@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from "react-router-dom";
 
-// Pages (default exports — any name works on import)
-import AuthSystem      from "./vantari-auth-system";
-import Analytics       from "./vantari-analytics-dashboard";
-import Leads           from "./vantari-leads-module";
-import Scoring         from "./vantari-scoring-system";
-import EmailMarketing  from "./vantari-email-marketing";
-import LandingPages    from "./vantari-landing-pages";
-import AIMarketing     from "./vantari-ai-marketing";
-import Integrations    from "./vantari-integrations-hub";
+const AuthSystem     = lazy(() => import("./vantari-auth-system"));
+const Analytics      = lazy(() => import("./vantari-analytics-dashboard"));
+const Leads          = lazy(() => import("./vantari-leads-module"));
+const Scoring        = lazy(() => import("./vantari-scoring-system"));
+const EmailMarketing = lazy(() => import("./vantari-email-marketing"));
+const LandingPages   = lazy(() => import("./vantari-landing-pages"));
+const AIMarketing    = lazy(() => import("./vantari-ai-marketing"));
+const Integrations   = lazy(() => import("./vantari-integrations-hub"));
+const Settings       = lazy(() => import("./vantari-settings-admin"));
 
 const NAV = [
   { path: "/dashboard",    label: "Dashboard",      icon: "📊" },
@@ -19,7 +19,43 @@ const NAV = [
   { path: "/landing",      label: "Landing Pages",  icon: "🖥️" },
   { path: "/ai-marketing", label: "IA Marketing",   icon: "🤖" },
   { path: "/integrations", label: "Integrações",    icon: "🔗" },
+  { path: "/settings",     label: "Configurações",  icon: "⚙️" },
 ];
+
+function PageLoader() {
+  return (
+    <div style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      minHeight: 300,
+      color: "#94a3b8",
+      fontSize: 14,
+    }}>
+      Carregando...
+    </div>
+  );
+}
+
+function NotFound() {
+  return (
+    <div style={{
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100%",
+      minHeight: 300,
+      gap: 12,
+      color: "#94a3b8",
+    }}>
+      <span style={{ fontSize: 48 }}>404</span>
+      <span style={{ fontSize: 16 }}>Página não encontrada</span>
+      <a href="/dashboard" style={{ color: "#60a5fa", fontSize: 14 }}>Voltar ao Dashboard</a>
+    </div>
+  );
+}
 
 function Sidebar({ collapsed, toggle }) {
   return (
@@ -34,7 +70,6 @@ function Sidebar({ collapsed, toggle }) {
       overflow: "hidden",
       flexShrink: 0,
     }}>
-      {/* Logo */}
       <div style={{
         padding: "20px 16px",
         display: "flex",
@@ -55,7 +90,6 @@ function Sidebar({ collapsed, toggle }) {
         )}
       </div>
 
-      {/* Nav links */}
       <nav style={{ flex: 1, padding: "12px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
         {NAV.map(({ path, label, icon }) => (
           <NavLink
@@ -82,7 +116,6 @@ function Sidebar({ collapsed, toggle }) {
         ))}
       </nav>
 
-      {/* Collapse toggle */}
       <button
         onClick={toggle}
         style={{
@@ -112,17 +145,21 @@ export default function App() {
         <Sidebar collapsed={collapsed} toggle={() => setCollapsed(c => !c)} />
 
         <main style={{ flex: 1, overflow: "auto" }}>
-          <Routes>
-            <Route path="/"               element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login"          element={<AuthSystem />} />
-            <Route path="/dashboard"      element={<Analytics />} />
-            <Route path="/leads"          element={<Leads />} />
-            <Route path="/scoring"        element={<Scoring />} />
-            <Route path="/email"          element={<EmailMarketing />} />
-            <Route path="/landing"        element={<LandingPages />} />
-            <Route path="/ai-marketing"   element={<AIMarketing />} />
-            <Route path="/integrations"   element={<Integrations />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/"               element={<Navigate to="/dashboard" replace />} />
+              <Route path="/login"          element={<AuthSystem />} />
+              <Route path="/dashboard"      element={<Analytics />} />
+              <Route path="/leads"          element={<Leads />} />
+              <Route path="/scoring"        element={<Scoring />} />
+              <Route path="/email"          element={<EmailMarketing />} />
+              <Route path="/landing"        element={<LandingPages />} />
+              <Route path="/ai-marketing"   element={<AIMarketing />} />
+              <Route path="/integrations"   element={<Integrations />} />
+              <Route path="/settings"       element={<Settings />} />
+              <Route path="*"               element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </BrowserRouter>

@@ -13,7 +13,7 @@ Módulos existentes:
 - [x] Landing Pages
 - [x] IA Marketing
 - [x] Integrações
-- [ ] Settings / Admin (arquivo existe, não está roteado)
+- [x] Settings / Admin
 
 ---
 
@@ -27,14 +27,14 @@ Módulos existentes:
 ### Qualidade de código
 - [x] Renomear `vantari-email-marketing (1).jsx` — espaço no nome causa problemas
 - [x] Padronizar nomenclatura dos arquivos (remover sufixos `-v2` e consolidar versões)
-- [ ] Implementar code splitting com `React.lazy` / `Suspense` (bundle atual ~1.2MB)
+- [x] Implementar code splitting com `React.lazy` / `Suspense` (bundle principal: 1.075MB → 229KB)
 
 ### Funcionalidades
-- [ ] Adicionar rota `/settings` para o módulo `vantari-settings-admin.jsx`
+- [x] Adicionar rota `/settings` para o módulo `vantari-settings-admin.jsx`
 - [ ] Implementar autenticação real (atualmente apenas UI)
 - [ ] Conectar módulos a uma API/backend
 
 ### UX
-- [ ] Adicionar estado de loading entre navegações
-- [ ] Tratar erros de rota (página 404)
+- [x] Adicionar estado de loading entre navegações
+- [x] Tratar erros de rota (página 404)
 - [ ] Tornar layout responsivo para mobile

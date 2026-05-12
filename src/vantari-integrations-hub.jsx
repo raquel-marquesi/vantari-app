@@ -132,7 +132,7 @@ const Btn = ({ children, onClick, variant="default", size="md", disabled=false, 
   };
   const v = variants[variant]||variants.default;
   const fs = sizes[size]?.fontSize||13;
-  const IconEl = icon && typeof icon === "function" ? icon : null;
+  const IconEl = icon && typeof icon !== "string" ? icon : null;
   return (
     <button onClick={disabled?undefined:onClick} style={{...base,...sizes[size],...v,...sx}}>
       {IconEl ? <IconEl size={fs} aria-hidden="true"/> : icon ? <span style={{fontSize:fs+1}}>{icon}</span> : null}

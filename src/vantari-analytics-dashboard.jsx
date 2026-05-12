@@ -1141,10 +1141,10 @@ export default function VantariAnalyticsDashboard() {
         }
       `}</style>
 
-      {/* ── SIDEBAR ── Analytics = dashboard principal: sem logo */}
+      {/* ── SIDEBAR ── */}
       <div style={{ width: 220, background: "#0079a9", display: "flex", flexDirection: "column", flexShrink: 0 }}>
         <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.12)" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#fff", fontFamily: T.head, letterSpacing: "0.04em" }}>Vantari</span>
+          <img src="iconrs.png" alt="Vantari" style={{ height: 28, width: "auto" }} />
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 0" }}>

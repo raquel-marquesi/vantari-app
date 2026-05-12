@@ -20,13 +20,13 @@ Módulos existentes:
 ## Próximos passos sugeridos
 
 ### Infraestrutura
-- [ ] Inicializar repositório Git para controle de versão
+- [x] Inicializar repositório Git para controle de versão
 - [ ] Adicionar variáveis de ambiente (`.env`) para URLs de API e chaves
 - [ ] Configurar domínio customizado no Vercel
 
 ### Qualidade de código
-- [ ] Renomear `vantari-email-marketing (1).jsx` — espaço no nome causa problemas
-- [ ] Padronizar nomenclatura dos arquivos (remover sufixos `-v2` e consolidar versões)
+- [x] Renomear `vantari-email-marketing (1).jsx` — espaço no nome causa problemas
+- [x] Padronizar nomenclatura dos arquivos (remover sufixos `-v2` e consolidar versões)
 - [ ] Implementar code splitting com `React.lazy` / `Suspense` (bundle atual ~1.2MB)
 
 ### Funcionalidades

@@ -1,4 +1,6 @@
 import { useState, useRef, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
    DATABASE SCHEMA (Supabase-compatible)
@@ -750,14 +752,33 @@ const SupportTab = ({toast}) => {
 /* ═══════════════════════════════════════════════════════════
    ROOT — topbar idêntico ao vantari-analytics-dashboard
 ═══════════════════════════════════════════════════════════ */
+const NAV_FONT  = "'Aptos', 'Nunito Sans', sans-serif";
+const NAV_HEAD  = "'Montserrat', sans-serif";
+
+const NavSection = ({ label }) => (
+  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:NAV_HEAD}}>{label}</div>
+);
+
+const NavItem = ({ icon: Icon, label, active = false, path }) => {
+  const [hov, setHov] = useState(false);
+  const navigate = useNavigate();
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => path && navigate(path)}
+      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:NAV_FONT,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
+      {Icon && <Icon size={16} aria-hidden="true" />}{label}
+    </div>
+  );
+};
+
 export default function VantariSettingsAdmin() {
   const [activeTab,setActiveTab] = useState("workspace");
   const {toasts,push:toast} = useToast();
 
   return (
-    <div style={{minHeight:"100vh",background:T.bg,fontFamily:T.font}}>
+    <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@500;600;700&display=swap');
         *{box-sizing:border-box;}
         ::-webkit-scrollbar{width:6px;height:6px;}
         ::-webkit-scrollbar-track{background:transparent;}
@@ -765,7 +786,32 @@ export default function VantariSettingsAdmin() {
         @keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
       `}</style>
 
-      {/* Topbar — same structure as analytics-dashboard */}
+      {/* ── SIDEBAR ── */}
+      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
+        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
+          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+        </div>
+        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+          <NavSection label="Principal"/>
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"     />
+          <NavItem icon={Users}          label="Leads"          path="/leads"         />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
+          <NavSection label="Ferramentas"/>
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"       />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"       />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
+          <NavSection label="Sistema"/>
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations"  />
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
+          <NavItem icon={Settings} label="Configurações" path="/settings" active />
+        </div>
+      </div>
+
+      {/* ── MAIN ── */}
+      <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+
+      {/* Topbar */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 28px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:60}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
@@ -793,7 +839,7 @@ export default function VantariSettingsAdmin() {
         </div>
       </div>
 
-      <div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
+      <div style={{flex:1,overflowY:"auto"}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
         {activeTab==="workspace"&&<WorkspaceTab toast={toast}/>}
         {activeTab==="team"     &&<TeamTab      toast={toast}/>}
         {activeTab==="email"    &&<EmailTab     toast={toast}/>}
@@ -801,9 +847,10 @@ export default function VantariSettingsAdmin() {
         {activeTab==="advanced" &&<AdvancedTab  toast={toast}/>}
         {activeTab==="audit"    &&<AuditTab/>}
         {activeTab==="support"  &&<SupportTab   toast={toast}/>}
-      </div>
+      </div></div>
 
       <Toasts toasts={toasts}/>
+      </div>{/* ── end MAIN ── */}
     </div>
   );
 }

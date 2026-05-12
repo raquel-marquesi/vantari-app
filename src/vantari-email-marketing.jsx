@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Layout, AlignLeft, Image, MousePointerClick,
@@ -145,10 +146,12 @@ const MetricPill = ({ label, value, sub, color=T.blue, icon:Icon }) => (
 const NavSection = ({ label }) => (
   <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
 );
-const NavItem = ({ icon:Icon, label, active=false }) => {
+const NavItem = ({ icon:Icon, label, active=false, path }) => {
   const [hov,setHov] = useState(false);
+  const navigate = useNavigate();
   return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => path && navigate(path)}
       style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
       {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
     </div>
@@ -914,18 +917,18 @@ export default function VantariEmailMarketing() {
         </div>
         <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
           <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics"       />
-          <NavItem icon={Users}          label="Leads"           />
-          <NavItem icon={Mail}           label="Email Marketing" active/>
+          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"       />
+          <NavItem icon={Users}          label="Leads" path="/leads"           />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email" active/>
           <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring"         />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"   />
-          <NavItem icon={Bot}            label="IA & Automação"  />
+          <NavItem icon={Star}           label="Scoring" path="/scoring"         />
+          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
           <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações"     />
+          <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
-          <NavItem icon={Settings} label="Configurações"/>
+          <NavItem icon={Settings} label="Configurações" path="/settings"/>
         </div>
       </div>
 

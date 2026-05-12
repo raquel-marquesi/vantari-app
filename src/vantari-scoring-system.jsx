@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Scale, Filter, Zap, Settings, Users, Mail,
   LayoutTemplate, Bot, Plug, Star, TrendingUp, TrendingDown,
@@ -258,10 +259,12 @@ const NavSection = ({ label }) => (
   </div>
 );
 
-const NavItem = ({ icon:Icon, label, active=false }) => {
+const NavItem = ({ icon:Icon, label, active=false, path }) => {
   const [hov, setHov] = useState(false);
+  const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => path && navigate(path)}
       style={{ display:"flex", alignItems:"center", gap:9, padding:"8px 20px", fontSize:13, fontWeight:active?700:600, fontFamily:C.font, color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)", background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent", borderRight:active?"2px solid #fff":"2px solid transparent", cursor:"pointer", transition:"all 0.15s", userSelect:"none" }}>
       {Icon && <Icon size={16} aria-hidden="true" />}
       {label}
@@ -302,8 +305,9 @@ const ScoringRules = ({ rules, setRules, thresholds, setThresholds, leads }) => 
     const isEdit = editId === rule.id;
     const CatIcon = CATEGORY_ICONS[rule.category] || Activity;
     return (
-      <div onMouseEnter={() => setHovRow(true)} onMouseLeave={() => setHovRow(false)}
-        style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:hovRow?C.faint:"transparent", borderRadius:8, transition:"background 0.15s", borderBottom:`0.5px solid ${C.border}` }}>
+      <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => path && navigate(path)}
+      style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:hovRow?C.faint:"transparent", borderRadius:8, transition:"background 0.15s", borderBottom:`0.5px solid ${C.border}` }}>
         <div style={{ width:28, height:28, borderRadius:8, background:`${rule.points >= 0 ? C.blue : C.red}12`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           <CatIcon size={13} color={rule.points >= 0 ? C.blue : C.red} aria-hidden="true" />
         </div>
@@ -985,19 +989,19 @@ export default function VantariScoringSystem() {
 
         <div style={{ flex:1, overflowY:"auto", padding:"8px 0" }}>
           <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"       />
-          <NavItem icon={Users}          label="Leads"           />
-          <NavItem icon={Mail}           label="Email Marketing" />
+          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"       />
+          <NavItem icon={Users}          label="Leads" path="/leads"           />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email" />
           <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"   active />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"   />
-          <NavItem icon={Bot}            label="IA & Automação"  />
+          <NavItem icon={Star}           label="Scoring" path="/scoring"   active />
+          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
           <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"     />
+          <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
         </div>
 
         <div style={{ borderTop:"1px solid rgba(255,255,255,0.12)", padding:"8px 0" }}>
-          <NavItem icon={Settings} label="Configurações" />
+          <NavItem icon={Settings} label="Configurações" path="/settings" />
         </div>
       </div>
 

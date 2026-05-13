@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 import {
   PenLine, TrendingUp, FileText, Target, Settings, Clock,
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
@@ -49,27 +50,6 @@ const MOCK_SETTINGS = {
   },
 };
 
-const MOCK_LEADS = [
-  { id:"l1", name:"João Silva",    email:"joao@technova.com.br",      company:"TechNova",      score:87,
-    interactions:[{ type:"email_open", label:"Abriu email",          count:5, detail:"Newsletter Nov, Black Friday x3, Follow-up" },
-                  { type:"email_click",label:"Clicou em link",        count:3, detail:"Links sobre precificação (2x), link trial (1x)" },
-                  { type:"page_visit", label:"Visitou página",         count:4, detail:"/pricing (3x), /trial (1x)" },
-                  { type:"form_submit",label:"Preencheu formulário",   count:1, detail:"Solicitou demo" }] },
-  { id:"l2", name:"Ana Costa",     email:"ana@agenciapixel.com.br",   company:"Agência Pixel", score:62,
-    interactions:[{ type:"email_open", label:"Abriu email",           count:2, detail:"Newsletter Nov, Webinar" },
-                  { type:"email_click",label:"Clicou em link",        count:1, detail:"Link blog sobre automação" },
-                  { type:"page_visit", label:"Visitou página",         count:2, detail:"/features, /blog/roi" }] },
-  { id:"l3", name:"Carlos Mendes", email:"carlos@startuplhub.com.br", company:"StartupHub",    score:41,
-    interactions:[{ type:"email_open", label:"Abriu email",           count:1, detail:"Black Friday" }] },
-];
-
-const MOCK_GENERATIONS = [
-  { id:"g1", type:"email",   prompt:"Email de follow-up para lead que solicitou demo de CRM",          result:"Assunto: Sua demo está pronta, João!\n\nOlá João,\n\nObrigado pelo seu interesse...", model:"claude-sonnet-4-20250514", rating:5, used:true,  created_at:new Date(Date.now()-2*86400000).toISOString(), tokens:320 },
-  { id:"g2", type:"subject", prompt:"Assunto para newsletter mensal de marketing digital",              result:"5 tendências que vão definir seu marketing em 2025\nSeus concorrentes já estão fazendo isso\nInsights exclusivos: marketing digital hoje", model:"claude-sonnet-4-20250514", rating:4, used:true,  created_at:new Date(Date.now()-3*86400000).toISOString(), tokens:180 },
-  { id:"g3", type:"email",   prompt:"Email promocional Black Friday com desconto 50%",                  result:"Assunto: 50% OFF só hoje — Oferta exclusiva para você\n\nOlá {{lead.name}},\n\nHoje é o dia...", model:"claude-sonnet-4-20250514", rating:5, used:true,  created_at:new Date(Date.now()-5*86400000).toISOString(), tokens:410 },
-  { id:"g4", type:"summary", prompt:"Resumo de engajamento do lead Ana Costa",                          result:"Ana demonstra interesse moderado em automação de marketing. Abriu 2 emails e clicou em conteúdo de blog...", model:"claude-sonnet-4-20250514", rating:3, used:false, created_at:new Date(Date.now()-1*86400000).toISOString(), tokens:220 },
-  { id:"g5", type:"email",   prompt:"Email de reativação para leads inativos 30 dias",                  result:"Assunto: Sentimos sua falta!\n\nOlá {{lead.name}},\n\nFaz um tempo que não nos falamos...", model:"claude-sonnet-4-20250514", rating:4, used:false, created_at:new Date(Date.now()-7*86400000).toISOString(), tokens:280 },
-];
 
 const MODELS = [
   { id:"claude-sonnet-4-20250514",  name:"Claude Sonnet 4",  provider:"Anthropic", cost:"$0.003/1k tokens", badge:"Recomendado",  color:T.blue   },
@@ -513,7 +493,7 @@ const SubjectOptTab = ({ settings }) => {
 /* ═══════════════════════════════════════════════════
    TAB 3: RESUMOS INTELIGENTES
 ═══════════════════════════════════════════════════ */
-const SummaryTab = ({ settings }) => {
+const SummaryTab = ({ settings, leads }) => {
   const [selected,   setSelected]   = useState(null);
   const [loading,    setLoad]       = useState(false);
   const [summaries,  setSummaries]  = useState({});
@@ -548,7 +528,11 @@ const SummaryTab = ({ settings }) => {
     <div style={{display:"grid",gridTemplateColumns:"280px 1fr",height:"100%",overflow:"hidden"}}>
       <div style={{borderRight:`0.5px solid ${T.border}`,overflowY:"auto",padding:16}}>
         <p style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 12px 4px"}}>Leads</p>
-        {MOCK_LEADS.map(lead=>(
+        {leads.length === 0 ? (
+          <div style={{padding:24,textAlign:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600}}>
+            Nenhum lead encontrado. Importe leads para começar.
+          </div>
+        ) : leads.map(lead=>(
           <div key={lead.id} onClick={()=>generateSummary(lead)}
             style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:selected?.id===lead.id?T.blueL:T.white,border:`0.5px solid ${selected?.id===lead.id?T.blue:T.border}`,transition:"all 0.15s"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -673,8 +657,8 @@ const SummaryTab = ({ settings }) => {
 /* ═══════════════════════════════════════════════════
    TAB 4: PERSONALIZAÇÃO DINÂMICA
 ═══════════════════════════════════════════════════ */
-const PersonalizationTab = ({ settings }) => {
-  const [lead,   setLead]   = useState(MOCK_LEADS[0]);
+const PersonalizationTab = ({ settings, leads }) => {
+  const [lead,   setLead]   = useState(leads[0] || null);
   const [loading,setLoad]   = useState(false);
   const [result, setResult] = useState(null);
 
@@ -703,13 +687,19 @@ const PersonalizationTab = ({ settings }) => {
     setLoad(false);
   };
 
-  useEffect(()=>{ generate(); },[]);
+  useEffect(()=>{ if(lead) generate(); },[]);
+
+  if (leads.length === 0) return (
+    <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600}}>
+      Nenhum lead encontrado. Importe leads para começar.
+    </div>
+  );
 
   return (
     <div style={{display:"grid",gridTemplateColumns:"240px 1fr",height:"100%",overflow:"hidden"}}>
       <div style={{borderRight:`0.5px solid ${T.border}`,overflowY:"auto",padding:16}}>
         <p style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 12px 4px"}}>Selecionar Lead</p>
-        {MOCK_LEADS.map(l=>(
+        {leads.map(l=>(
           <div key={l.id} onClick={()=>{setLead(l);setResult(null);}}
             style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:lead.id===l.id?T.blueL:T.white,border:`0.5px solid ${lead.id===l.id?T.blue:T.border}`,transition:"all 0.15s"}}>
             <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink,margin:"0 0 2px"}}>{l.name}</p>
@@ -896,12 +886,12 @@ const SettingsTab = ({ settings, onChange }) => {
    TAB 6: HISTÓRICO & ANALYTICS
 ═══════════════════════════════════════════════════ */
 const HistoryTab = () => {
-  const [gens,   setGens]   = useState(MOCK_GENERATIONS);
+  const [gens,   setGens]   = useState([]);
   const [filter, setFilter] = useState("all");
 
   const filtered    = filter==="all" ? gens : gens.filter(g=>g.type===filter);
   const totalTokens = gens.reduce((a,g)=>a+(g.tokens||0),0);
-  const avgRating   = (gens.reduce((a,g)=>a+(g.rating||0),0)/gens.length).toFixed(1);
+  const avgRating   = gens.length ? (gens.reduce((a,g)=>a+(g.rating||0),0)/gens.length).toFixed(1) : "0.0";
   const usedCount   = gens.filter(g=>g.used).length;
 
   const typeInfo = t => ({
@@ -998,12 +988,30 @@ const TABS = [
   { id:"summary",  Icon:Brain,      label:"Resumos Inteligentes"     },
   { id:"personal", Icon:Target,     label:"Personalização Dinâmica"  },
   { id:"settings", Icon:Settings,   label:"Configurações de IA"      },
-  { id:"history",  Icon:Clock,      label:"Histórico & Analytics",   badge:MOCK_GENERATIONS.length },
+  { id:"history",  Icon:Clock,      label:"Histórico & Analytics" },
 ];
 
 export default function VantariAIMarketing() {
   const [tab,      setTab]      = useState("email");
   const [settings, setSettings] = useState(MOCK_SETTINGS);
+  const [leads,    setLeads]    = useState([]);
+
+  useEffect(() => {
+    supabase.from("leads")
+      .select("id, name, email, company, score")
+      .order("score", { ascending: false })
+      .limit(20)
+      .then(({ data }) => {
+        setLeads((data || []).map(l => ({
+          id: l.id,
+          name: l.name || l.email?.split("@")[0] || "—",
+          email: l.email,
+          company: l.company || "—",
+          score: l.score || 0,
+          interactions: [],
+        })));
+      });
+  }, []);
 
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
@@ -1074,8 +1082,8 @@ export default function VantariAIMarketing() {
         <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
           {tab==="email"    && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><EmailGenTab    settings={settings}/></div>}
           {tab==="subject"  && <div style={{flex:1,overflowY:"auto"}}><SubjectOptTab  settings={settings}/></div>}
-          {tab==="summary"  && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><SummaryTab     settings={settings}/></div>}
-          {tab==="personal" && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><PersonalizationTab settings={settings}/></div>}
+          {tab==="summary"  && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><SummaryTab     settings={settings} leads={leads}/></div>}
+          {tab==="personal" && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><PersonalizationTab settings={settings} leads={leads}/></div>}
           {tab==="settings" && <div style={{flex:1,overflowY:"auto"}}><SettingsTab    settings={settings} onChange={setSettings}/></div>}
           {tab==="history"  && <div style={{flex:1,overflowY:"auto"}}><HistoryTab/></div>}
         </div>

@@ -110,40 +110,20 @@ const MOCK_MEMBERS = [
   { id:"u5", name:"Elena Souza",    email:"elena@empresa.com.br", role:"manager", status:"suspended", lastActive:"7d",    avatar:"ES", joined:"Fev 2024" },
 ];
 
-const MOCK_AUDIT = [
-  { id:"a1", user:"Ana Costa",    action:"updated", resource:"workspace_settings", detail:"Alterou nome da empresa",         time:"5min",  icon:"⚙️" },
-  { id:"a2", user:"Bruno Lima",   action:"invited", resource:"user",               detail:"Convidou diego@empresa.com.br",   time:"2h",    icon:"✉️" },
-  { id:"a3", user:"Ana Costa",    action:"created", resource:"api_key",            detail:"Criou chave 'Integração HubSpot'",time:"1d",    icon:"🔑" },
-  { id:"a4", user:"Carla Mendes", action:"deleted", resource:"campaign",           detail:"Removeu campanha 'Black Friday'", time:"2d",    icon:"🗑️" },
-  { id:"a5", user:"Ana Costa",    action:"revoked", resource:"api_key",            detail:"Revogou chave 'Antiga API v1'",   time:"3d",    icon:"🚫" },
-  { id:"a6", user:"Bruno Lima",   action:"updated", resource:"billing",            detail:"Atualizou cartão de crédito",     time:"5d",    icon:"💳" },
-];
+const MOCK_AUDIT = [];
 
 const MOCK_USAGE = {
-  leads_stored:      { used:3840,  limit:5000,   label:"Leads Armazenados",     icon:"👥", color:T.blue   },
-  emails_sent:       { used:18200, limit:25000,  label:"Emails Enviados",       icon:"📧", color:T.teal   },
-  api_calls:         { used:42100, limit:100000, label:"Chamadas de API",       icon:"⚡", color:T.purple },
-  contacts_enriched: { used:890,   limit:1000,   label:"Contatos Enriquecidos", icon:"✨", color:T.green  },
+  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     icon:"👥", color:T.blue   },
+  emails_sent:       { used:0, limit:25000,  label:"Emails Enviados",       icon:"📧", color:T.teal   },
+  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       icon:"⚡", color:T.purple },
+  contacts_enriched: { used:0, limit:1000,   label:"Contatos Enriquecidos", icon:"✨", color:T.green  },
 };
 
-const MOCK_KEYS = [
-  { id:"k1", name:"Integração HubSpot", prefix:"vnt_live", scopes:["read:leads","write:leads"],    lastUsed:"2h", created:"12/01/2025" },
-  { id:"k2", name:"Webhook Zapier",     prefix:"vnt_live", scopes:["read:campaigns","webhooks"],   lastUsed:"1d", created:"20/02/2025" },
-  { id:"k3", name:"Analytics Export",  prefix:"vnt_live", scopes:["read:analytics"],              lastUsed:"5d", created:"05/03/2025" },
-];
+const MOCK_KEYS = [];
 
-const MOCK_WEBHOOKS = [
-  { id:"w1", name:"Notificação Slack", url:"https://hooks.slack.com/services/T0...",  events:["lead.created","lead.scored"],    enabled:true,  lastTriggered:"1h", failCount:0 },
-  { id:"w2", name:"CRM Salesforce",   url:"https://api.salesforce.com/webhook/...",  events:["lead.converted","campaign.sent"],enabled:true,  lastTriggered:"3h", failCount:0 },
-  { id:"w3", name:"Backup Externo",   url:"https://backup.empresa.com/vantari/...", events:["lead.created","lead.deleted"],   enabled:false, lastTriggered:"2d", failCount:3 },
-];
+const MOCK_WEBHOOKS = [];
 
-const MOCK_INVOICES = [
-  { id:"inv-001", period:"Maio 2025",      amount:"R$ 497,00", date:"01/05/2025" },
-  { id:"inv-002", period:"Abril 2025",     amount:"R$ 497,00", date:"01/04/2025" },
-  { id:"inv-003", period:"Março 2025",     amount:"R$ 297,00", date:"01/03/2025" },
-  { id:"inv-004", period:"Fevereiro 2025", amount:"R$ 297,00", date:"01/02/2025" },
-];
+const MOCK_INVOICES = [];
 
 const TABS = [
   { id:"workspace", icon:"🏢", label:"Workspace"  },

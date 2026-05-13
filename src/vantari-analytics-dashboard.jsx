@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -79,57 +80,21 @@ const STAGE_COLORS = {
 };
 
 /* ───── MOCK DATA ───── */
-const monthlyTrend = [
-  { month: "Jan", leads: 320, mqls: 89,  sqls: 34, clientes: 12, receita: 48000  },
-  { month: "Fev", leads: 380, mqls: 112, sqls: 42, clientes: 15, receita: 60000  },
-  { month: "Mar", leads: 410, mqls: 128, sqls: 51, clientes: 19, receita: 76000  },
-  { month: "Abr", leads: 390, mqls: 118, sqls: 47, clientes: 17, receita: 68000  },
-  { month: "Mai", leads: 520, mqls: 163, sqls: 68, clientes: 24, receita: 96000  },
-  { month: "Jun", leads: 490, mqls: 155, sqls: 64, clientes: 22, receita: 88000  },
-  { month: "Jul", leads: 560, mqls: 178, sqls: 74, clientes: 27, receita: 108000 },
-  { month: "Ago", leads: 610, mqls: 196, sqls: 83, clientes: 30, receita: 120000 },
-  { month: "Set", leads: 580, mqls: 184, sqls: 77, clientes: 28, receita: 112000 },
-  { month: "Out", leads: 650, mqls: 209, sqls: 89, clientes: 32, receita: 128000 },
-  { month: "Nov", leads: 720, mqls: 236, sqls: 101,clientes: 37, receita: 148000 },
-  { month: "Dez", leads: 680, mqls: 220, sqls: 94, clientes: 34, receita: 136000 },
-];
+const monthlyTrend = [];
 
-const channelData = [
-  { canal: "Organic",    leads: 1840, custo: 2400,  roi: 767,  conversao: 4.2, cor: T.green },
-  { canal: "Google Ads", leads: 1320, custo: 18600, roi: 324,  conversao: 3.1, cor: T.blue  },
-  { canal: "Meta Ads",   leads: 980,  custo: 12400, roi: 289,  conversao: 2.8, cor: "#1877F2"},
-  { canal: "Email Mkt",  leads: 760,  custo: 1800,  roi: 924,  conversao: 5.6, cor: T.teal  },
-  { canal: "LinkedIn",   leads: 420,  custo: 8200,  roi: 187,  conversao: 6.1, cor: "#0A66C2"},
-  { canal: "Indicação",  leads: 310,  custo: 0,     roi: 9999, conversao: 12.4,cor: T.purple },
-];
+const channelData = [];
 
-const attributionData = [
-  { name: "Google Ads", first: 38, last: 29, multi: 31 },
-  { name: "Organic",    first: 24, last: 18, multi: 22 },
-  { name: "Meta Ads",   first: 18, last: 22, multi: 19 },
-  { name: "Email",      first: 10, last: 18, multi: 16 },
-  { name: "LinkedIn",   first: 7,  last: 9,  multi: 8  },
-  { name: "Outros",     first: 3,  last: 4,  multi: 4  },
-];
+const attributionData = [];
 
 const funnelStages = [
-  { name: "Visitor", count: 48320, pct: 100,  conv: null, avgDays: null },
-  { name: "Lead",    count: 5640,  pct: 11.7, conv: 11.7, avgDays: 0.3  },
-  { name: "MQL",     count: 1180,  pct: 2.4,  conv: 20.9, avgDays: 8.2  },
-  { name: "SQL",     count: 312,   pct: 0.6,  conv: 26.4, avgDays: 14.5 },
-  { name: "Cliente", count: 94,    pct: 0.2,  conv: 30.1, avgDays: 22.8 },
+  { name: "Visitor", count: 0, pct: 100,  conv: null, avgDays: null },
+  { name: "Lead",    count: 0, pct: 0,    conv: 0,    avgDays: 0    },
+  { name: "MQL",     count: 0, pct: 0,    conv: 0,    avgDays: 0    },
+  { name: "SQL",     count: 0, pct: 0,    conv: 0,    avgDays: 0    },
+  { name: "Cliente", count: 0, pct: 0,    conv: 0,    avgDays: 0    },
 ];
 
-const liveActivity = [
-  { id: 1, type: "lead_novo",    msg: "Novo lead: Carla Mendonça (TechNova)",          time: "agora", color: T.blue   },
-  { id: 2, type: "email_open",   msg: "Roberto Alves abriu campanha 'Q4 Nurturing'",   time: "2min",  color: T.teal   },
-  { id: 3, type: "sql_convert",  msg: "SQL detectado: Lucas Pereira (Score 91)",        time: "5min",  color: T.green  },
-  { id: 4, type: "email_click",  msg: "Ana Costa clicou em CTA — /pricing",             time: "8min",  color: T.purple },
-  { id: 5, type: "form_submit",  msg: "Demo solicitada: Beatriz Nunes (E-shop Max)",    time: "12min", color: T.orange },
-  { id: 6, type: "email_open",   msg: "Diego Rocha abriu campanha 'Boas-vindas'",       time: "15min", color: T.teal   },
-  { id: 7, type: "lead_novo",    msg: "Novo lead: Fernanda Lima (StartupHub)",           time: "18min", color: T.blue   },
-  { id: 8, type: "sql_convert",  msg: "Score alto: Marcos Oliveira (Score 88)",         time: "22min", color: T.green  },
-];
+const liveActivity = [];
 
 const EVENT_ICONS = {
   lead_novo:   User,
@@ -139,44 +104,15 @@ const EVENT_ICONS = {
   form_submit: ClipboardList,
 };
 
-const campaignPerf = [
-  { name: "Q4 Nurturing Series",        enviados: 4820,  abertos: 1688, cliques: 437, conversoes: 89,  abertura: 35.0, ctr: 9.1,  status: "ativo"     },
-  { name: "Black Friday 2024",           enviados: 12400, abertos: 3720, cliques: 744, conversoes: 186, abertura: 30.0, ctr: 6.0,  status: "encerrado"  },
-  { name: "Boas-vindas Onboarding",      enviados: 2310,  abertos: 1617, cliques: 578, conversoes: 231, abertura: 70.0, ctr: 25.0, status: "ativo"     },
-  { name: "Reengajamento Inativos",      enviados: 1840,  abertos: 386,  cliques: 55,  conversoes: 11,  abertura: 21.0, ctr: 3.0,  status: "pausado"    },
-  { name: "Demo Request Follow-up",      enviados: 312,   abertos: 265,  cliques: 140, conversoes: 78,  abertura: 84.9, ctr: 44.9, status: "ativo"     },
-];
+const campaignPerf = [];
 
-const alertsDB = [
-  { id: 1, name: "Lead SQL detectado",      condition: "score >= 85",          recipients: ["equipe@vantari.com"],    last: "5min", count: 47,  enabled: true,  urgency: "high"   },
-  { id: 2, name: "Campanha baixa abertura", condition: "abertura < 15%",       recipients: ["marketing@vantari.com"], last: "2h",   count: 8,   enabled: true,  urgency: "medium" },
-  { id: 3, name: "Lead inativo há 30 dias", condition: "last_interaction > 30d",recipients: ["crm@vantari.com"],      last: "1d",   count: 124, enabled: true,  urgency: "low"    },
-  { id: 4, name: "Erro sistema integração", condition: "webhook_error = true",  recipients: ["tech@vantari.com"],     last: "nunca",count: 0,   enabled: false, urgency: "high"   },
-];
+const alertsDB = [];
 
-const todayVsYesterday = [
-  { hora: "06h", hoje: 12,  ontem: 8   },
-  { hora: "08h", hoje: 34,  ontem: 28  },
-  { hora: "10h", hoje: 67,  ontem: 54  },
-  { hora: "12h", hoje: 89,  ontem: 71  },
-  { hora: "14h", hoje: 102, ontem: 88  },
-  { hora: "16h", hoje: 118, ontem: 95  },
-  { hora: "18h", hoje: 134, ontem: 108 },
-];
+const todayVsYesterday = [];
 
-const leadsPerStage = {
-  Visitor: Array.from({ length: 8 }, (_, i) => ({ id: i, name: ["Maria","João","Ana","Pedro","Lucas","Beatriz","Carlos","Fern"][i], company: ["TechNova","Pixel","Hub","Brasil","Forte","Minds","Pro","Elite"][i], score: 10 + i * 3, source: ["Organic","Google Ads","Meta"][i % 3] })),
-  Lead:    Array.from({ length: 6 }, (_, i) => ({ id: i, name: ["Silva","Rocha","Lima","Costa","Alves","Mendes"][i], company: ["TechA","TechB","TechC","TechD","TechE","TechF"][i], score: 25 + i * 5, source: ["Email","LinkedIn","Organic"][i % 3] })),
-  MQL:     Array.from({ length: 5 }, (_, i) => ({ id: i, name: ["Ferreira","Martins","Nunes","Sousa","Ribeiro"][i], company: ["Alpha","Beta","Gamma","Delta","Epsilon"][i], score: 55 + i * 5, source: ["Google Ads","Email","Meta"][i % 3] })),
-  SQL:     Array.from({ length: 4 }, (_, i) => ({ id: i, name: ["Pereira","Oliveira","Santos","Barbosa"][i], company: ["BigCo","ScaleUp","Enterprise","StartupX"][i], score: 80 + i * 5, source: ["Indicação","Google Ads","Email","LinkedIn"][i] })),
-  Cliente: Array.from({ length: 3 }, (_, i) => ({ id: i, name: ["Monteiro","Carvalho","Dias"][i], company: ["Premium A","Premium B","Premium C"][i], score: 95 + i, source: ["Indicação","LinkedIn","Demo"][i] })),
-};
+const leadsPerStage = { Visitor: [], Lead: [], MQL: [], SQL: [], Cliente: [] };
 
-const savedReports = [
-  { id: 1, name: "Overview Executivo Mensal",       owner: "Você",       shared: 3, updated: "2h atrás" },
-  { id: 2, name: "Performance Campanhas Q4",         owner: "marketing@", shared: 1, updated: "1d atrás" },
-  { id: 3, name: "Pipeline SQL — Relatório Semanal", owner: "crm@",       shared: 5, updated: "3d atrás" },
-];
+const savedReports = [];
 
 const METRIC_OPTIONS = [
   "Total Leads","MQLs","SQLs","Clientes","Taxa Conversão",
@@ -303,6 +239,20 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
 ═══════════════════════════════════════════════════════════ */
 const OverviewSection = () => {
   const [activeMetric, setActiveMetric] = useState("leads");
+  const [kpis, setKpis] = useState({ leads: 0, mqls: 0, sqls: 0, campaigns: 0 });
+
+  useEffect(() => {
+    const fetchKpis = async () => {
+      const [{ count: leads }, { count: mqls }, { count: sqls }, { count: campaigns }] = await Promise.all([
+        supabase.from("leads").select("*", { count: "exact", head: true }),
+        supabase.from("leads").select("*", { count: "exact", head: true }).eq("stage", "MQL"),
+        supabase.from("leads").select("*", { count: "exact", head: true }).eq("stage", "SQL"),
+        supabase.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
+      ]);
+      setKpis({ leads: leads || 0, mqls: mqls || 0, sqls: sqls || 0, campaigns: campaigns || 0 });
+    };
+    fetchKpis();
+  }, []);
 
   const lineKeys = {
     leads:   { key: "leads",   color: T.blue,   label: "Leads"      },
@@ -314,10 +264,10 @@ const OverviewSection = () => {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
-        <MetricCard icon={Users}      label="Total de Leads"    value="5.640"  trend={12.4} color={T.blue}   sub="623 vs mês anterior" />
-        <MetricCard icon={Star}       label="MQLs este mês"     value="236"    trend={8.7}  color={T.orange} sub="Taxa MQL: 4.2%" />
-        <MetricCard icon={Zap}        label="SQLs qualificados" value="101"    trend={15.2} color={T.green}  sub="Taxa SQL: 1.8%" />
-        <MetricCard icon={DollarSign} label="Taxa Conversão"    value="1.67%"  trend={3.1}  color={T.purple} sub="R$ 136k receita" />
+        <MetricCard icon={Users}      label="Total de Leads"    value={kpis.leads.toLocaleString("pt-BR")}     trend={12.4} color={T.blue}   />
+        <MetricCard icon={Star}       label="MQLs este mês"     value={kpis.mqls.toLocaleString("pt-BR")}      trend={8.7}  color={T.orange} />
+        <MetricCard icon={Zap}        label="SQLs qualificados" value={kpis.sqls.toLocaleString("pt-BR")}      trend={15.2} color={T.green}  />
+        <MetricCard icon={DollarSign} label="Taxa Conversão"    value="0%"                                     trend={3.1}  color={T.purple} />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
@@ -355,10 +305,10 @@ const OverviewSection = () => {
           <SectionTitle>Campanhas Ativas</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              { label: "Abertura Média",    value: "34.2%", sub: "+2.1pp vs anterior",        color: T.blue   },
-              { label: "CTR Médio",         value: "9.4%",  sub: "+0.8pp vs anterior",         color: T.teal   },
-              { label: "Conversões totais", value: "595",   sub: "este mês",                   color: T.green  },
-              { label: "Campanhas ativas",  value: "3",     sub: "1 pausada, 1 encerrada",     color: T.purple },
+              { label: "Abertura Média",    value: "—", sub: "sem dados",    color: T.blue   },
+              { label: "CTR Médio",         value: "—", sub: "sem dados",    color: T.teal   },
+              { label: "Conversões totais", value: "0", sub: "sem campanhas", color: T.green  },
+              { label: "Campanhas ativas",  value: kpis.campaigns.toString(), sub: "enviadas", color: T.purple },
             ].map((m, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 12px", background: T.faint, borderRadius: 10, border: `0.5px solid ${T.border}` }}>
                 <div>
@@ -809,37 +759,12 @@ const ChannelSection = () => {
 ═══════════════════════════════════════════════════════════ */
 const RealtimeSection = () => {
   const [feed, setFeed] = useState(liveActivity);
-  const [tick, setTick] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTick(t => t + 1);
-      const types  = ["lead_novo","email_open","email_click","form_submit"];
-      const msgs   = [
-        "Novo lead: Camila Ferreira (Alpha Co)",
-        "Eduardo Lopes abriu email 'Demo Follow-up'",
-        "Novo lead: Rodrigo Melo (ScaleUp)",
-        "Demo solicitada: Priscila Torres",
-        "Score alto: Wilson Teixeira (Score 87)",
-      ];
-      const colors = [T.blue, T.teal, T.green, T.orange];
-      const t2     = types[Math.floor(Math.random() * types.length)];
-      setFeed(prev => [{
-        id:    Date.now(),
-        type:  t2,
-        msg:   msgs[Math.floor(Math.random() * msgs.length)],
-        time:  "agora",
-        color: colors[Math.floor(Math.random() * colors.length)],
-      }, ...prev.slice(0, 11)]);
-    }, 4000);
-    return () => clearInterval(timer);
-  }, []);
 
   const liveStats = [
-    { Icon: Users,         label: "Online agora",       getValue: (t) => 234 + (t % 7),             color: T.green, pulse: true  },
-    { Icon: Mail,          label: "Emails abertos hoje", getValue: (t) => 1684 + t * 3,              color: T.blue,  pulse: false },
-    { Icon: ClipboardList, label: "Forms hoje",          getValue: (t) => 47 + Math.floor(t / 2),    color: T.teal,  pulse: false },
-    { Icon: Zap,           label: "SQLs hoje",           getValue: (t) => 8 + (t > 3 ? 1 : 0),       color: T.orange,pulse: false },
+    { Icon: Users,         label: "Online agora",        value: 0, color: T.green, pulse: false },
+    { Icon: Mail,          label: "Emails abertos hoje",  value: 0, color: T.blue,  pulse: false },
+    { Icon: ClipboardList, label: "Forms hoje",           value: 0, color: T.teal,  pulse: false },
+    { Icon: Zap,           label: "SQLs hoje",            value: 0, color: T.orange,pulse: false },
   ];
 
   return (
@@ -860,7 +785,7 @@ const RealtimeSection = () => {
                   </div>
                 )}
               </div>
-              <div style={{ fontSize: 26, fontWeight: 800, color: T.text, fontFamily: T.head, letterSpacing: "-0.03em" }}>{s.getValue(tick).toLocaleString("pt-BR")}</div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: T.text, fontFamily: T.head, letterSpacing: "-0.03em" }}>{s.value.toLocaleString("pt-BR")}</div>
               <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, marginTop: 3, fontWeight: 600 }}>{s.label}</div>
             </Card>
           );
@@ -985,11 +910,7 @@ const RealtimeSection = () => {
    SECTION 6 — EXPORT E AUTOMAÇÃO
 ═══════════════════════════════════════════════════════════ */
 const ExportSection = () => {
-  const [schedules, setSchedules] = useState([
-    { id: 1, report: "Overview Executivo Mensal",       frequency: "Semanal", day: "Segunda", time: "08:00", recipients: "diretoria@vantari.com", active: true  },
-    { id: 2, report: "Pipeline SQL — Relatório Semanal",frequency: "Diário",  day: "—",       time: "07:00", recipients: "crm@vantari.com",       active: true  },
-    { id: 3, report: "Performance Campanhas",           frequency: "Mensal",  day: "Dia 1",   time: "09:00", recipients: "marketing@vantari.com",  active: false },
-  ]);
+  const [schedules, setSchedules] = useState([]);
   const [apiCopied, setApiCopied] = useState(null);
   const copyEndpoint = (path) => { setApiCopied(path); setTimeout(() => setApiCopied(null), 2000); };
 

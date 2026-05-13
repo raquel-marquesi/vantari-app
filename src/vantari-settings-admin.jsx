@@ -1,5 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 import { BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
@@ -384,16 +385,43 @@ const WorkspaceTab = ({toast}) => {
 };
 
 const TeamTab = ({toast}) => {
-  const [members,setMembers] = useState(MOCK_MEMBERS);
+  const [members,setMembers] = useState([]);
+  const [loading,setLoading] = useState(true);
   const [invEmail,setInvEmail] = useState(""); const [invRole,setInvRole] = useState("user"); const [inviting,setInviting] = useState(false);
   const [permTarget,setPermTarget] = useState(null); const [perms,setPerms] = useState({});
 
+  const fetchMembers = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("*")
+      .order("joined_at", { ascending: true });
+    if (!error && data) setMembers(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchMembers(); }, [fetchMembers]);
+
   const invite=async()=>{
     if(!invEmail.includes("@"))return toast("Email inválido","error");
-    setInviting(true);await new Promise(r=>setTimeout(r,800));
-    setMembers(m=>[...m,{id:"u"+Date.now(),name:invEmail.split("@")[0],email:invEmail,role:invRole,status:"invited",lastActive:"—",avatar:invEmail[0].toUpperCase()+invEmail[1].toUpperCase(),joined:"—"}]);
-    setInvEmail("");setInviting(false);toast(`Convite enviado para ${invEmail}`,"success");
+    setInviting(true);
+    const { error } = await supabase.from("team_members").insert({
+      email: invEmail,
+      name: invEmail.split("@")[0],
+      role: invRole,
+      status: "invited",
+    });
+    if (error) toast("Erro: " + error.message, "error");
+    else { toast(`Convite registado para ${invEmail}`,"success"); fetchMembers(); }
+    setInvEmail(""); setInviting(false);
   };
+
+  const removeMember = async (id) => {
+    const { error } = await supabase.from("team_members").delete().eq("id", id);
+    if (error) toast("Erro ao remover", "error");
+    else { toast("Membro removido","success"); fetchMembers(); }
+  };
+
   const openPerms=m=>{setPerms(ROLE_DEFAULTS[m.role]||{});setPermTarget(m);};
   const toggleAction=(res,action)=>setPerms(p=>{const cur=p[res]||[];return{...p,[res]:cur.includes(action)?cur.filter(a=>a!==action):[...cur,action]};});
 
@@ -420,37 +448,42 @@ const TeamTab = ({toast}) => {
             <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>{members.length} membros</div>
           </div>
         </div>
+        {loading ? (
+          <div style={{padding:32,textAlign:"center",color:T.muted,fontSize:13,fontFamily:T.font}}>Carregando...</div>
+        ) : (
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{background:T.faint}}>
-            {["Usuário","Papel","Status","Último Acesso","Ações"].map(h=>(
+            {["Usuário","Papel","Status","Ações"].map(h=>(
               <th key={h} style={{padding:"9px 18px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,letterSpacing:"0.06em",textTransform:"uppercase",fontFamily:T.font}}>{h}</th>
             ))}
           </tr></thead>
           <tbody>
-            {members.map(m=>(
+            {members.map(m=>{
+              const initials = (m.name||m.email).split(" ").map(w=>w[0]).join("").substring(0,2).toUpperCase();
+              return (
               <tr key={m.id} style={{borderTop:`1px solid ${T.border}`}}>
                 <td style={{padding:"13px 18px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:34,height:34,borderRadius:"50%",background:avatarBg(m.name),display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700}}>{m.avatar}</div>
+                    <div style={{width:34,height:34,borderRadius:"50%",background:avatarBg(m.name||m.email),display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:700}}>{initials}</div>
                     <div>
-                      <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{m.name}</div>
+                      <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{m.name||"—"}</div>
                       <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>{m.email}</div>
                     </div>
                   </div>
                 </td>
-                <td style={{padding:"13px 18px"}}><Badge color={roleC[m.role]}>{roleL[m.role]}</Badge></td>
-                <td style={{padding:"13px 18px"}}><Badge color={statusS[m.status].color} bg={statusS[m.status].bg}>{statusL[m.status]}</Badge></td>
-                <td style={{padding:"13px 18px",fontSize:13,color:T.muted,fontFamily:T.font}}>{m.lastActive}</td>
+                <td style={{padding:"13px 18px"}}><Badge color={roleC[m.role]||T.muted}>{roleL[m.role]||m.role}</Badge></td>
+                <td style={{padding:"13px 18px"}}><Badge color={(statusS[m.status]||statusS.active).color} bg={(statusS[m.status]||statusS.active).bg}>{statusL[m.status]||m.status}</Badge></td>
                 <td style={{padding:"13px 18px"}}>
                   <div style={{display:"flex",gap:6}}>
                     <Btn variant="outline" size="xs" onClick={()=>openPerms(m)}>Permissões</Btn>
-                    {m.role!=="admin"&&<Btn variant="danger" size="xs" onClick={()=>{setMembers(ms=>ms.filter(x=>x.id!==m.id));toast("Membro removido","success");}}>Remover</Btn>}
+                    {m.role!=="admin"&&<Btn variant="danger" size="xs" onClick={()=>removeMember(m.id)}>Remover</Btn>}
                   </div>
                 </td>
               </tr>
-            ))}
+            );})}
           </tbody>
         </table>
+        )}
       </Card>
 
       {permTarget&&(

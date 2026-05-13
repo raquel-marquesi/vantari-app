@@ -1,4 +1,6 @@
-# Vantari — Histórico de Alterações
+# Vantari — Histórico de Desenvolvimento
+
+---
 
 ## 2026-05-12 — Deploy inicial e correções
 
@@ -72,3 +74,74 @@
 ### Deploy de produção
 - URL: https://vantari-app.vercel.app
 - Deploy ID: `dpl_JXF7SeZ5rUAwsMa2MbsavbAj7FCR`
+
+---
+
+## 2026-05-13 — Workflow Builder, GitHub e correção de 404
+
+### Integração do Workflow Builder
+- Convertido `marketing_workflow_builder_v2.html` (script inline UMD) para módulo React ESM
+- Criado `src/vantari-workflow-builder.jsx` com:
+  - Canvas drag-and-drop de nós (Trigger, Condition, Ação, Delay)
+  - Conexões entre nós via SVG bezier
+  - Tabs: Builder, Workflows, Logs, Analytics
+  - Minimap e controles de zoom
+  - Sidebar de paleta / painel de configuração de nó
+- Instalado `@tabler/icons-webfont` (ícones `ti ti-*` usados no componente)
+- Adicionada rota `/workflow` em `App.jsx`
+
+### Correção de 404 ao recarregar páginas
+- Criado `vercel.json` com rewrite `/(.*) → /index.html`
+- Resolve o problema clássico de SPA no Vercel: servidor tentava servir rotas como arquivos físicos
+
+### GitHub e deploy automático
+- Repositório criado: https://github.com/raquel-marquesi/vantari-app (privado)
+- Remote `origin` adicionado e código enviado com `git push -u origin main`
+- Vercel conectado ao GitHub via `vercel git connect`
+- Deploy automático ativo: push no `main` → Vercel deploya em https://vantari-app.vercel.app
+- Deploy pelo CLI (`vercel --prod`) continua funcionando como alternativa
+
+---
+
+## 2026-05-13 — Setup Supabase e conexão do módulo Leads
+
+### Setup Supabase
+- Projeto Supabase: `ejhrlrasepowdcdnggmv.supabase.co`
+- Instalado `@supabase/supabase-js` via npm
+- Criado `src/supabase.js` com `createClient` via `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY`
+- Variáveis configuradas no Vercel (produção) e `.env` local
+
+### Schema SQL criado (via SQL Editor do Supabase)
+Tabelas: `leads`, `lead_events`, `campaigns`, `campaign_sends`,
+`automation_flows`, `flow_runs`, `landing_pages`, `form_submissions`, `segments`
+
+Triggers criados:
+- `trg_update_lead_score` — atualiza `leads.score` ao inserir em `lead_events`
+- `trg_leads_updated_at` / `trg_campaigns_updated_at` / `trg_flows_updated_at`
+
+RLS habilitado com policies abertas (`using (true)`) para fase de desenvolvimento.
+
+### Módulo Leads — conectado ao Supabase
+**Arquivo:** `src/vantari-leads-module.jsx`
+
+Funcionalidades com dados reais:
+- Listagem com busca (nome/email/empresa) via query Supabase
+- Filtro por estágio aplicado na query
+- Stat cards calculados do array retornado
+- Modal de criação (`INSERT`) com deduplicação por email
+- Modal de edição (`UPDATE`) e exclusão (`DELETE`) com confirmação
+- Painel lateral de detalhes ao clicar na linha
+- Score badge (Cold/Warm/Hot/Sales Ready) e stage badge coloridos
+- Loading state com spinner, error state com banner
+
+---
+
+## Pendente para próximas sessões
+
+- [ ] `vantari-scoring-system.jsx` → conectar `lead_events`
+- [ ] `vantari-email-marketing.jsx` → conectar `campaigns` + `campaign_sends`
+- [ ] Criar `vantari-automation-flows.jsx` do zero (ou conectar workflow builder ao Supabase)
+- [ ] Supabase Auth real (substituir auth mock)
+- [ ] Segmentação dinâmica (`segments`)
+- [ ] Reports com dados reais
+- [ ] RLS com `auth.uid()` antes de produção

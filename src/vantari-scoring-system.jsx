@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Scale, Filter, Zap, Settings, Users, Mail,
@@ -6,8 +6,9 @@ import {
   Pencil, X, Plus, Save, CheckCircle2, AlertTriangle,
   AlertCircle, Info, Radio, ClipboardList, Monitor,
   MessageSquare, Calendar, Thermometer, Flame, ChevronRight,
-  Activity, Clock, Webhook
+  Activity, Clock, Webhook, Loader2
 } from "lucide-react";
+import { supabase } from "./supabase";
 
 /* ═══════════════════════════════════════════════════════════════════════
    DATABASE SCHEMA (Supabase-compatible)
@@ -77,27 +78,6 @@ const scoreBand = (s, t) => {
 };
 const bandOf = (score, t) => bandColors[scoreBand(score, t)];
 
-/* ───── SEED DATA ───── */
-const NAMES     = ["Ana Costa","Carlos Mendes","Fernanda Lima","Roberto Alves","Patrícia Santos","Diego Rocha","Juliana Ferreira","Marcos Oliveira","Beatriz Nunes","Lucas Pereira","Camila Souza","André Machado","Vanessa Cruz","Felipe Gomes","Larissa Martins","Bruno Carvalho","Priscila Rodrigues","Thiago Almeida","Natalia Vieira","Rafael Barbosa","Isabela Rocha","Eduardo Lopes","Simone Freitas","Gabriel Silva","Monique Nascimento"];
-const COMPANIES = ["TechNova","Agência Pixel","StartupHub","Comércio Brasil","Digital Minds","Vendas Pro","Consultoria Elite","E-shop Max"];
-const SOURCES   = ["Email","WhatsApp","Instagram","Google Ads","Meta Ads","Landing Page"];
-const ALL_TAGS  = ["VIP","B2B","SaaS","E-commerce","Alto Valor","Newsletter","Demo Solicitada","Retargeting"];
-
-const makeLeads = () => NAMES.map((name, i) => {
-  const score = Math.floor(Math.random() * 100);
-  return {
-    id: `l${i+1}`, name,
-    email: `${name.split(" ")[0].toLowerCase()}${i}@co.com`,
-    company: COMPANIES[i % COMPANIES.length],
-    score,
-    prevScore: Math.max(0, score + Math.floor(Math.random() * 20 - 10)),
-    source: SOURCES[i % SOURCES.length],
-    tags: ALL_TAGS.sort(() => Math.random() - .5).slice(0, Math.floor(Math.random() * 3)),
-    lastActive: new Date(Date.now() - Math.random() * 45 * 864e5).toISOString(),
-    interactions: Math.floor(Math.random() * 30 + 1),
-  };
-});
-
 const CATEGORY_ICONS = {
   email:    Mail,
   form:     ClipboardList,
@@ -126,17 +106,6 @@ const DEFAULT_SEGMENTS = [
   { id:"seg2", name:"Alto Valor B2B", color:C.purple, conditions:[{field:"score",  op:"gte", value:"50"},{field:"tags", op:"contains",value:"B2B"}],           logic:"AND", count:0, saved:true },
   { id:"seg3", name:"Reengajamento",  color:C.orange, conditions:[{field:"score",  op:"lte", value:"20"},{field:"lastActive",op:"days_ago",value:"30"}],       logic:"AND", count:0, saved:true },
 ];
-
-const makeHistory = () => {
-  const reasons = ["Email aberto (+2)","Formulário preenchido (+10)","Clique em link (+5)","Visitou /pricing (+15)","Inatividade 30d (−5)","Demo solicitada (+20)","Email bounce (−10)"];
-  return Array.from({ length: 40 }, (_, i) => ({
-    id: `h${i}`, lead_id: `l${(i%25)+1}`, lead_name: NAMES[i % NAMES.length],
-    old_score: Math.floor(Math.random()*80), new_score: Math.floor(Math.random()*100),
-    reason: reasons[i % reasons.length],
-    timestamp: new Date(Date.now() - i * 3600000 * (1+Math.random()*5)).toISOString(),
-    webhook_sent: Math.random() > 0.4,
-  }));
-};
 
 /* ═══════════════════════════════════════════════════════════════════════
    SHARED UI COMPONENTS
@@ -305,8 +274,7 @@ const ScoringRules = ({ rules, setRules, thresholds, setThresholds, leads }) => 
     const isEdit = editId === rule.id;
     const CatIcon = CATEGORY_ICONS[rule.category] || Activity;
     return (
-      <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      onClick={() => path && navigate(path)}
+      <div onMouseEnter={() => setHovRow(true)} onMouseLeave={() => setHovRow(false)}
       style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 14px", background:hovRow?C.faint:"transparent", borderRadius:8, transition:"background 0.15s", borderBottom:`0.5px solid ${C.border}` }}>
         <div style={{ width:28, height:28, borderRadius:8, background:`${rule.points >= 0 ? C.blue : C.red}12`, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
           <CatIcon size={13} color={rule.points >= 0 ? C.blue : C.red} aria-hidden="true" />
@@ -466,7 +434,10 @@ const CONDITION_FIELDS = [
   { value:"interactions",label:"Interações",        ops:["gte","lte"]                },
 ];
 const OP_LABELS = { gte:"≥", lte:"≤", eq:"=", neq:"≠", between:"entre", contains:"contém", not_contains:"não contém", days_ago:"há mais de X dias", days_within:"dentro de X dias" };
-const FIELD_VALUES = { source:SOURCES, tags:ALL_TAGS };
+const FIELD_VALUES = {
+  source: ["Email","WhatsApp","Instagram","Google Ads","Meta Ads","Landing Page"],
+  tags:   ["VIP","B2B","SaaS","E-commerce","Alto Valor","Newsletter","Demo Solicitada","Retargeting"],
+};
 
 const SegmentBuilder = ({ leads, thresholds }) => {
   const [segments, setSegments] = useState(DEFAULT_SEGMENTS);
@@ -690,7 +661,7 @@ const ScoringDashboard = ({ leads, thresholds, history }) => {
       {/* Stats row */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
         <StatCard label="Total de Leads"  value={leads.length}                                                                  icon={Users}      color={C.blue}   />
-        <StatCard label="Média de Score"  value={Math.round(leads.reduce((a,l)=>a+l.score,0)/leads.length)}                    icon={BarChart2}  color={C.teal}   />
+        <StatCard label="Média de Score"  value={leads.length ? Math.round(leads.reduce((a,l)=>a+l.score,0)/leads.length) : 0} icon={BarChart2}  color={C.teal}   />
         <StatCard label="Leads SQL"        value={bands.sql}                                                                    icon={Star}       color={C.purple} />
         <StatCard label="Mudanças hoje"    value={history.filter(h=>new Date(h.timestamp)>new Date(Date.now()-864e5)).length}   icon={Activity}   color={C.orange} />
       </div>
@@ -700,7 +671,7 @@ const ScoringDashboard = ({ leads, thresholds, history }) => {
         {/* Donut */}
         <div style={{ background:C.surface, border:`0.5px solid ${C.border}`, borderRadius:12, padding:"20px", display:"flex", flexDirection:"column", alignItems:"center" }}>
           <SectionHeading>Distribuição por Faixa</SectionHeading>
-          <DonutChart slices={donutSlices} size={140} />
+          <DonutChart slices={donutSlices.length ? donutSlices : [{ label:"—", value:1, color:C.border }]} size={140} />
           <div style={{ width:"100%", marginTop:16, display:"flex", flexDirection:"column", gap:6 }}>
             {donutSlices.map(s => (
               <div key={s.label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
@@ -710,7 +681,7 @@ const ScoringDashboard = ({ leads, thresholds, history }) => {
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                   <span style={{ fontFamily:C.head, fontSize:12, fontWeight:700, color:s.color }}>{s.value}</span>
-                  <span style={{ fontFamily:C.font, fontSize:10, color:C.muted, fontWeight:600 }}>{Math.round(s.value/leads.length*100)}%</span>
+                  <span style={{ fontFamily:C.font, fontSize:10, color:C.muted, fontWeight:600 }}>{leads.length ? Math.round(s.value/leads.length*100) : 0}%</span>
                 </div>
               </div>
             ))}
@@ -962,11 +933,68 @@ const TABS = [
 ];
 
 export default function VantariScoringSystem() {
-  const [leads]      = useState(makeLeads);
-  const [history]    = useState(makeHistory);
-  const [rules, setRules]             = useState(DEFAULT_RULES);
-  const [thresholds, setThresholds]   = useState({warm:21, hot:51, sql:80});
-  const [tab, setTab]                 = useState("dashboard");
+  const [leads, setLeads]               = useState([]);
+  const [history, setHistory]           = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [rules, setRules]               = useState(DEFAULT_RULES);
+  const [thresholds, setThresholds]     = useState({warm:21, hot:51, sql:80});
+  const [tab, setTab]                   = useState("dashboard");
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [{ data: leadsData, error: leadsErr }, { data: eventsData, error: eventsErr }] = await Promise.all([
+        supabase
+          .from("leads")
+          .select("id, name, email, company, score, tags, source, updated_at")
+          .order("score", { ascending: false }),
+        supabase
+          .from("lead_events")
+          .select("id, lead_id, event_type, score_delta, created_at, leads(name, score)")
+          .order("created_at", { ascending: false })
+          .limit(200),
+      ]);
+      if (leadsErr) throw leadsErr;
+      if (eventsErr) throw eventsErr;
+
+      setLeads((leadsData || []).map(l => ({
+        id:           l.id,
+        name:         l.name || l.email?.split("@")[0] || "—",
+        email:        l.email,
+        company:      l.company || "—",
+        score:        l.score ?? 0,
+        prevScore:    Math.max(0, (l.score ?? 0) - 5),
+        source:       l.source || "—",
+        tags:         Array.isArray(l.tags) ? l.tags : [],
+        lastActive:   l.updated_at,
+        interactions: 0,
+      })));
+
+      setHistory((eventsData || []).map(ev => {
+        const delta    = ev.score_delta ?? 0;
+        const newScore = ev.leads?.score ?? 0;
+        const oldScore = Math.max(0, newScore - delta);
+        return {
+          id:           ev.id,
+          lead_id:      ev.lead_id,
+          lead_name:    ev.leads?.name || "—",
+          old_score:    oldScore,
+          new_score:    newScore,
+          reason:       ev.event_type || "—",
+          timestamp:    ev.created_at,
+          webhook_sent: false,
+        };
+      }));
+    } catch (err) {
+      setError(err.message || "Erro ao carregar dados.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   return (
     <div style={{ display:"flex", height:"100vh", background:C.bg, fontFamily:C.font, overflow:"hidden" }}>
@@ -979,6 +1007,7 @@ export default function VantariScoringSystem() {
         ::-webkit-scrollbar-track { background:transparent; }
         ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:3px; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
 
       {/* ── SIDEBAR — iconrs.png embutido (scoring ≠ dashboard principal) */}
@@ -996,6 +1025,7 @@ export default function VantariScoringSystem() {
           <NavItem icon={Star}           label="Scoring" path="/scoring"   active />
           <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
           <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
+          <NavItem icon={Zap}            label="Workflows" path="/workflow" />
           <NavSection label="Sistema" />
           <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
         </div>
@@ -1043,10 +1073,24 @@ export default function VantariScoringSystem() {
 
         {/* Content */}
         <div style={{ flex:1, overflowY:"auto", padding:"24px 28px" }}>
-          {tab==="dashboard"  && <ScoringDashboard leads={leads} thresholds={thresholds} history={history} />}
-          {tab==="rules"      && <ScoringRules rules={rules} setRules={setRules} thresholds={thresholds} setThresholds={setThresholds} leads={leads} />}
-          {tab==="segments"   && <SegmentBuilder leads={leads} thresholds={thresholds} />}
-          {tab==="automation" && <AutomationLog leads={leads} history={history} thresholds={thresholds} />}
+          {loading ? (
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:300, gap:10, color:C.muted }}>
+              <Loader2 size={22} style={{ animation:"spin 1s linear infinite" }} aria-hidden="true" />
+              <span style={{ fontFamily:C.font, fontSize:14, fontWeight:600 }}>Carregando dados...</span>
+            </div>
+          ) : error ? (
+            <div style={{ display:"flex", alignItems:"center", gap:10, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:10, padding:"14px 18px", color:C.red }}>
+              <AlertCircle size={18} aria-hidden="true" />
+              <span style={{ fontFamily:C.font, fontSize:13, fontWeight:600 }}>{error}</span>
+            </div>
+          ) : (
+            <>
+              {tab==="dashboard"  && <ScoringDashboard leads={leads} thresholds={thresholds} history={history} />}
+              {tab==="rules"      && <ScoringRules rules={rules} setRules={setRules} thresholds={thresholds} setThresholds={setThresholds} leads={leads} />}
+              {tab==="segments"   && <SegmentBuilder leads={leads} thresholds={thresholds} />}
+              {tab==="automation" && <AutomationLog leads={leads} history={history} thresholds={thresholds} />}
+            </>
+          )}
         </div>
 
         {/* DB schema footer */}

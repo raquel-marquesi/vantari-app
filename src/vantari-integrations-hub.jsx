@@ -8,25 +8,54 @@ import {
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
-   DESIGN TOKENS
+   DESIGN TOKENS — Vantari redesign
 ═══════════════════════════════════════════════════════════ */
 const T = {
-  blue:    "#0079a9", blueL:   "#e8f5fb", blueM: "#0079a9",
-  teal:    "#0079a9", tealL:   "#e8f5fb",
-  green:   "#05b27b", greenL:  "#f0fdf7",
-  amber:   "#e07b00", amberL:  "#fff4e6",
-  red:     "#ef4444", redL:    "#fef2f2",
-  purple:  "#6d45d9", purpleL: "#f3f0ff",
-  bg:      "#f2f5f8",
-  surface: "#ffffff",
-  border:  "#e2e8f0",
-  border2: "#edf0f4",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  faint:   "#f8fafc",
-  font:    "'Aptos', 'Nunito Sans', sans-serif",
-  head:    "'Montserrat', sans-serif",
-  mono:    "monospace",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+  border2: "#EEF2F6",
+
+  // Ink scale
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Compat aliases
+  blueL:   "#DCF0F7",
+  blueM:   "#0D7491",
+  tealL:   "#DCF0F7",
+  greenL:  "#DCFCE7",
+  amberL:  "#FEF3C7",
+  redL:    "#FFE8E6",
+  purpleL: "#EDE9FF",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -88,8 +117,8 @@ const PROVIDERS = {
     icon:()=>(<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" fill="#25D366"/></svg>),
   },
   webhook: {
-    label:"Webhooks", color:"#6d45d9", colorL:"#f3f0ff",
-    icon:()=>(<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#6d45d9" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>),
+    label:"Webhooks", color:"#7C5CFF", colorL:"#EDE9FF",
+    icon:()=>(<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>),
   },
 };
 
@@ -99,7 +128,7 @@ const PROVIDERS = {
 const StatusBadge = ({ status }) => {
   const map = {
     connected:    {bg:T.greenL,  color:"#065f46", label:"Conectado"    },
-    disconnected: {bg:"#f1f5f9", color:"#475569", label:"Desconectado" },
+    disconnected: {bg:"#EEF2F6", color:"#475569", label:"Desconectado" },
     partial:      {bg:T.amberL,  color:"#92400e", label:"Parcial"      },
     success:      {bg:T.greenL,  color:"#065f46", label:"Sucesso"      },
     error:        {bg:T.redL,    color:"#991b1b", label:"Erro"         },
@@ -107,7 +136,7 @@ const StatusBadge = ({ status }) => {
     approved:     {bg:T.greenL,  color:"#065f46", label:"Aprovado"     },
     pending:      {bg:T.amberL,  color:"#92400e", label:"Pendente"     },
     rejected:     {bg:T.redL,    color:"#991b1b", label:"Rejeitado"    },
-    syncing:      {bg:T.blueL,   color:T.blue,    label:"Sincronizando"},
+    syncing:      {bg:T.blueL,   color:T.teal,    label:"Sincronizando"},
     active:       {bg:T.greenL,  color:"#065f46", label:"Ativo"        },
   };
   const s=map[status]||map.disconnected;
@@ -121,10 +150,10 @@ const StatusBadge = ({ status }) => {
 
 /* Btn — accepts icon as string (safe unicode) OR Lucide component */
 const Btn = ({ children, onClick, variant="default", size="md", disabled=false, icon, style:sx={} }) => {
-  const base = {display:"inline-flex",alignItems:"center",gap:6,border:"none",borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontFamily:T.font,fontWeight:700,transition:"all .15s",opacity:disabled?.5:1,outline:"none"};
+  const base = {display:"inline-flex",alignItems:"center",gap:6,border:"none",borderRadius:10,cursor:disabled?"not-allowed":"pointer",fontFamily:T.font,fontWeight:700,transition:"all .15s",opacity:disabled?.5:1,outline:"none"};
   const sizes = {sm:{fontSize:12,padding:"5px 12px"},md:{fontSize:13,padding:"7px 16px"},lg:{fontSize:14,padding:"10px 20px"}};
   const variants = {
-    default:   {background:T.blue,    color:"#fff"              },
+    default:   {background:T.teal,    color:"#fff"              },
     secondary: {background:T.border2, color:T.text,border:`0.5px solid ${T.border}`},
     ghost:     {background:"transparent",color:T.muted,border:"none"},
     danger:    {background:T.redL,    color:T.red,  border:`0.5px solid ${T.red}20`},
@@ -163,9 +192,9 @@ const Select = ({ label, value, onChange, options }) => (
 );
 
 const Card = ({ children, style:sx={}, onClick, hover }) => (
-  <div onClick={onClick} style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:12,padding:"18px 20px",cursor:onClick?"pointer":"default",transition:"box-shadow .15s, border-color .15s",...sx}}
-    onMouseEnter={hover?e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.boxShadow="0 4px 16px rgba(0,121,169,0.08)";}:undefined}
-    onMouseLeave={hover?e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.boxShadow="none";}:undefined}>
+  <div onClick={onClick} style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:14,padding:"18px 20px",cursor:onClick?"pointer":"default",transition:"box-shadow .15s, border-color .15s",boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",...sx}}
+    onMouseEnter={hover?e=>{e.currentTarget.style.borderColor=T.teal;e.currentTarget.style.boxShadow="0 4px 16px rgba(13,116,145,0.10)";}:undefined}
+    onMouseLeave={hover?e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.boxShadow="0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)";}:undefined}>
     {children}
   </div>
 );
@@ -173,7 +202,7 @@ const Card = ({ children, style:sx={}, onClick, hover }) => (
 const SectionHeader = ({ title, subtitle, action }) => (
   <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:20}}>
     <div>
-      <h2 style={{margin:0,fontSize:16,fontWeight:700,color:T.text,fontFamily:T.head}}>{title}</h2>
+      <h2 style={{margin:0,fontSize:16,fontWeight:700,color:T.ink,fontFamily:T.head}}>{title}</h2>
       {subtitle&&<p style={{margin:"3px 0 0",fontSize:13,fontWeight:600,color:T.muted,fontFamily:T.font}}>{subtitle}</p>}
     </div>
     {action}
@@ -211,9 +240,11 @@ const LogRow = ({ log }) => {
   );
 };
 
-/* NavSection / NavItem */
+/* ─── SIDEBAR NAV HELPERS ─── */
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
+    {label}
+  </div>
 );
 const NavItem = ({ icon:Icon, label, active=false, path }) => {
   const [hov,setHov] = useState(false);
@@ -221,7 +252,23 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
+      style={{
+        position:"relative",
+        display:"flex",alignItems:"center",gap:9,
+        padding:"8px 20px",fontSize:13.5,
+        fontWeight:active?700:600,
+        fontFamily:T.font,
+        color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
+        background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
+        cursor:"pointer",transition:"all 0.15s",userSelect:"none",
+      }}>
+      {active && (
+        <span style={{
+          position:"absolute",left:0,top:6,bottom:6,width:3,
+          background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
+          borderRadius:"0 3px 3px 0",
+        }}/>
+      )}
       {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
     </div>
   );
@@ -338,7 +385,7 @@ const MetaView = ({ integration, onBack }) => {
               <Input label="Pixel ID" value={cfg.pixel_id} onChange={v=>setCfg({...cfg,pixel_id:v})} mono/>
               <Input label="Business ID" value={cfg.business_id} onChange={v=>setCfg({...cfg,business_id:v})} mono/>
             </div>
-            <div style={{background:"#0f172a",borderRadius:8,padding:16,fontFamily:T.mono,fontSize:12,color:"#e2e8f0",lineHeight:1.7}}>
+            <div style={{background:"#0f172a",borderRadius:8,padding:16,fontFamily:T.mono,fontSize:12,color:"#E8EEF3",lineHeight:1.7}}>
               <div style={{color:"#64748b",marginBottom:8}}>{"<!-- Meta Pixel Code -->"}</div>
               <div><span style={{color:"#f59e0b"}}>{"!function"}</span><span style={{color:"#94a3b8"}}>({"f,b,e,v,n,t,s"})</span></div>
               <div><span style={{color:"#94a3b8"}}>{"// Pixel ID: "}</span><span style={{color:"#34d399"}}>{cfg.pixel_id||"SEU_PIXEL_ID"}</span></div>
@@ -440,7 +487,7 @@ const GoogleView = ({ integration, onBack }) => {
                     <div style={{fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Estratégia: {c.bidding}</div>
                   </div>
                   <div style={{display:"flex",gap:24,textAlign:"right"}}>
-                    <div><div style={{fontSize:18,fontWeight:700,color:T.blue,fontFamily:T.head}}>{c.conversions}</div><div style={{fontSize:11,fontWeight:600,color:T.muted}}>Conversões</div></div>
+                    <div><div style={{fontSize:18,fontWeight:700,color:T.teal,fontFamily:T.head}}>{c.conversions}</div><div style={{fontSize:11,fontWeight:600,color:T.muted}}>Conversões</div></div>
                     <div><div style={{fontSize:18,fontWeight:700,color:T.green,fontFamily:T.head}}>{c.value}</div><div style={{fontSize:11,fontWeight:600,color:T.muted}}>Valor</div></div>
                   </div>
                 </div>
@@ -459,9 +506,9 @@ const GoogleView = ({ integration, onBack }) => {
             </div>
             {[{kw:"crm marketing",leads:34,score:72,conv:"18%"},{kw:"automação leads",leads:28,score:68,conv:"15%"},{kw:"software crm",leads:19,score:61,conv:"11%"},{kw:"gestão de leads",leads:15,score:58,conv:"9%"}].map((r,i)=>(
               <div key={r.kw} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"12px 16px",borderTop:`0.5px solid ${T.border}`,background:i%2===0?T.surface:T.faint,fontSize:13,fontFamily:T.font}}>
-                <span style={{fontFamily:T.mono,color:T.blue,fontWeight:600}}>"{r.kw}"</span>
+                <span style={{fontFamily:T.mono,color:T.teal,fontWeight:600}}>"{r.kw}"</span>
                 <span style={{fontWeight:700,color:T.text}}>{r.leads}</span>
-                <span><span style={{background:T.blueL,color:T.blue,fontWeight:700,fontSize:12,padding:"2px 8px",borderRadius:20}}>{r.score}</span></span>
+                <span><span style={{background:T.blueL,color:T.teal,fontWeight:700,fontSize:12,padding:"2px 8px",borderRadius:20}}>{r.score}</span></span>
                 <span style={{color:T.green,fontWeight:700}}>{r.conv}</span>
               </div>
             ))}
@@ -549,7 +596,7 @@ const WhatsAppView = ({ integration, onBack }) => {
               <span>https://api.vantari.com.br/webhooks/whatsapp</span>
             </div>
             <p style={{fontSize:12,fontWeight:600,color:T.muted,margin:"8px 0 0",fontFamily:T.font}}>Configure este URL em Meta for Developers como Webhook URL. Verify token: <code style={{fontFamily:T.mono,background:T.faint,padding:"1px 5px",borderRadius:4}}>vantari_wh_token</code></p>
-            <div style={{marginTop:8,fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Campos subscritos: <span style={{fontFamily:T.mono,color:T.blue}}>messages, message_status_updates, messaging_handovers</span></div>
+            <div style={{marginTop:8,fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Campos subscritos: <span style={{fontFamily:T.mono,color:T.teal}}>messages, message_status_updates, messaging_handovers</span></div>
           </Card>
         </div>
       )}
@@ -588,7 +635,7 @@ const WhatsAppView = ({ integration, onBack }) => {
               <div key={c.phone} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderTop:i>0?`0.5px solid ${T.border}`:"none",cursor:"pointer",background:T.surface,transition:"background 0.1s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=T.faint}
                 onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
-                <div style={{width:38,height:38,borderRadius:"50%",background:T.blueL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:T.blue,fontFamily:T.head}}>
+                <div style={{width:38,height:38,borderRadius:"50%",background:T.blueL,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:T.teal,fontFamily:T.head}}>
                   {c.name.split(" ").map(n=>n[0]).join("").slice(0,2)}
                 </div>
                 <div style={{flex:1,minWidth:0}}>
@@ -645,7 +692,7 @@ const WebhooksView = ({ integration, onBack }) => {
       </div>
 
       {showNew&&(
-        <Card style={{marginBottom:20,border:`0.5px solid ${T.blue}40`,background:T.blueL}}>
+        <Card style={{marginBottom:20,border:`0.5px solid ${T.teal}40`,background:T.blueL}}>
           <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:14,fontFamily:T.font}}>Novo Endpoint</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:12}}>
             <Input label="Nome" value={newEp.name} onChange={v=>setNewEp({...newEp,name:v})} placeholder="Ex: Meu CRM"/>
@@ -655,7 +702,7 @@ const WebhooksView = ({ integration, onBack }) => {
             <label style={{display:"block",fontSize:12,fontWeight:700,color:T.muted,marginBottom:6,textTransform:"uppercase",fontFamily:T.font}}>Eventos</label>
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
               {EVENTS.map(ev=>(
-                <label key={ev.id} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",border:`0.5px solid ${newEp.events.includes(ev.id)?T.blue:T.border}`,borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,background:newEp.events.includes(ev.id)?T.blueL:T.surface,color:newEp.events.includes(ev.id)?T.blue:T.text,fontFamily:T.font}}>
+                <label key={ev.id} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 12px",border:`0.5px solid ${newEp.events.includes(ev.id)?T.teal:T.border}`,borderRadius:20,cursor:"pointer",fontSize:12,fontWeight:700,background:newEp.events.includes(ev.id)?T.blueL:T.surface,color:newEp.events.includes(ev.id)?T.teal:T.text,fontFamily:T.font}}>
                   <input type="checkbox" checked={newEp.events.includes(ev.id)} onChange={e=>setNewEp({...newEp,events:e.target.checked?[...newEp.events,ev.id]:newEp.events.filter(i=>i!==ev.id)})} style={{display:"none"}}/>
                   {ev.label}
                 </label>
@@ -755,7 +802,7 @@ const FieldMappingView = ({ onBack }) => {
       </div>
       <div style={{display:"flex",gap:8,marginBottom:20}}>
         {["meta","google"].map(p=>(
-          <button key={p} onClick={()=>setProvider(p)} style={{padding:"7px 18px",border:`0.5px solid ${provider===p?T.blue:T.border}`,borderRadius:20,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:T.font,background:provider===p?T.blueL:T.surface,color:provider===p?T.blue:T.muted}}>
+          <button key={p} onClick={()=>setProvider(p)} style={{padding:"7px 18px",border:`0.5px solid ${provider===p?T.teal:T.border}`,borderRadius:20,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:T.font,background:provider===p?T.blueL:T.surface,color:provider===p?T.teal:T.muted}}>
             {p==="meta"?"Meta Ads":"Google Ads"}
           </button>
         ))}
@@ -777,7 +824,7 @@ const FieldMappingView = ({ onBack }) => {
                   {TRANSFORMS.map(t=><option key={t.value} value={t.value}>{t.label}</option>)}
                 </select>
                 <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <input type="checkbox" checked={m.required} onChange={e=>updateMap(i,"required",e.target.checked)} style={{accentColor:T.blue}}/>
+                  <input type="checkbox" checked={m.required} onChange={e=>updateMap(i,"required",e.target.checked)} style={{accentColor:T.teal}}/>
                   <button onClick={()=>removeMap(i)} style={{background:"none",border:"none",cursor:"pointer",color:T.red,padding:"2px 4px",display:"flex",alignItems:"center"}}>
                     <X size={13} color={T.red} aria-hidden="true"/>
                   </button>
@@ -826,7 +873,7 @@ const LogsView = ({ onBack }) => {
         <h2 style={{margin:0,fontSize:17,fontWeight:700,color:T.text,fontFamily:T.head}}>Logs de Sincronização</h2>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
-        {[{label:"Total",v:counts.total,color:T.blue},{label:"Sucesso",v:counts.success,color:T.green},{label:"Erros",v:counts.error,color:T.red},{label:"Avisos",v:counts.warning,color:T.amber}].map(s=>(
+        {[{label:"Total",v:counts.total,color:T.teal},{label:"Sucesso",v:counts.success,color:T.green},{label:"Erros",v:counts.error,color:T.red},{label:"Avisos",v:counts.warning,color:T.amber}].map(s=>(
           <div key={s.label} style={{background:T.surface,border:`0.5px solid ${T.border}`,borderLeft:`3px solid ${s.color}`,borderRadius:10,padding:"12px 16px",textAlign:"center"}}>
             <div style={{fontSize:22,fontWeight:700,color:s.color,fontFamily:T.head}}>{s.v}</div>
             <div style={{fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>{s.label}</div>
@@ -875,32 +922,52 @@ export default function VantariIntegrationsHub() {
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         body { margin:0; }
-        ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
+        ::-webkit-scrollbar { width:6px; height:6px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
         select, input { font-family:${T.font}; }
       `}</style>
 
-      {/* ── SIDEBAR — iconrs.png */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        width: 240,
+        background: T.sidebarBg,
+        display:"flex", flexDirection:"column", flexShrink:0,
+        position:"relative", overflow:"hidden",
+      }}>
+        {/* glow topo-direito */}
+        <div style={{
+          position:"absolute", inset:0, pointerEvents:"none",
+          background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)",
+        }}/>
+
+        {/* Brand */}
+        <div style={{padding:"20px 20px 0", position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+            <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
+              <img src="/icone.png" alt="" style={{width:22,height:22}}/>
+            </div>
+            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
+            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+
+        <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
           <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"       />
-          <NavItem icon={Users}          label="Leads" path="/leads"           />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email" />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
           <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring" path="/scoring"         />
-          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
           <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações" path="/integrations" active/>
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" active/>
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
           <NavItem icon={Settings} label="Configurações" path="/settings"/>
         </div>
       </div>
@@ -909,8 +976,8 @@ export default function VantariIntegrationsHub() {
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
 
         {/* Topbar */}
-        <div style={{height:52,background:T.surface,borderBottom:`0.5px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0}}>
-          <span style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.head,letterSpacing:"-0.01em"}}>Integrações</span>
+        <div style={{height:56,background:T.surface,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,zIndex:10}}>
+          <span style={{fontSize:18,fontWeight:700,color:T.ink,fontFamily:T.head,letterSpacing:"-0.02em"}}>Integrações</span>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             {pendingLeads>0&&(
               <div style={{padding:"4px 10px",background:T.amberL,border:`0.5px solid ${T.amber}40`,borderRadius:20,fontSize:12,fontWeight:700,color:"#92400e",fontFamily:T.font}}>
@@ -923,7 +990,7 @@ export default function VantariIntegrationsHub() {
         </div>
 
         {/* Content */}
-        <div style={{flex:1,overflowY:"auto",padding:"28px",maxWidth:1100,margin:"0 auto",width:"100%"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"28px",maxWidth:1100,margin:"0 auto",width:"100%",background:"#F5F8FB"}}>
 
           {view==="hub"&&(
             <div>
@@ -931,7 +998,7 @@ export default function VantariIntegrationsHub() {
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
                 {[
-                  {label:"Plataformas Conectadas", value:`${integrations.filter(i=>i.status==="connected").length}/${integrations.length}`, color:T.blue },
+                  {label:"Plataformas Conectadas", value:`${integrations.filter(i=>i.status==="connected").length}/${integrations.length}`, color:T.teal },
                   {label:"Leads Importados Hoje",   value:extLeads.length,                                                                   color:T.green},
                   {label:"Pendentes de Processar",  value:pendingLeads,                                                                      color:T.amber},
                   {label:"Falhas nas Últimas 24h",  value:DB.integration_logs.filter(l=>l.status==="error").length,                         color:T.red  },

@@ -17,35 +17,58 @@ import { supabase } from "./supabase";
    DESIGN TOKENS
 ═══════════════════════════════════════════════════ */
 const T = {
-  bg:      "#f2f5f8",
-  white:   "#ffffff",
-  ink:     "#5f5f64",
-  ink2:    "#5f5f64",
-  muted:   "#888891",
-  border:  "#e2e8f0",
-  border2: "#edf0f4",
-  blue:    "#0079a9",
-  blueL:   "#e8f5fb",
-  teal:    "#0079a9",
-  green:   "#05b27b",
-  amber:   "#e07b00",
-  red:     "#ef4444",
-  purple:  "#6d45d9",
-  font:    "'Aptos', 'Nunito Sans', sans-serif",
-  head:    "'Montserrat', sans-serif",
-  sans:    "'Aptos', 'Nunito Sans', sans-serif",
-  mono:    "'Courier New', monospace",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  white:   "#FFFFFF",
+  border:  "#E8EEF3",
+  border2: "#E8EEF3",
+
+  // Ink scale (text)
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Legacy compat aliases
+  blueL:   "#E0F2F8",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  sans:    "'Inter', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ═══════════════════════════════════════════════════
    SEED DATA
 ═══════════════════════════════════════════════════ */
 const STATUS_META = {
-  draft:     { label:"Rascunho", color:"#888891", bg:"#f3f4f6" },
-  scheduled: { label:"Agendada", color:"#e07b00", bg:"#fff4e6" },
-  sending:   { label:"Enviando", color:"#0079a9", bg:"#e8f5fb" },
-  sent:      { label:"Enviada",  color:"#05b27b", bg:"#f0fdf7" },
-  failed:    { label:"Falhou",   color:"#ef4444", bg:"#fef2f2" },
+  draft:     { label:"Rascunho", color:"#5A6B7A", bg:"#EEF2F6" },
+  scheduled: { label:"Agendada", color:"#F59E0B", bg:"#FEF3C7" },
+  sending:   { label:"Enviando", color:"#0D7491", bg:"#E0F2F8" },
+  sent:      { label:"Enviada",  color:"#14A273", bg:"#ECFDF5" },
+  failed:    { label:"Falhou",   color:"#FF6B5E", bg:"#FEF2F2" },
 };
 
 
@@ -55,19 +78,19 @@ const TEMPLATES = [
     {id:"b2",type:"text",   content:{text:"Olá, {{lead.name}}!\n\nBem-vindo à nossa newsletter mensal com as principais tendências de marketing digital.",align:"left"}},
     {id:"b3",type:"divider",content:{}},
     {id:"b4",type:"text",   content:{text:"Continue lendo para descobrir insights exclusivos do mercado.",align:"left"}},
-    {id:"b5",type:"button", content:{text:"Ler Artigo Completo",url:"#",align:"center",color:"#0079a9"}},
+    {id:"b5",type:"button", content:{text:"Ler Artigo Completo",url:"#",align:"center",color:"#0D7491"}},
     {id:"b6",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
   ]},
   { id:"t2", name:"Oferta Promocional",  category:"promotional", desc:"Alta conversão com urgência e call-to-action em destaque", blocks:[
     {id:"b1",type:"header", content:{logo:true,headline:"Oferta Especial",subline:"Por tempo limitado"}},
     {id:"b2",type:"text",   content:{text:"{{lead.name}}, temos uma oferta exclusiva para você.\n\nNão perca esta oportunidade única.",align:"center"}},
-    {id:"b3",type:"button", content:{text:"Aproveitar Agora",url:"#",align:"center",color:"#ef4444"}},
+    {id:"b3",type:"button", content:{text:"Aproveitar Agora",url:"#",align:"center",color:"#FF6B5E"}},
     {id:"b4",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
   ]},
   { id:"t3", name:"Follow-up de Vendas", category:"follow-up",   desc:"Sequência de nurturing focada em conversão", blocks:[
     {id:"b1",type:"header", content:{logo:true,headline:"",subline:""}},
     {id:"b2",type:"text",   content:{text:"Oi {{lead.name}},\n\nSoftwares e automação podem triplicar seus resultados. Que tal explorarmos isso juntos?\n\nAbraços,\nTime Vantari",align:"left"}},
-    {id:"b3",type:"button", content:{text:"Agendar uma Conversa",url:"#",align:"left",color:"#0079a9"}},
+    {id:"b3",type:"button", content:{text:"Agendar uma Conversa",url:"#",align:"left",color:"#0D7491"}},
     {id:"b4",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
   ]},
 ];
@@ -91,19 +114,25 @@ const TypeIcon = ({ type, size=16, color="#fff" }) => {
 const Btn = ({ children, onClick, variant="primary", size="md", icon:Icon, disabled, full, style:sx={} }) => {
   const [hov,setHov] = useState(false);
   const v = {
-    primary:   { bg:hov?"#006a93":T.blue,  color:"#fff", border:"none",                             shadow:hov?`0 4px 16px ${T.blue}44`:`0 1px 4px ${T.blue}22` },
-    secondary: { bg:hov?T.blueL:T.white,   color:T.blue, border:`1px solid ${hov?T.blue:T.border2}`, shadow:"none" },
-    ghost:     { bg:hov?T.border2:"transparent",color:T.ink, border:`0.5px solid ${T.border}`,      shadow:"none" },
-    danger:    { bg:hov?"#dc2626":"#fef2f2",color:hov?"#fff":T.red, border:`0.5px solid ${T.red}55`,shadow:"none" },
-    ink:       { bg:hov?"#3d3d3d":T.ink,   color:"#fff", border:"none",                             shadow:"none" },
-    success:   { bg:hov?"#04996a":T.green, color:"#fff", border:"none",                             shadow:"none" },
+    primary:   {
+      bg: hov
+        ? "linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)"
+        : "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+      color: "#fff", border: "none",
+      shadow: hov ? "0 8px 22px -6px rgba(13,116,145,.5)" : "0 4px 14px -4px rgba(13,116,145,.4)",
+    },
+    secondary: { bg:hov?`${T.teal}14`:T.white, color:T.teal, border:`1.5px solid ${hov?T.teal:T.border}`, shadow:"none" },
+    ghost:     { bg:hov?"#EEF2F6":"transparent", color:T.text, border:"none", shadow:"none" },
+    danger:    { bg:hov?"#e04d42":T.coral, color:"#fff", border:"none", shadow:"none" },
+    ink:       { bg:hov?"#1A2D3B":T.ink, color:"#fff", border:"none", shadow:"none" },
+    success:   { bg:hov?"#108A60":T.green, color:"#fff", border:"none", shadow:"none" },
   }[variant]||{};
   const pad = {xs:"4px 9px",sm:"6px 13px",md:"9px 18px",lg:"12px 26px"}[size]||"9px 18px";
   const fs  = {xs:10,sm:12,md:13,lg:14}[size]||13;
   return (
     <button onClick={onClick} disabled={disabled}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{display:"inline-flex",alignItems:"center",gap:7,padding:pad,fontSize:fs,fontFamily:T.font,fontWeight:700,borderRadius:8,border:v.border||"none",background:v.bg,color:v.color,boxShadow:v.shadow,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"all 0.15s",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",...sx}}>
+      style={{display:"inline-flex",alignItems:"center",gap:7,padding:pad,fontSize:fs,fontFamily:T.font,fontWeight:700,borderRadius:10,border:v.border||"none",background:v.bg,color:v.color,boxShadow:v.shadow,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"all 0.15s",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",transform:hov&&variant==="primary"?"translateY(-1px)":"none",...sx}}>
       {Icon&&<Icon size={fs} aria-hidden="true"/>}{children}
     </button>
   );
@@ -121,14 +150,14 @@ const Field = ({ label, value, onChange, placeholder, type="text", small, mono, 
   );
 };
 
-const Badge = ({ label, color="#888891", bg="#f3f4f6", dot }) => (
+const Badge = ({ label, color="#5A6B7A", bg="#EEF2F6", dot }) => (
   <span style={{display:"inline-flex",alignItems:"center",gap:5,fontFamily:T.font,fontSize:11,fontWeight:700,color,background:bg,padding:"3px 9px",borderRadius:20}}>
     {dot&&<span style={{width:6,height:6,borderRadius:"50%",background:color,display:"inline-block"}}/>}{label}
   </span>
 );
 
 const MetricPill = ({ label, value, sub, color=T.blue, icon:Icon }) => (
-  <div style={{background:T.white,border:`0.5px solid ${T.border}`,borderLeft:`3px solid ${color}`,borderRadius:10,padding:"12px 14px"}}>
+  <div style={{background:T.surface,border:`1px solid ${T.border}`,borderLeft:`3px solid ${color}`,borderRadius:14,padding:"12px 14px",boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)"}}>
     <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6,display:"flex",alignItems:"center",gap:5}}>
       {Icon&&<Icon size={11} color={color} aria-hidden="true"/>}{label}
     </div>
@@ -137,18 +166,95 @@ const MetricPill = ({ label, value, sub, color=T.blue, icon:Icon }) => (
   </div>
 );
 
+/* ─── Phase 5: Hero KPI Components ─── */
+const SparklineChart = ({ data = [], color }) => {
+  const pts = (data.length >= 2 ? data : Array(7).fill(0));
+  const max = Math.max(...pts) || 1;
+  const min = Math.min(...pts);
+  const range = max - min || 1;
+  const W = 220, H = 36;
+  const x = (i) => (i / (pts.length - 1)) * W;
+  const y = (v) => H - ((v - min) / range) * (H - 6) - 3;
+  const line = pts.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${line} L${W},${H} L0,${H}Z`;
+  const gradId = `sg${color.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ display: "block", width: "calc(100% + 32px)", height: 36, margin: "8px -16px -1px" }}
+      aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.28" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
+const TrendChipHero = ({ value }) => {
+  const up = value >= 0;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, fontFamily: T.mono,
+      background: up ? `${T.green}14` : `${T.coral}14`, color: up ? T.green : T.coral }}>
+      {up ? "↗" : "↘"} {Math.abs(value)}%
+    </span>
+  );
+};
+
+const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData }) => (
+  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+    padding: "14px 16px 0", position: "relative", overflow: "hidden",
+    boxShadow: "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color, borderRadius: "14px 14px 0 0" }} />
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ width: 32, height: 32, borderRadius: 9, background: `${color}14`, display: "grid", placeItems: "center" }}>
+        {Icon && <Icon size={16} color={color} aria-hidden="true" />}
+      </div>
+      {trend !== undefined && <TrendChipHero value={trend} />}
+    </div>
+    <div style={{ fontSize: 28, fontWeight: 700, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em",
+      fontVariantNumeric: "tabular-nums", margin: "10px 0 3px", lineHeight: 1 }}>{value}</div>
+    <div style={{ fontSize: 11.5, color: T.muted, fontWeight: 600, fontFamily: T.font }}>{label}</div>
+    {sub && <div style={{ fontSize: 10.5, color, fontWeight: 700, fontFamily: T.mono, margin: "2px 0 8px" }}>{sub}</div>}
+    {!sub && <div style={{ height: 8 }} />}
+    <SparklineChart data={sparkData} color={color} />
+  </div>
+);
+
 /* NavSection / NavItem */
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+    {label}
+  </div>
 );
-const NavItem = ({ icon:Icon, label, active=false, path }) => {
-  const [hov,setHov] = useState(false);
+const NavItem = ({ icon: Icon, label, active = false, path }) => {
+  const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
-      {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
+      style={{
+        position: "relative",
+        display: "flex", alignItems: "center", gap: 9,
+        padding: "8px 20px", fontSize: 13.5,
+        fontWeight: active ? 700 : 600,
+        fontFamily: T.font,
+        color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
+        background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
+        cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+      }}>
+      {active && (
+        <span style={{
+          position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
+          background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
+          borderRadius: "0 3px 3px 0",
+        }} />
+      )}
+      {Icon && <Icon size={16} aria-hidden="true" />}
+      {label}
     </div>
   );
 };
@@ -200,7 +306,7 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
       </div>
     );
     case "footer": return (
-      <div style={{background:"#f8fafc",padding:"20px 40px",textAlign:"center",borderTop:`0.5px solid ${T.border}`}}>
+      <div style={{background:T.faint,padding:"20px 40px",textAlign:"center",borderTop:`0.5px solid ${T.border}`}}>
         <p style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,margin:0}}>{b.text||"© 2024 Vantari · Todos os direitos reservados"}</p>
         <p style={{fontFamily:T.font,fontSize:11,color:T.muted,margin:"4px 0 0",fontWeight:600}}>
           <a href="#" style={{color:T.blue,textDecoration:"none"}}>Descadastrar</a> · <a href="#" style={{color:T.blue,textDecoration:"none"}}>Política de Privacidade</a>
@@ -434,8 +540,8 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
         <div style={{flex:1,overflow:"auto",padding:"24px 20px",background:T.bg,display:"flex",justifyContent:"center"}}>
           <div style={{width:previewWidths[preview],maxWidth:"100%",transition:"width 0.3s ease"}}>
             <div style={{background:T.white,boxShadow:"0 2px 20px rgba(0,0,0,0.07)",borderRadius:12,overflow:"hidden",minHeight:400}}>
-              <div style={{background:"#f8fafc",borderBottom:`0.5px solid ${T.border}`,padding:"10px 16px",display:"flex",gap:6,alignItems:"center"}}>
-                {["#ef4444",T.amber,T.green].map(c=><div key={c} style={{width:10,height:10,borderRadius:"50%",background:c}}/>)}
+              <div style={{background:T.faint,borderBottom:`0.5px solid ${T.border}`,padding:"10px 16px",display:"flex",gap:6,alignItems:"center"}}>
+                {["#FF6B5E",T.amber,T.green].map(c=><div key={c} style={{width:10,height:10,borderRadius:"50%",background:c}}/>)}
                 <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,marginLeft:8,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                   <strong>De:</strong> {campaign?.sender||"email@vantari.com.br"} &nbsp;·&nbsp; <strong>Assunto:</strong> {subjectLine||"(sem assunto)"}
                 </div>
@@ -665,6 +771,50 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
 const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelete, onSend }) => {
   const [filter,setFilter] = useState("all");
   const [search,setSearch] = useState("");
+  const [emailKpis, setEmailKpis] = useState({ total: 0, sent: 0, avgOpen: 0, active: 0 });
+  const [emailSpark, setEmailSpark] = useState({ total: [], sent: [], open: [], active: [] });
+
+  useEffect(() => {
+    const loadKpis = async () => {
+      const [{ data: allCamps }, { data: sends }] = await Promise.all([
+        supabase.from("campaigns").select("id, status, sent_at, created_at"),
+        supabase.from("campaign_sends").select("opened, created_at"),
+      ]);
+      const camps = allCamps || [];
+      const s = sends || [];
+      const total  = camps.length;
+      const sent   = camps.filter(c => c.status === "sent").length;
+      const active = camps.filter(c => c.status === "active" || c.status === "sending").length;
+      const avgOpen = s.length ? parseFloat(((s.filter(x => x.opened).length / s.length) * 100).toFixed(1)) : 0;
+      setEmailKpis({ total, sent, avgOpen, active });
+
+      // sparklines bucketed by month
+      const now = new Date();
+      const buckets = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
+        return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, total: 0, sent: 0, open: 0, openTotal: 0 };
+      });
+      camps.forEach(c => {
+        const d = new Date(c.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const b = buckets.find(m => m.key === key);
+        if (b) { b.total++; if (c.status === "sent") b.sent++; }
+      });
+      s.forEach(x => {
+        const d = new Date(x.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const b = buckets.find(m => m.key === key);
+        if (b) { b.openTotal++; if (x.opened) b.open++; }
+      });
+      setEmailSpark({
+        total:  buckets.map(b => b.total),
+        sent:   buckets.map(b => b.sent),
+        open:   buckets.map(b => b.openTotal > 0 ? parseFloat((b.open / b.openTotal * 100).toFixed(1)) : 0),
+        active: buckets.map(b => b.total),
+      });
+    };
+    loadKpis();
+  }, []);
 
   const filtered = campaigns.filter(c=>{
     if(filter!=="all"&&c.status!==filter) return false;
@@ -673,7 +823,7 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
   });
 
   const ThumbnailBg = ({thumb,type}) => {
-    const colors = {promo:["#ef4444","#f97316"],newsletter:["#0079a9","#0079a9"],followup:["#1e293b","#374151"],event:["#6d45d9","#4f46e5"],reactivation:["#05b27b","#0d9488"]};
+    const colors = {promo:["#FF6B5E","#f97316"],newsletter:["#0D7491","#0D7491"],followup:["#1e293b","#374151"],event:["#7C5CFF","#4f46e5"],reactivation:["#14A273","#0d9488"]};
     const [c1,c2] = colors[thumb]||colors.newsletter;
     return (
       <div style={{width:"100%",height:"100%",background:`linear-gradient(135deg,${c1},${c2})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -690,6 +840,34 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
           <p style={{margin:0,fontFamily:T.font,fontSize:13,fontWeight:600,color:T.muted}}>{campaigns.length} campanhas no total</p>
         </div>
         <Btn onClick={onNew} variant="ink" size="lg" icon={Plus}>Nova Campanha</Btn>
+      </div>
+
+      {/* Hero KPI row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
+        <HeroKpiCard icon={Mail}        color={T.teal}   trend={0}
+          label="Total de Campanhas"
+          value={emailKpis.total.toLocaleString("pt-BR")}
+          sub="criadas"
+          sparkData={emailSpark.total}
+        />
+        <HeroKpiCard icon={TrendingUp}  color={T.green}  trend={0}
+          label="Campanhas Enviadas"
+          value={emailKpis.sent.toLocaleString("pt-BR")}
+          sub="status sent"
+          sparkData={emailSpark.sent}
+        />
+        <HeroKpiCard icon={Star}        color={T.amber}  trend={0}
+          label="Taxa Média de Abertura"
+          value={`${emailKpis.avgOpen}%`}
+          sub="avg open rate"
+          sparkData={emailSpark.open}
+        />
+        <HeroKpiCard icon={Zap}         color={T.violet} trend={0}
+          label="Campanhas Ativas"
+          value={emailKpis.active.toLocaleString("pt-BR")}
+          sub="ativas agora"
+          sparkData={emailSpark.active}
+        />
       </div>
 
       <div style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:10,padding:"12px 16px",marginBottom:20,display:"flex",gap:12,alignItems:"center"}}>
@@ -1120,36 +1298,55 @@ export default function VantariEmailMarketing() {
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         body { margin:0; }
         select { cursor:pointer; }
         ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
+        ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
         @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
 
-      {/* ── SIDEBAR — iconrs.png embutido */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        width: 240,
+        background: T.sidebarBg,
+        display: "flex", flexDirection: "column", flexShrink: 0,
+        position: "relative", overflow: "hidden",
+      }}>
+        {/* glow topo-direito */}
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)",
+        }} />
+
+        {/* Brand */}
+        <div style={{ padding: "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
+            </div>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"       />
-          <NavItem icon={Users}          label="Leads" path="/leads"           />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email" active/>
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring" path="/scoring"         />
-          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
-          <NavItem icon={Zap}            label="Workflows" path="/workflow"           />
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
+          <NavSection label="Principal" />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email" active />
+          <NavSection label="Ferramentas" />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
+          <NavItem icon={Zap}            label="Workflows"      path="/workflow"     />
+          <NavSection label="Sistema" />
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings"/>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <NavItem icon={Settings} label="Configurações" path="/settings" />
         </div>
       </div>
 
@@ -1180,7 +1377,7 @@ export default function VantariEmailMarketing() {
         )}
 
         {/* Content */}
-        <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
+        <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #FFF4F2 0%, #FFECE8 100%)"}}>
           {loading && view==="list" ? (
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:300,gap:10,color:T.muted}}>
               <Loader2 size={22} style={{animation:"spin 1s linear infinite"}} aria-hidden="true"/>

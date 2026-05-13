@@ -22,10 +22,10 @@ function PageLoader() {
       alignItems: "center",
       justifyContent: "center",
       height: "100vh",
-      background: "#f2f5f8",
-      color: "#888891",
+      background: "#F5F8FB",
+      color: "#5A6B7A",
       fontSize: 14,
-      fontFamily: "'Aptos', 'Nunito Sans', sans-serif",
+      fontFamily: "'Inter', system-ui, sans-serif",
     }}>
       Carregando...
     </div>
@@ -40,14 +40,14 @@ function NotFound() {
       alignItems: "center",
       justifyContent: "center",
       height: "100vh",
-      background: "#f2f5f8",
+      background: "#F5F8FB",
       gap: 12,
-      color: "#888891",
-      fontFamily: "'Aptos', 'Nunito Sans', sans-serif",
+      color: "#5A6B7A",
+      fontFamily: "'Inter', system-ui, sans-serif",
     }}>
-      <span style={{ fontSize: 48, color: "#5f5f64" }}>404</span>
+      <span style={{ fontSize: 48, color: "#0E1A24" }}>404</span>
       <span style={{ fontSize: 16 }}>Página não encontrada</span>
-      <a href="/dashboard" style={{ color: "#0079a9", fontSize: 14 }}>Voltar ao Dashboard</a>
+      <a href="/dashboard" style={{ color: "#0D7491", fontSize: 14 }}>Voltar ao Dashboard</a>
     </div>
   );
 }

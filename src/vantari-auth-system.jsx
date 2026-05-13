@@ -2,23 +2,62 @@ import { useState, useEffect, createContext, useContext, useCallback } from "rea
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 
-// ─── DESIGN TOKENS ─────────────────────────────────────────────────────────────
-const C = {
-  blue:    "#0079a9",
-  green:   "#05b27b",
-  amber:   "#e07b00",
-  red:     "#ef4444",
-  purple:  "#6d45d9",
-  bg:      "#f2f5f8",
-  surface: "#ffffff",
-  border:  "#e2e8f0",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  subtle:  "#adadb5",
-  faint:   "#f8fafc",
+/* ───── DESIGN TOKENS ───── */
+const T = {
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
-const FONT = "'Aptos', 'Nunito Sans', sans-serif";
-const HEAD = "'Montserrat', sans-serif";
+
+// Legacy aliases used throughout this file
+const C = {
+  blue:    T.teal,
+  green:   T.green,
+  amber:   T.amber,
+  red:     T.coral,
+  purple:  T.violet,
+  bg:      T.bg,
+  surface: T.surface,
+  border:  T.border,
+  text:    T.text,
+  muted:   T.muted,
+  subtle:  T.faint3,
+  faint:   T.faint,
+};
+const FONT = T.font;
+const HEAD = T.head;
 
 // ─── CONTEXTS ──────────────────────────────────────────────────────────────────
 const AuthContext  = createContext(null);
@@ -97,10 +136,10 @@ const Input = ({ label, type="text", value, onChange, error, placeholder, icon, 
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {label&&<label style={{fontFamily:HEAD,fontSize:12,fontWeight:600,color:C.muted,letterSpacing:"0.03em"}}>{label}</label>}
       <div style={{position:"relative"}}>
-        {icon&&<div style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:focused?C.blue:C.subtle,transition:"color 0.2s"}}><Icon name={icon} size={18}/></div>}
+        {icon&&<div style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:focused?C.blue:T.faint3,transition:"color 0.2s"}}><Icon name={icon} size={18}/></div>}
         <input type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
           onFocus={()=>setFocused(true)} onBlur={()=>setFocused(false)}
-          style={{width:"100%",boxSizing:"border-box",padding:`12px ${rightIcon?"44px":"14px"} 12px ${icon?"44px":"14px"}`,fontFamily:FONT,fontSize:14,fontWeight:600,border:`1.5px solid ${error?C.red:focused?C.blue:C.border}`,borderRadius:10,outline:"none",background:disabled?"#f9fafb":"#fff",color:C.text,transition:"border-color 0.2s, box-shadow 0.2s",boxShadow:focused?`0 0 0 3px ${C.blue}18`:"none"}}/>
+          style={{width:"100%",boxSizing:"border-box",padding:`12px ${rightIcon?"44px":"14px"} 12px ${icon?"44px":"14px"}`,fontFamily:FONT,fontSize:14,fontWeight:600,border:`1.5px solid ${error?C.red:focused?C.blue:C.border}`,borderRadius:10,outline:"none",background:disabled?"#F5F8FB":"#fff",color:C.text,transition:"border-color 0.2s, box-shadow 0.2s",boxShadow:focused?`0 0 0 3px ${C.blue}18`:"none"}}/>
         {rightIcon&&<button onClick={onRightClick} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,padding:0,display:"flex",alignItems:"center"}}><Icon name={rightIcon} size={18}/></button>}
       </div>
       {error&&<span style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:C.red}}>{error}</span>}
@@ -112,18 +151,24 @@ const Input = ({ label, type="text", value, onChange, error, placeholder, icon, 
 const Button = ({ children, onClick, variant="primary", loading, disabled, fullWidth, size="md", icon }) => {
   const [hov,setHov] = useState(false);
   const variants = {
-    primary:   {bg:hov?"#006a93":C.blue,  color:"#fff", border:"none",               shadow:hov?`0 6px 20px ${C.blue}44`:`0 2px 8px ${C.blue}28`},
-    secondary: {bg:hov?"#e8f5fb":"#fff",  color:C.blue, border:`1.5px solid ${C.blue}`,shadow:"none"},
-    ghost:     {bg:hov?C.faint:"transparent",color:C.text,border:"none",              shadow:"none"},
-    danger:    {bg:hov?"#dc2626":C.red,   color:"#fff", border:"none",               shadow:"none"},
-    success:   {bg:hov?"#04996a":C.green, color:"#fff", border:"none",               shadow:"none"},
+    primary:   {
+      bg: hov
+        ? "linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)"
+        : "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+      color:"#fff", border:"none",
+      shadow: hov ? "0 8px 22px -6px rgba(13,116,145,.5)" : "0 4px 14px -4px rgba(13,116,145,.4)",
+    },
+    secondary: {bg:hov?`${T.teal}14`:"#fff",  color:T.teal, border:`1.5px solid ${T.teal}`, shadow:"none"},
+    ghost:     {bg:hov?"#EEF2F6":"transparent",color:T.text, border:"none",                  shadow:"none"},
+    danger:    {bg:hov?"#e04d42":T.coral,      color:"#fff", border:"none",                  shadow:"none"},
+    success:   {bg:hov?"#108A60":T.green,      color:"#fff", border:"none",                  shadow:"none"},
   };
   const sizes = {sm:{padding:"7px 14px",fontSize:13},md:{padding:"11px 22px",fontSize:14},lg:{padding:"14px 28px",fontSize:15}};
   const v=variants[variant]||variants.primary;
   const s=sizes[size]||sizes.md;
   return (
     <button onClick={onClick} disabled={disabled||loading} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:fullWidth?"100%":"auto",background:v.bg,color:v.color,border:v.border||"none",boxShadow:v.shadow,borderRadius:10,...s,fontFamily:HEAD,fontWeight:700,letterSpacing:"0.01em",cursor:disabled||loading?"not-allowed":"pointer",opacity:disabled?.6:1,transition:"all 0.2s ease"}}>
+      style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,width:fullWidth?"100%":"auto",background:v.bg,color:v.color,border:v.border||"none",boxShadow:v.shadow,borderRadius:10,...s,fontFamily:HEAD,fontWeight:700,letterSpacing:"0.01em",cursor:disabled||loading?"not-allowed":"pointer",opacity:disabled?.6:1,transition:"all 0.2s ease",transform:hov&&variant==="primary"?"translateY(-1px)":"none"}}>
       {loading
         ?<div style={{width:16,height:16,border:"2px solid rgba(255,255,255,0.3)",borderTop:"2px solid #fff",borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
         :icon?<Icon name={icon} size={16}/>:null}
@@ -154,7 +199,11 @@ const Card = ({ children, style:sx={}, onClick, hoverable }) => {
   const [hov,setHov] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={()=>hoverable&&setHov(true)} onMouseLeave={()=>hoverable&&setHov(false)}
-      style={{background:"#fff",borderRadius:12,border:`0.5px solid ${C.border}`,boxShadow:hov?"0 8px 30px rgba(0,0,0,0.08)":"0 1px 3px rgba(0,0,0,0.04)",transition:"all 0.2s",cursor:onClick?"pointer":"default",transform:hov?"translateY(-2px)":"none",...sx}}>
+      style={{background:"#fff",borderRadius:12,border:`1px solid ${T.border}`,
+        boxShadow: hov
+          ? "0 1px 0 rgba(14,26,36,.04), 0 16px 36px -16px rgba(14,26,36,.15)"
+          : "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",
+        transition:"all 0.2s",cursor:onClick?"pointer":"default",transform:hov?"translateY(-2px)":"none",...sx}}>
       {children}
     </div>
   );
@@ -225,10 +274,10 @@ const LoginScreen = () => {
   return (
     <div style={{minHeight:"100vh",display:"flex",fontFamily:FONT}}>
       {/* Left panel */}
-      <div style={{flex:"0 0 55%",background:`linear-gradient(145deg, ${C.blue} 0%, #006a93 50%, ${C.green} 100%)`,display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"48px 56px",position:"relative",overflow:"hidden"}}>
+      <div style={{flex:"0 0 55%",background:`linear-gradient(145deg, ${T.teal} 0%, #0A5165 50%, ${T.green} 100%)`,display:"flex",flexDirection:"column",justifyContent:"space-between",padding:"48px 56px",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:-80,right:-80,width:320,height:320,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
         <div style={{position:"absolute",bottom:-60,left:-60,width:240,height:240,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
-        <div style={{position:"absolute",top:"40%",right:"10%",width:160,height:160,borderRadius:"50%",background:`rgba(5,178,123,0.2)`}}/>
+        <div style={{position:"absolute",top:"40%",right:"10%",width:160,height:160,borderRadius:"50%",background:`rgba(20,162,115,0.2)`}}/>
 
         {/* Logo */}
         <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -263,13 +312,13 @@ const LoginScreen = () => {
       </div>
 
       {/* Right panel */}
-      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:C.faint,padding:40}}>
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:T.faint,padding:40}}>
         <div style={{width:"100%",maxWidth:400}}>
           <div style={{marginBottom:36}}>
-            <h2 style={{margin:"0 0 6px",fontSize:24,fontWeight:700,color:C.text,letterSpacing:"-0.02em",fontFamily:HEAD}}>
+            <h2 style={{margin:"0 0 6px",fontSize:24,fontWeight:700,color:T.ink,letterSpacing:"-0.02em",fontFamily:HEAD}}>
               {mode==="login"?"Entrar na sua conta":mode==="signup"?"Criar nova conta":"Recuperar senha"}
             </h2>
-            <p style={{margin:0,color:C.muted,fontSize:14,fontWeight:600,fontFamily:FONT}}>
+            <p style={{margin:0,color:T.muted,fontSize:14,fontWeight:600,fontFamily:FONT}}>
               {mode==="login"?"Bem-vindo de volta ao Vantari":mode==="signup"?"Comece sua jornada de marketing":"Enviaremos um link para seu email"}
             </p>
           </div>
@@ -287,16 +336,16 @@ const LoginScreen = () => {
             )}
             {mode==="login"&&(
               <div style={{textAlign:"right",marginTop:-8}}>
-                <button onClick={()=>setMode("forgot")} style={{background:"none",border:"none",color:C.blue,fontSize:13,cursor:"pointer",fontFamily:FONT,fontWeight:700}}>Esqueci minha senha</button>
+                <button onClick={()=>setMode("forgot")} style={{background:"none",border:"none",color:T.teal,fontSize:13,cursor:"pointer",fontFamily:FONT,fontWeight:700}}>Esqueci minha senha</button>
               </div>
             )}
             <Button onClick={handleSubmit} loading={loading} fullWidth size="lg">
               {mode==="login"?"Entrar":mode==="signup"?"Criar conta":"Enviar link de recuperação"}
             </Button>
-            <div style={{textAlign:"center",color:C.muted,fontSize:13,fontWeight:600,paddingTop:4,fontFamily:FONT}}>
+            <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,paddingTop:4,fontFamily:FONT}}>
               {mode==="login"
-                ?<>Não tem conta?{" "}<button onClick={()=>{setMode("signup");setErrors({});}} style={{background:"none",border:"none",color:C.blue,fontWeight:700,cursor:"pointer",fontFamily:FONT,fontSize:13}}>Criar conta grátis</button></>
-                :<>Já tem conta?{" "}<button onClick={()=>{setMode("login");setErrors({});}} style={{background:"none",border:"none",color:C.blue,fontWeight:700,cursor:"pointer",fontFamily:FONT,fontSize:13}}>Entrar</button></>}
+                ?<>Não tem conta?{" "}<button onClick={()=>{setMode("signup");setErrors({});}} style={{background:"none",border:"none",color:T.teal,fontWeight:700,cursor:"pointer",fontFamily:FONT,fontSize:13}}>Criar conta grátis</button></>
+                :<>Já tem conta?{" "}<button onClick={()=>{setMode("login");setErrors({});}} style={{background:"none",border:"none",color:T.teal,fontWeight:700,cursor:"pointer",fontFamily:FONT,fontSize:13}}>Entrar</button></>}
             </div>
           </div>
 
@@ -320,23 +369,29 @@ const navItems = [
 const Sidebar = ({ active, setActive, collapsed, setCollapsed, user }) => {
   const { signOut } = useContext(AuthContext);
   return (
-    <aside style={{width:collapsed?72:240,minHeight:"100vh",flexShrink:0,background:C.blue,borderRight:"none",display:"flex",flexDirection:"column",transition:"width 0.25s ease",position:"fixed",top:0,left:0,zIndex:100}}>
+    <aside style={{width:collapsed?72:240,minHeight:"100vh",flexShrink:0,background:T.sidebarBg,borderRight:"none",display:"flex",flexDirection:"column",transition:"width 0.25s ease",position:"fixed",top:0,left:0,zIndex:100,overflow:"hidden"}}>
+      {/* Glow */}
+      <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)"}}/>
       {/* Logo */}
-      <div style={{padding:collapsed?"18px 0":"14px 16px",display:"flex",alignItems:"center",justifyContent:collapsed?"center":"space-between",borderBottom:"1px solid rgba(255,255,255,0.12)",minHeight:60}}>
+      <div style={{padding:collapsed?"18px 0":"14px 16px",display:"flex",alignItems:"center",justifyContent:collapsed?"center":"space-between",borderBottom:"1px solid rgba(255,255,255,0.12)",minHeight:60,position:"relative"}}>
         {collapsed
           ?<img src="iconrs.png" alt="Vantari" style={{height:24,width:"auto"}}/>
           :<div style={{display:"flex",alignItems:"center",gap:8}}>
-            <img src="iconrs.png" alt="Vantari" style={{height:26,width:"auto"}}/>
+            <div style={{width:28,height:28,background:"white",borderRadius:7,display:"grid",placeItems:"center",flexShrink:0}}>
+              <img src="/icone.png" alt="" style={{width:20,height:20}}/>
+            </div>
+            <span style={{fontFamily:HEAD,fontWeight:700,fontSize:17,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
+            <span style={{marginLeft:4,fontSize:10,background:"rgba(255,255,255,.12)",padding:"2px 7px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
           </div>}
         {!collapsed&&(
-          <button onClick={()=>setCollapsed(true)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,0.55)",padding:4,borderRadius:6,display:"flex",alignItems:"center"}}>
+          <button onClick={()=>setCollapsed(true)} style={{background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,0.55)",padding:4,borderRadius:6,display:"flex",alignItems:"center",position:"relative"}}>
             <Icon name="menu" size={18} color="rgba(255,255,255,0.55)"/>
           </button>
         )}
       </div>
 
       {/* Nav */}
-      <nav style={{flex:1,padding:"10px 8px",display:"flex",flexDirection:"column",gap:2}}>
+      <nav style={{flex:1,padding:"10px 0",display:"flex",flexDirection:"column",gap:2,position:"relative"}}>
         {collapsed&&(
           <button onClick={()=>setCollapsed(false)} style={{display:"flex",alignItems:"center",justifyContent:"center",padding:"10px",background:"none",border:"none",cursor:"pointer",color:"rgba(255,255,255,0.55)",borderRadius:8,marginBottom:6}}>
             <Icon name="menu" size={20} color="rgba(255,255,255,0.55)"/>
@@ -346,11 +401,25 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, user }) => {
           const isActive=active===item.id;
           return (
             <button key={item.id} onClick={()=>setActive(item.id)} title={collapsed?item.label:undefined}
-              style={{display:"flex",alignItems:"center",gap:10,padding:collapsed?"10px 0":"9px 12px",justifyContent:collapsed?"center":"flex-start",background:isActive?"rgba(255,255,255,0.18)":"transparent",border:"none",borderRight:isActive?"2px solid #fff":"2px solid transparent",borderRadius:collapsed?8:0,cursor:"pointer",color:isActive?"#fff":"rgba(255,255,255,0.6)",fontFamily:FONT,fontSize:13,fontWeight:isActive?700:600,transition:"all 0.15s",position:"relative"}}>
-              <Icon name={item.icon} size={18} color={isActive?"#fff":"rgba(255,255,255,0.55)"}/>
+              style={{
+                display:"flex",alignItems:"center",gap:9,
+                padding:collapsed?"10px 0":"8px 20px",
+                justifyContent:collapsed?"center":"flex-start",
+                background:isActive?"rgba(255,255,255,0.10)":"transparent",
+                border:"none",
+                position:"relative",
+                borderRadius:0,
+                cursor:"pointer",
+                color:isActive?"#fff":"rgba(255,255,255,0.6)",
+                fontFamily:FONT,fontSize:13.5,fontWeight:isActive?700:600,transition:"all 0.15s",
+              }}>
+              {isActive&&(
+                <span style={{position:"absolute",left:0,top:6,bottom:6,width:3,background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",borderRadius:"0 3px 3px 0"}}/>
+              )}
+              <Icon name={item.icon} size={16} color={isActive?"#fff":"rgba(255,255,255,0.55)"}/>
               {!collapsed&&<span style={{flex:1}}>{item.label}</span>}
               {!collapsed&&item.badge&&(
-                <span style={{background:"rgba(255,255,255,0.25)",color:"#fff",fontSize:10,fontWeight:700,borderRadius:10,padding:"2px 6px",minWidth:18,textAlign:"center"}}>{item.badge}</span>
+                <span style={{background:"rgba(255,255,255,0.18)",color:"#fff",fontSize:10,fontWeight:700,borderRadius:10,padding:"2px 6px",minWidth:18,textAlign:"center"}}>{item.badge}</span>
               )}
             </button>
           );
@@ -358,8 +427,8 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, user }) => {
       </nav>
 
       {/* User */}
-      <div style={{padding:"10px 8px",borderTop:"1px solid rgba(255,255,255,0.12)"}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,padding:collapsed?"10px 0":"9px 12px",justifyContent:collapsed?"center":"flex-start",borderRadius:8}}>
+      <div style={{padding:"10px 0",borderTop:"1px solid rgba(255,255,255,0.12)",position:"relative"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,padding:collapsed?"10px 0":"9px 20px",justifyContent:collapsed?"center":"flex-start",borderRadius:8}}>
           <div style={{width:32,height:32,borderRadius:"50%",background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
             <span style={{color:"#fff",fontSize:13,fontWeight:700}}>{(user?.user_metadata?.name||user?.email||"U")[0].toUpperCase()}</span>
           </div>
@@ -385,30 +454,30 @@ const Header = ({ active, collapsed, notifications, setNotifOpen, notifOpen }) =
   const labels = {dashboard:"Dashboard",leads:"Leads",campaigns:"Campanhas",automations:"Automações",landing:"Landing Pages",integrations:"Integrações",settings:"Configurações"};
   const unread = notifications.filter(n=>!n.read).length;
   return (
-    <header style={{position:"fixed",top:0,left:collapsed?72:240,right:0,height:52,background:"#fff",borderBottom:`0.5px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 28px",zIndex:90,transition:"left 0.25s ease"}}>
+    <header style={{position:"fixed",top:0,left:collapsed?72:240,right:0,height:52,background:"#fff",borderBottom:`0.5px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 28px",zIndex:90,transition:"left 0.25s ease"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,fontFamily:FONT}}>
-        <span style={{color:C.muted,fontSize:12,fontWeight:600}}>Vantari</span>
-        <Icon name="chevron" size={14} color={C.border}/>
-        <span style={{color:C.text,fontSize:14,fontWeight:700,fontFamily:HEAD}}>{labels[active]||active}</span>
+        <span style={{color:T.muted,fontSize:12,fontWeight:600}}>Vantari</span>
+        <Icon name="chevron" size={14} color={T.border}/>
+        <span style={{color:T.text,fontSize:14,fontWeight:700,fontFamily:HEAD}}>{labels[active]||active}</span>
       </div>
       <div style={{display:"flex",alignItems:"center",gap:14}}>
         <div style={{position:"relative"}}>
-          <button onClick={()=>setNotifOpen(!notifOpen)} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,padding:8,borderRadius:8,position:"relative",display:"flex",alignItems:"center"}}>
+          <button onClick={()=>setNotifOpen(!notifOpen)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:8,borderRadius:8,position:"relative",display:"flex",alignItems:"center"}}>
             <Icon name="bell" size={20}/>
-            {unread>0&&<span style={{position:"absolute",top:6,right:6,width:8,height:8,background:C.red,borderRadius:"50%",border:"2px solid #fff"}}/>}
+            {unread>0&&<span style={{position:"absolute",top:6,right:6,width:8,height:8,background:T.coral,borderRadius:"50%",border:"2px solid #fff"}}/>}
           </button>
           {notifOpen&&(
-            <div style={{position:"absolute",right:0,top:"100%",marginTop:8,width:340,background:"#fff",border:`0.5px solid ${C.border}`,borderRadius:12,boxShadow:"0 10px 40px rgba(0,0,0,0.1)",zIndex:200}}>
-              <div style={{padding:"14px 18px",borderBottom:`0.5px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{fontFamily:HEAD,fontWeight:700,fontSize:13,color:C.text}}>Notificações</span>
-                {unread>0&&<span style={{fontSize:11,fontWeight:600,color:C.muted,fontFamily:FONT}}>{unread} não lidas</span>}
+            <div style={{position:"absolute",right:0,top:"100%",marginTop:8,width:340,background:"#fff",border:`0.5px solid ${T.border}`,borderRadius:12,boxShadow:"0 10px 40px rgba(0,0,0,0.1)",zIndex:200}}>
+              <div style={{padding:"14px 18px",borderBottom:`0.5px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontFamily:HEAD,fontWeight:700,fontSize:13,color:T.text}}>Notificações</span>
+                {unread>0&&<span style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:FONT}}>{unread} não lidas</span>}
               </div>
               {notifications.map(n=>(
-                <div key={n.id} style={{padding:"13px 18px",borderBottom:`0.5px solid ${C.faint}`,background:n.read?"#fff":"#e8f5fb",display:"flex",gap:12,alignItems:"flex-start"}}>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:n.read?C.border:C.blue,marginTop:5,flexShrink:0}}/>
+                <div key={n.id} style={{padding:"13px 18px",borderBottom:`0.5px solid ${T.faint}`,background:n.read?"#fff":"#e8f5fb",display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{width:8,height:8,borderRadius:"50%",background:n.read?T.border:T.teal,marginTop:5,flexShrink:0}}/>
                   <div>
-                    <div style={{fontFamily:FONT,fontSize:13,fontWeight:n.read?600:700,color:C.text}}>{n.title}</div>
-                    <div style={{fontFamily:FONT,fontSize:11,fontWeight:600,color:C.muted,marginTop:2}}>{n.time}</div>
+                    <div style={{fontFamily:FONT,fontSize:13,fontWeight:n.read?600:700,color:T.text}}>{n.title}</div>
+                    <div style={{fontFamily:FONT,fontSize:11,fontWeight:600,color:T.muted,marginTop:2}}>{n.time}</div>
                   </div>
                 </div>
               ))}
@@ -423,16 +492,16 @@ const Header = ({ active, collapsed, notifications, setNotifOpen, notifOpen }) =
 // ─── DASHBOARD CONTENT ────────────────────────────────────────────────────────
 const DashboardContent = () => {
   const stats = [
-    {label:"Total de Leads",    value:"6.284", delta:"+12%",  color:C.blue,   icon:"leads"      },
-    {label:"Campanhas Ativas",  value:"14",    delta:"+3",    color:C.green,  icon:"campaigns"  },
-    {label:"Taxa de Abertura",  value:"38.4%", delta:"+2.1%", color:C.blue,   icon:"mail"       },
-    {label:"Score Médio",       value:"72",    delta:"+8",    color:C.purple, icon:"automations"},
+    {label:"Total de Leads",    value:"6.284", delta:"+12%",  color:T.teal,   icon:"leads"      },
+    {label:"Campanhas Ativas",  value:"14",    delta:"+3",    color:T.green,  icon:"campaigns"  },
+    {label:"Taxa de Abertura",  value:"38.4%", delta:"+2.1%", color:T.teal,   icon:"mail"       },
+    {label:"Score Médio",       value:"72",    delta:"+8",    color:T.violet, icon:"automations"},
   ];
   return (
     <div>
       <div style={{marginBottom:28}}>
-        <h1 style={{margin:"0 0 6px",fontFamily:HEAD,fontSize:22,fontWeight:700,color:C.text,letterSpacing:"-0.02em"}}>Bom dia!</h1>
-        <p style={{margin:0,color:C.muted,fontSize:14,fontWeight:600,fontFamily:FONT}}>Aqui está o resumo da sua plataforma de marketing</p>
+        <h1 style={{margin:"0 0 6px",fontFamily:HEAD,fontSize:22,fontWeight:700,color:T.ink,letterSpacing:"-0.02em"}}>Bom dia!</h1>
+        <p style={{margin:0,color:T.muted,fontSize:14,fontWeight:600,fontFamily:FONT}}>Aqui está o resumo da sua plataforma de marketing</p>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:16,marginBottom:24}}>
@@ -440,9 +509,9 @@ const DashboardContent = () => {
           <Card key={i} style={{padding:"18px 20px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
-                <div style={{fontFamily:FONT,fontSize:11,fontWeight:700,color:C.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>{s.label}</div>
-                <div style={{fontFamily:HEAD,fontSize:26,fontWeight:700,color:C.text,lineHeight:1}}>{s.value}</div>
-                <div style={{fontFamily:FONT,fontSize:12,fontWeight:700,color:C.green,marginTop:6}}>{s.delta} este mês</div>
+                <div style={{fontFamily:FONT,fontSize:11,fontWeight:700,color:T.muted,marginBottom:8,textTransform:"uppercase",letterSpacing:"0.05em"}}>{s.label}</div>
+                <div style={{fontFamily:HEAD,fontSize:26,fontWeight:700,color:T.ink,lineHeight:1,letterSpacing:"-0.03em",fontVariantNumeric:"tabular-nums"}}>{s.value}</div>
+                <div style={{fontFamily:FONT,fontSize:12,fontWeight:700,color:T.green,marginTop:6}}>{s.delta} este mês</div>
               </div>
               <div style={{width:42,height:42,borderRadius:10,background:`${s.color}14`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Icon name={s.icon} size={20} color={s.color}/>
@@ -454,14 +523,14 @@ const DashboardContent = () => {
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
         <Card style={{padding:"20px"}}>
-          <h3 style={{margin:"0 0 18px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:C.text}}>Leads por Canal</h3>
-          {[{label:"Email Marketing",pct:38,color:C.blue},{label:"WhatsApp",pct:27,color:C.green},{label:"Instagram",pct:18,color:C.blue},{label:"Google Ads",pct:11,color:C.purple},{label:"Meta Ads",pct:6,color:C.amber}].map(c=>(
+          <h3 style={{margin:"0 0 18px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:T.text}}>Leads por Canal</h3>
+          {[{label:"Email Marketing",pct:38,color:T.teal},{label:"WhatsApp",pct:27,color:T.green},{label:"Instagram",pct:18,color:T.teal},{label:"Google Ads",pct:11,color:T.violet},{label:"Meta Ads",pct:6,color:T.amber}].map(c=>(
             <div key={c.label} style={{marginBottom:12}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                <span style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:C.text}}>{c.label}</span>
+                <span style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:T.text}}>{c.label}</span>
                 <span style={{fontFamily:FONT,fontSize:12,fontWeight:700,color:c.color}}>{c.pct}%</span>
               </div>
-              <div style={{height:7,background:C.border2||"#edf0f4",borderRadius:4,overflow:"hidden"}}>
+              <div style={{height:7,background:T.border,borderRadius:4,overflow:"hidden"}}>
                 <div style={{height:"100%",width:`${c.pct}%`,background:c.color,borderRadius:4,transition:"width 0.8s ease"}}/>
               </div>
             </div>
@@ -469,25 +538,25 @@ const DashboardContent = () => {
         </Card>
 
         <Card style={{padding:"20px"}}>
-          <h3 style={{margin:"0 0 18px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:C.text}}>Funil de Conversão</h3>
-          {[{label:"Topo — Visitantes",value:12400,color:C.blue},{label:"Meio — Leads",value:6284,color:C.blue},{label:"Qualificados (MQL)",value:1840,color:C.green},{label:"Oportunidades (SQL)",value:620,color:C.green},{label:"Clientes",value:148,color:"#04996a"}].map((f,i,arr)=>(
+          <h3 style={{margin:"0 0 18px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:T.text}}>Funil de Conversão</h3>
+          {[{label:"Topo — Visitantes",value:12400,color:T.teal},{label:"Meio — Leads",value:6284,color:T.teal},{label:"Qualificados (MQL)",value:1840,color:T.green},{label:"Oportunidades (SQL)",value:620,color:T.green},{label:"Clientes",value:148,color:"#04996a"}].map((f,i,arr)=>(
             <div key={f.label} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
               <div style={{width:`${(f.value/arr[0].value)*100}%`,minWidth:40,maxWidth:"60%",height:26,background:`${f.color}18`,border:`0.5px solid ${f.color}44`,borderRadius:6,display:"flex",alignItems:"center",paddingLeft:8,transition:"width 0.8s ease"}}>
                 <span style={{fontFamily:HEAD,fontSize:11,fontWeight:700,color:f.color}}>{f.value.toLocaleString("pt-BR")}</span>
               </div>
-              <span style={{fontFamily:FONT,fontSize:11,fontWeight:600,color:C.muted,flex:1}}>{f.label}</span>
+              <span style={{fontFamily:FONT,fontSize:11,fontWeight:600,color:T.muted,flex:1}}>{f.label}</span>
             </div>
           ))}
         </Card>
       </div>
 
       <Card style={{padding:"20px"}}>
-        <h3 style={{margin:"0 0 16px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:C.text}}>Leads Recentes</h3>
+        <h3 style={{margin:"0 0 16px",fontFamily:HEAD,fontSize:14,fontWeight:700,color:T.text}}>Leads Recentes</h3>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead>
-            <tr style={{borderBottom:`2px solid ${C.faint}`}}>
+            <tr style={{borderBottom:`2px solid ${T.faint}`}}>
               {["Nome","Email","Canal","Score","Estágio","Última interação"].map(h=>(
-                <th key={h} style={{padding:"8px 10px",textAlign:"left",fontFamily:FONT,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
+                <th key={h} style={{padding:"8px 10px",textAlign:"left",fontFamily:FONT,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -499,22 +568,22 @@ const DashboardContent = () => {
               {name:"Patrícia Santos",email:"patricia@tech.com.br",canal:"Google Ads", score:52, stage:"Novo",     last:"Ontem"  },
               {name:"Diego Rocha",    email:"diego@vendas.com",    canal:"Instagram",  score:41, stage:"Frio",     last:"3 dias" },
             ].map((lead,i)=>(
-              <tr key={i} style={{borderBottom:`0.5px solid ${C.faint}`}}>
-                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:13,fontWeight:700,color:C.text}}>{lead.name}</td>
-                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:13,fontWeight:600,color:C.muted}}>{lead.email}</td>
-                <td style={{padding:"11px 10px"}}><span style={{background:C.blueL||"#e8f5fb",color:C.blue,borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:700,fontFamily:FONT}}>{lead.canal}</span></td>
+              <tr key={i} style={{borderBottom:`0.5px solid ${T.faint}`}}>
+                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:13,fontWeight:700,color:T.text}}>{lead.name}</td>
+                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:13,fontWeight:600,color:T.muted}}>{lead.email}</td>
+                <td style={{padding:"11px 10px"}}><span style={{background:`${T.teal}14`,color:T.teal,borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:700,fontFamily:FONT}}>{lead.canal}</span></td>
                 <td style={{padding:"11px 10px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <div style={{width:38,height:5,background:C.faint,borderRadius:3,overflow:"hidden"}}>
-                      <div style={{height:"100%",width:`${lead.score}%`,background:lead.score>80?C.green:lead.score>50?C.amber:C.red,borderRadius:3}}/>
+                    <div style={{width:38,height:5,background:T.faint,borderRadius:3,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${lead.score}%`,background:lead.score>80?T.green:lead.score>50?T.amber:T.coral,borderRadius:3}}/>
                     </div>
-                    <span style={{fontFamily:HEAD,fontSize:12,fontWeight:700,color:C.text}}>{lead.score}</span>
+                    <span style={{fontFamily:HEAD,fontSize:12,fontWeight:700,color:T.text}}>{lead.score}</span>
                   </div>
                 </td>
                 <td style={{padding:"11px 10px"}}>
-                  <span style={{background:lead.stage==="SQL"?"#f0fdf7":lead.stage==="MQL"?"#e8f5fb":"#f1f5f9",color:lead.stage==="SQL"?C.green:lead.stage==="MQL"?C.blue:C.muted,borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:700,fontFamily:FONT}}>{lead.stage}</span>
+                  <span style={{background:lead.stage==="SQL"?"#f0fdf7":lead.stage==="MQL"?"#e8f5fb":"#EEF2F6",color:lead.stage==="SQL"?T.green:lead.stage==="MQL"?T.teal:T.muted,borderRadius:6,padding:"3px 8px",fontSize:11,fontWeight:700,fontFamily:FONT}}>{lead.stage}</span>
                 </td>
-                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:12,fontWeight:600,color:C.muted}}>{lead.last}</td>
+                <td style={{padding:"11px 10px",fontFamily:FONT,fontSize:12,fontWeight:600,color:T.muted}}>{lead.last}</td>
               </tr>
             ))}
           </tbody>
@@ -527,11 +596,11 @@ const DashboardContent = () => {
 // ─── PLACEHOLDER PAGES ────────────────────────────────────────────────────────
 const PlaceholderPage = ({ title, icon, description }) => (
   <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:400,gap:16}}>
-    <div style={{width:72,height:72,borderRadius:20,background:`${C.blue}14`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <Icon name={icon} size={36} color={C.blue}/>
+    <div style={{width:72,height:72,borderRadius:20,background:`${T.teal}14`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <Icon name={icon} size={36} color={T.teal}/>
     </div>
-    <h2 style={{margin:0,fontFamily:HEAD,fontSize:20,fontWeight:700,color:C.text}}>{title}</h2>
-    <p style={{margin:0,color:C.muted,fontFamily:FONT,fontSize:14,fontWeight:600,textAlign:"center",maxWidth:380}}>{description}</p>
+    <h2 style={{margin:0,fontFamily:HEAD,fontSize:20,fontWeight:700,color:T.text}}>{title}</h2>
+    <p style={{margin:0,color:T.muted,fontFamily:FONT,fontSize:14,fontWeight:600,textAlign:"center",maxWidth:380}}>{description}</p>
     <Button>Em breve</Button>
   </div>
 );
@@ -559,18 +628,18 @@ const MainApp = ({ user }) => {
   };
 
   return (
-    <div style={{display:"flex",minHeight:"100vh",background:C.bg}} onClick={()=>notifOpen&&setNotifOpen(false)}>
+    <div style={{display:"flex",minHeight:"100vh",background:T.bg}} onClick={()=>notifOpen&&setNotifOpen(false)}>
       <Sidebar active={active} setActive={setActive} collapsed={collapsed} setCollapsed={setCollapsed} user={user}/>
       <div style={{flex:1,marginLeft:collapsed?72:240,transition:"margin-left 0.25s ease",minWidth:0}}>
         <Header active={active} collapsed={collapsed} notifications={notifications} notifOpen={notifOpen} setNotifOpen={v=>{ v&&setNotifOpen(v); }}/>
         <main style={{padding:"80px 28px 28px",maxWidth:1400,margin:"0 auto"}}>
           {pages[active]||pages.dashboard}
         </main>
-        <footer style={{borderTop:`0.5px solid ${C.border}`,padding:"18px 28px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:C.muted}}>© 2025 Vantari · Plataforma de Marketing Digital</span>
+        <footer style={{borderTop:`0.5px solid ${T.border}`,padding:"18px 28px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:T.muted}}>© 2025 Vantari · Plataforma de Marketing Digital</span>
           <div style={{display:"flex",gap:20}}>
             {["Documentação","Suporte","Status","LGPD"].map(link=>(
-              <a key={link} href="#" style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:C.muted,textDecoration:"none"}}>{link}</a>
+              <a key={link} href="#" style={{fontFamily:FONT,fontSize:12,fontWeight:600,color:T.muted,textDecoration:"none"}}>{link}</a>
             ))}
           </div>
         </footer>
@@ -589,9 +658,9 @@ const AppContent = () => {
   },[user, loading, navigate]);
 
   if(loading) return (
-    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.faint,flexDirection:"column",gap:16}}>
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.faint,flexDirection:"column",gap:16}}>
       <img src="iconrs.png" alt="Vantari" style={{height:44,width:"auto",animation:"pulse 1.5s ease infinite"}}/>
-      <span style={{fontFamily:FONT,fontWeight:600,color:C.muted,fontSize:14}}>Carregando...</span>
+      <span style={{fontFamily:FONT,fontWeight:600,color:T.muted,fontSize:14}}>Carregando...</span>
     </div>
   );
   return user ? null : <LoginScreen/>;
@@ -602,7 +671,7 @@ export default function VantariAuthSystem() {
   return (
     <>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         body { margin:0; padding:0; }
         @keyframes spin    { to { transform:rotate(360deg); } }
@@ -610,9 +679,13 @@ export default function VantariAuthSystem() {
         @keyframes fadeUp  { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
         @keyframes slideIn { from{opacity:0;transform:translateX(20px)} to{opacity:1;transform:translateX(0)} }
         @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.5} }
-        input::placeholder { color:#d1d5db; }
+        @keyframes pulse-live {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(6,182,212,0.6); }
+          50%       { box-shadow: 0 0 0 8px rgba(6,182,212,0); }
+        }
+        input::placeholder { color:#B3BFCA; }
         ::-webkit-scrollbar { width:5px; }
-        ::-webkit-scrollbar-thumb { background:${C.border}; border-radius:3px; }
+        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
       `}</style>
       <ToastContext.Provider value={toastSystem}>
         <ToastContainer toasts={toastSystem.toasts} remove={toastSystem.remove}/>

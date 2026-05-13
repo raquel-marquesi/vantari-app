@@ -10,18 +10,40 @@ import {
    DESIGN TOKENS
 ═══════════════════════════════════════════════════════════ */
 const T = {
-  blue:    "#0079a9",
-  green:   "#05b27b",
-  orange:  "#e07b00",
-  purple:  "#6d45d9",
-  red:     "#ef4444",
-  bg:      "#f2f5f8",
-  surface: "#ffffff",
-  border:  "#e2e8f0",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  font:    "'Aptos','Nunito Sans',sans-serif",
-  head:    "'Montserrat',sans-serif",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale (text)
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -44,7 +66,7 @@ const INITIAL_DATA = {
     { id:2, nome:"Nutrindo", cor:"#1d4ed8" },
     { id:3, nome:"MQL",      cor:"#92400e" },
     { id:4, nome:"SQL",      cor:"#5b21b6" },
-    { id:5, nome:"Cliente",  cor:"#05b27b" },
+    { id:5, nome:"Cliente",  cor:"#14A273" },
   ],
   scoring: [
     { acao:"Abriu email",     pontos:2   },
@@ -70,19 +92,19 @@ const PHASES = [
    SHARED UI COMPONENTS
 ═══════════════════════════════════════════════════════════ */
 const FL = ({ label, required, error }) => (
-  <label style={{display:"block",fontSize:11,fontWeight:700,color:error?T.red:T.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.head}}>
-    {label}{required && <span style={{color:T.red,marginLeft:2}}>*</span>}
+  <label style={{display:"block",fontSize:11,fontWeight:700,color:error?T.coral:T.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.head}}>
+    {label}{required && <span style={{color:T.coral,marginLeft:2}}>*</span>}
   </label>
 );
 
 const Inp = ({ value, onChange, placeholder, type="text", error, disabled }) => (
   <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} disabled={disabled}
-    style={{width:"100%",padding:"9px 12px",border:`1px solid ${error?T.red:T.border}`,borderRadius:8,fontSize:13,fontWeight:600,fontFamily:T.font,background:disabled?"#f8fafc":T.surface,color:T.text,outline:"none",boxSizing:"border-box"}}/>
+    style={{width:"100%",padding:"9px 12px",border:`1px solid ${error?T.coral:T.border}`,borderRadius:8,fontSize:13,fontWeight:600,fontFamily:T.font,background:disabled?T.faint:T.surface,color:T.text,outline:"none",boxSizing:"border-box"}}/>
 );
 
 const Sel = ({ value, onChange, options, error }) => (
   <select value={value} onChange={e=>onChange(e.target.value)}
-    style={{width:"100%",padding:"9px 12px",border:`1px solid ${error?T.red:T.border}`,borderRadius:8,fontSize:13,fontWeight:600,fontFamily:T.font,background:T.surface,color:T.text,outline:"none"}}>
+    style={{width:"100%",padding:"9px 12px",border:`1px solid ${error?T.coral:T.border}`,borderRadius:8,fontSize:13,fontWeight:600,fontFamily:T.font,background:T.surface,color:T.text,outline:"none"}}>
     <option value="">Selecione...</option>
     {options.map(o => <option key={o.value||o} value={o.value||o}>{o.label||o}</option>)}
   </select>
@@ -92,19 +114,19 @@ const FW = ({ label, required, error, children, style:sx={} }) => (
   <div style={{marginBottom:16,...sx}}>
     <FL label={label} required={required} error={!!error}/>
     {children}
-    {error && <p style={{margin:"4px 0 0",fontSize:11,color:T.red,fontFamily:T.font}}>{error}</p>}
+    {error && <p style={{margin:"4px 0 0",fontSize:11,color:T.coral,fontFamily:T.font}}>{error}</p>}
   </div>
 );
 
 const Btn = ({ children, onClick, variant="primary", size="md", icon:Icon, disabled, style:sx={} }) => {
-  const base = {display:"inline-flex",alignItems:"center",gap:6,border:"none",borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontFamily:T.font,fontWeight:700,transition:"all .15s",opacity:disabled?.5:1};
+  const base = {display:"inline-flex",alignItems:"center",gap:6,border:"none",borderRadius:10,cursor:disabled?"not-allowed":"pointer",fontFamily:T.font,fontWeight:700,transition:"all .15s",opacity:disabled?.5:1};
   const sizes = { sm:{fontSize:12,padding:"5px 12px"}, md:{fontSize:13,padding:"8px 16px"} };
   const variants = {
-    primary:   {background:T.blue,   color:"#fff"},
-    success:   {background:T.green,  color:"#fff"},
-    secondary: {background:T.border, color:T.text},
+    primary:   {background:T.gradient, color:"#fff", boxShadow:"0 4px 14px -4px rgba(13,116,145,.4)"},
+    success:   {background:T.green,    color:"#fff"},
+    secondary: {background:T.border,   color:T.text},
     ghost:     {background:"transparent",color:T.muted,border:`1px solid ${T.border}`},
-    danger:    {background:"#fef2f2",color:T.red,border:`1px solid ${T.red}20`},
+    danger:    {background:`${T.coral}14`,color:T.coral,border:`1px solid ${T.coral}20`},
   };
   const v = variants[variant]||variants.primary;
   return (
@@ -115,14 +137,14 @@ const Btn = ({ children, onClick, variant="primary", size="md", icon:Icon, disab
 };
 
 const Card = ({ children, style:sx={} }) => (
-  <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:12,padding:"20px 24px",...sx}}>{children}</div>
+  <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:"20px 24px",boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",...sx}}>{children}</div>
 );
 
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR COMPONENTS
 ═══════════════════════════════════════════════════════════ */
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
 );
 
 const NavItem = ({ icon:Icon, label, active=false, path }) => {
@@ -133,7 +155,18 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
+      style={{
+        position:"relative",
+        display:"flex",alignItems:"center",gap:9,
+        padding:"8px 20px",fontSize:13.5,
+        fontWeight:active?700:600,fontFamily:T.font,
+        color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
+        background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
+        cursor:"pointer",transition:"all 0.15s",userSelect:"none",
+      }}>
+      {active && (
+        <span style={{position:"absolute",left:0,top:6,bottom:6,width:3,background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",borderRadius:"0 3px 3px 0"}} />
+      )}
       {Icon && <Icon size={16}/>}{label}
     </div>
   );
@@ -149,7 +182,7 @@ const WizardHeader = ({ phase, subStep, completedPhases, progress }) => (
       {PHASES.map((p, i) => {
         const done = completedPhases.includes(i);
         const active = i === phase;
-        const color = done ? T.green : active ? T.blue : T.muted;
+        const color = done ? T.green : active ? T.teal : T.muted;
         const PhaseIcon = p.Icon;
         return (
           <span key={i} style={{display:"contents"}}>
@@ -159,10 +192,10 @@ const WizardHeader = ({ phase, subStep, completedPhases, progress }) => (
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4,minWidth:120}}>
               <div style={{
                 width:40,height:40,borderRadius:"50%",
-                background: done ? "#e8faf3" : active ? "#e8f5fb" : "#f8fafc",
+                background: done ? `${T.green}14` : active ? `${T.teal}14` : T.faint,
                 border:`2px solid ${color}`,
                 display:"flex",alignItems:"center",justifyContent:"center",
-                boxShadow: active ? `0 0 0 4px ${T.blue}20` : "none",
+                boxShadow: active ? `0 0 0 4px ${T.teal}20` : "none",
                 transition:"all 0.3s",
               }}>
                 {done ? <CheckCircle2 size={20} color={T.green}/> : <PhaseIcon size={18} color={color}/>}
@@ -176,7 +209,7 @@ const WizardHeader = ({ phase, subStep, completedPhases, progress }) => (
     {/* Sub-dots para fase ativa */}
     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10,justifyContent:"center"}}>
       {PHASES[phase].subSteps.map((_,i) => (
-        <div key={i} style={{width:i===subStep?20:6,height:6,borderRadius:3,background:i===subStep?T.blue:i<subStep?T.green:T.border,transition:"all 0.3s"}}/>
+        <div key={i} style={{width:i===subStep?20:6,height:6,borderRadius:3,background:i===subStep?T.teal:i<subStep?T.green:T.border,transition:"all 0.3s"}}/>
       ))}
       <span style={{fontSize:11,color:T.muted,marginLeft:8,fontFamily:T.font}}>{PHASES[phase].subSteps[subStep]}</span>
     </div>
@@ -285,20 +318,20 @@ const Step_Faturamento = ({ data, setField, errors }) => (
   <Card>
     <h2 style={{margin:"0 0 20px",fontSize:18,fontWeight:700,color:T.text,fontFamily:T.head}}>Plano e faturamento</h2>
     {/* Plano atual readonly */}
-    <div style={{background:"#e8f5fb",border:`1px solid ${T.blue}30`,borderRadius:10,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+    <div style={{background:`${T.teal}10`,border:`1px solid ${T.teal}30`,borderRadius:10,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
       <div>
-        <div style={{fontSize:15,fontWeight:700,color:T.blue,fontFamily:T.head}}>Growth</div>
+        <div style={{fontSize:15,fontWeight:700,color:T.teal,fontFamily:T.head}}>Growth</div>
         <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>R$ 499/mês · 5.000 leads · 25.000 emails</div>
       </div>
-      <span style={{background:T.blue,color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,fontFamily:T.font}}>Ativo</span>
+      <span style={{background:T.teal,color:"#fff",fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:20,fontFamily:T.font}}>Ativo</span>
     </div>
     {/* Método de pagamento */}
     <FW label="Método de pagamento" required error={errors["faturamento.pagamento"]}>
       <div style={{display:"flex",gap:12}}>
         {[{value:"cartao",label:"Cartão de Crédito"},{value:"boleto",label:"Boleto Bancário"}].map(op => (
-          <label key={op.value} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"10px 16px",border:`1px solid ${data.faturamento.pagamento===op.value?T.blue:T.border}`,borderRadius:8,background:data.faturamento.pagamento===op.value?"#e8f5fb":T.surface,flex:1}}>
-            <input type="radio" value={op.value} checked={data.faturamento.pagamento===op.value} onChange={()=>setField("faturamento.pagamento",op.value)} style={{accentColor:T.blue}}/>
-            <span style={{fontSize:13,fontWeight:600,color:data.faturamento.pagamento===op.value?T.blue:T.text,fontFamily:T.font}}>{op.label}</span>
+          <label key={op.value} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"10px 16px",border:`1px solid ${data.faturamento.pagamento===op.value?T.teal:T.border}`,borderRadius:8,background:data.faturamento.pagamento===op.value?`${T.teal}10`:T.surface,flex:1}}>
+            <input type="radio" value={op.value} checked={data.faturamento.pagamento===op.value} onChange={()=>setField("faturamento.pagamento",op.value)} style={{accentColor:T.teal}}/>
+            <span style={{fontSize:13,fontWeight:600,color:data.faturamento.pagamento===op.value?T.teal:T.text,fontFamily:T.font}}>{op.label}</span>
           </label>
         ))}
       </div>
@@ -353,7 +386,7 @@ const Step_Membros = ({ data, setField, errors, newMembro, setNewMembro }) => {
               <div key={m.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:T.bg,borderRadius:8}}>
                 <span style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{m.email}</span>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:"#e8f5fb",color:T.blue,fontFamily:T.font}}>{m.role}</span>
+                  <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:`${T.teal}14`,color:T.teal,fontFamily:T.font}}>{m.role}</span>
                   <button onClick={()=>removeMembro(m.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex"}}><X size={14}/></button>
                 </div>
               </div>
@@ -407,8 +440,8 @@ const Step_Dominio = ({ data, setField, errors, verifyingDns, setVerifyingDns })
 
   const StatusBadge = ({ s }) => (
     <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,fontFamily:T.font,
-      background:s==="verified"?"#e8faf3":s==="pending"?"#f8fafc":"#fef2f2",
-      color:s==="verified"?T.green:s==="pending"?T.muted:T.red}}>
+      background:s==="verified"?`${T.green}14`:s==="pending"?T.faint:`${T.coral}14`,
+      color:s==="verified"?T.green:s==="pending"?T.muted:T.coral}}>
       {s==="verified"?"✓ Verificado":s==="pending"?"Pendente":"Erro"}
     </span>
   );
@@ -475,7 +508,7 @@ const Step_Integracoes = ({ data, setField, errors }) => {
     { key:"meta",     label:"Meta Ads",         desc:"Facebook, Instagram e Lead Ads",    color:"#1877F2", bg:"#e7f0fe" },
     { key:"google",   label:"Google Ads",        desc:"Search, Display e conversões",      color:"#4285F4", bg:"#e8f0fe" },
     { key:"whatsapp", label:"WhatsApp Business", desc:"API oficial e templates aprovados", color:"#25D366", bg:"#e8faf0" },
-    { key:"webhook",  label:"Webhook / API",     desc:"Integração customizada via HTTP",   color:"#6d45d9", bg:"#f3f0ff" },
+    { key:"webhook",  label:"Webhook / API",     desc:"Integração customizada via HTTP",   color:"#7C5CFF", bg:"#F3F0FF" },
   ];
   return (
     <div>
@@ -494,7 +527,7 @@ const Step_Integracoes = ({ data, setField, errors }) => {
                   <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>{integ.desc}</div>
                 </div>
                 <div style={{marginLeft:"auto"}}>
-                  <span style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:20,background:connected?"#e8faf3":"#f1f5f9",color:connected?T.green:"#475569",fontFamily:T.font}}>
+                  <span style={{fontSize:11,fontWeight:700,padding:"3px 8px",borderRadius:20,background:connected?`${T.green}14`:"#EEF2F6",color:connected?T.green:T.muted,fontFamily:T.font}}>
                     {connected?"Conectado":"Desconectado"}
                   </span>
                 </div>
@@ -584,10 +617,10 @@ const Step_Scoring = ({ data, setField }) => {
     setField("scoring", s);
   };
   const BANDAS = [
-    { key:"cold", label:"Cold", color:"#0079a9" },
-    { key:"warm", label:"Warm", color:"#e07b00" },
-    { key:"hot",  label:"Hot",  color:"#05b27b" },
-    { key:"sql",  label:"SQL",  color:"#6d45d9" },
+    { key:"cold", label:"Cold", color:"#0D7491" },
+    { key:"warm", label:"Warm", color:"#F59E0B" },
+    { key:"hot",  label:"Hot",  color:"#14A273" },
+    { key:"sql",  label:"SQL",  color:"#7C5CFF" },
   ];
   return (
     <div>
@@ -601,7 +634,7 @@ const Step_Scoring = ({ data, setField }) => {
             <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 100px",padding:"8px 12px",borderTop:`0.5px solid ${T.border}`,alignItems:"center"}}>
               <span style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{s.acao}</span>
               <input type="number" value={s.pontos} onChange={e=>updatePontos(i,e.target.value)}
-                style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontWeight:700,textAlign:"center",fontFamily:T.font,color:s.pontos<0?T.red:T.green,outline:"none"}}/>
+                style={{width:"100%",padding:"5px 8px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:13,fontWeight:700,textAlign:"center",fontFamily:T.font,color:s.pontos<0?T.coral:T.green,outline:"none"}}/>
             </div>
           ))}
         </div>
@@ -669,7 +702,7 @@ const Step_Alertas = ({ data, setField, errors, newAlerta, setNewAlerta }) => {
             return (
               <div key={a.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",background:T.bg,borderRadius:8}}>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{fontSize:12,fontWeight:700,color:T.blue,fontFamily:T.font}}>{tipo?.label}</span>
+                  <span style={{fontSize:12,fontWeight:700,color:T.teal,fontFamily:T.font}}>{tipo?.label}</span>
                   <span style={{fontSize:11,color:T.muted,fontFamily:T.font}}>via {a.canal} · threshold: {a.threshold}</span>
                 </div>
                 <button onClick={()=>remove(a.id)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex"}}><X size={14}/></button>
@@ -871,14 +904,25 @@ export default function VantariOnboardingWizard() {
 
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@500;600;700&display=swap');*{box-sizing:border-box;}`}</style>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');*{box-sizing:border-box;}::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#B3BFCA;border-radius:99px;}`}</style>
 
       {/* Sidebar */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      <div style={{width:240,background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"hidden"}}>
+        {/* glow topo-direito */}
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)"}} />
+
+        {/* Brand */}
+        <div style={{padding:"20px 20px 0",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+            <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
+              <img src="/icone.png" alt="" style={{width:22,height:22}}/>
+            </div>
+            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
+            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+
+        <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
           <NavSection label="Principal"/>
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"           path="/leads"        />
@@ -890,7 +934,7 @@ export default function VantariOnboardingWizard() {
           <NavSection label="Sistema"/>
           <NavItem icon={Plug}           label="Integrações"     path="/integrations" />
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
           <NavItem icon={Settings} label="Configurações" path="/settings"/>
         </div>
       </div>

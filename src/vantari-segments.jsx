@@ -7,25 +7,60 @@ import {
   Filter, Layers, ChevronRight, Trash2, Copy, Edit2,
 } from "lucide-react";
 
-/* ─── design tokens ─── */
+/* ───── DESIGN TOKENS ───── */
 const T = {
-  bg:      "#f2f5f8",
-  surface: "#fff",
-  primary: "#0079a9",
-  accent:  "#05b27b",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  danger:  "#e53935",
-  border:  "#e8edf2",
-  sidebar: "linear-gradient(180deg,#0c2d48 0%,#0079a9 100%)",
-  font:    "'Aptos','Nunito Sans',sans-serif",
-  head:    "Montserrat,sans-serif",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
+
+  // Aliases for compat
+  primary: "#0D7491",
+  accent:  "#14A273",
+  danger:  "#FF6B5E",
 };
 
 const SPIN = `@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`;
 
-/* ─── sidebar ─── */
+/* ───── SIDEBAR NAV HELPERS ───── */
+const NavSection = ({ label }) => (
+  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+    {label}
+  </div>
+);
+
 const NavItem = ({ icon: Icon, label, active = false, path }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
@@ -34,22 +69,26 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
       style={{
+        position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13,
+        padding: "8px 20px", fontSize: 13.5,
         fontWeight: active ? 700 : 600, fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
-        background: active ? "rgba(255,255,255,0.18)" : hov ? "rgba(255,255,255,0.08)" : "transparent",
-        borderRight: active ? "2px solid #fff" : "2px solid transparent",
-        cursor: "pointer", transition: "all 0.15s",
+        background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
+        cursor: "pointer", transition: "all 0.15s", userSelect: "none",
       }}
     >
-      {Icon && <Icon size={16} />}{label}
+      {active && (
+        <span style={{
+          position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
+          background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
+          borderRadius: "0 3px 3px 0",
+        }} />
+      )}
+      {Icon && <Icon size={16} aria-hidden="true" />}{label}
     </div>
   );
 };
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.1em", color: "rgba(255,255,255,0.45)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>{label}</div>
-);
 
 /* ─── filter fields and operators ─── */
 const FIELDS = [
@@ -102,9 +141,9 @@ async function computeLeads(filters) {
 /* ─── score badge ─── */
 function ScoreBadge({ score }) {
   const s = score >= 100 ? { label: "Sales Ready", bg: "#d1fae5", cl: "#059669" }
-           : score >= 51  ? { label: "Hot",         bg: "#fee2e2", cl: T.danger  }
+           : score >= 51  ? { label: "Hot",         bg: `${T.coral}18`, cl: T.coral  }
            : score >= 21  ? { label: "Warm",        bg: "#fef3c7", cl: "#d97706" }
-           :                { label: "Cold",         bg: "#e8edf2", cl: T.muted  };
+           :                { label: "Cold",         bg: T.border,  cl: T.muted  };
   return (
     <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, fontFamily: T.font }}>
       {score} · {s.label}
@@ -115,12 +154,12 @@ function ScoreBadge({ score }) {
 /* ─── stage badge ─── */
 function StageBadge({ stage }) {
   const map = {
-    visitor:     { bg: "#f2f5f8", cl: T.muted  },
-    lead:        { bg: "#e8f5fb", cl: T.primary },
-    mql:         { bg: "#e8f5fb", cl: T.primary },
-    sql:         { bg: "#e6f9f2", cl: T.accent  },
-    opportunity: { bg: "#f0fdf4", cl: "#16a34a" },
-    customer:    { bg: "#d1fae5", cl: "#059669" },
+    visitor:     { bg: T.faint,      cl: T.muted    },
+    lead:        { bg: "#E8F5FB",    cl: T.teal     },
+    mql:         { bg: "#E8F5FB",    cl: T.teal     },
+    sql:         { bg: "#E6F9F2",    cl: T.green    },
+    opportunity: { bg: "#f0fdf4",    cl: "#16a34a"  },
+    customer:    { bg: "#d1fae5",    cl: "#059669"  },
   };
   const s = map[stage?.toLowerCase()] || map.lead;
   return (
@@ -138,15 +177,12 @@ function RuleRow({ rule, onChange, onRemove }) {
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-      {/* field */}
       <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value, op: OPS[(FIELDS.find(f=>f.value===e.target.value)||FIELDS[0]).type][0].v, value: "" })} style={{ ...inp, flex: "0 0 130px" }}>
         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select>
-      {/* operator */}
       <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ ...inp, flex: "0 0 90px" }}>
         {ops.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
       </select>
-      {/* value */}
       {field.type === "enum" ? (
         <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ ...inp, flex: 1 }}>
           <option value="">— selecionar —</option>
@@ -161,7 +197,7 @@ function RuleRow({ rule, onChange, onRemove }) {
         <input value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder={field.type === "number" ? "0" : "valor..."} style={{ ...inp, flex: 1 }} type={field.type === "number" ? "number" : "text"} />
       )}
       <button onClick={onRemove} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, padding: 4, display: "flex", alignItems: "center" }}>
-        <X size={15} />
+        <X size={15} aria-hidden="true" />
       </button>
     </div>
   );
@@ -192,7 +228,6 @@ function SegmentModal({ segment, onClose, onSave }) {
     setPreviewLoading(false);
   }, [filters, type]);
 
-  /* debounce preview */
   useEffect(() => {
     const t = setTimeout(runPreview, 600);
     return () => clearTimeout(t);
@@ -215,20 +250,20 @@ function SegmentModal({ segment, onClose, onSave }) {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "#fff", borderRadius: 14, width: "90%", maxWidth: 900, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.18)", animation: "fadeUp 0.2s ease" }}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "90%", maxWidth: 900, maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: "0 25px 60px rgba(0,0,0,0.18)", animation: "fadeUp 0.2s ease" }}>
         <style>{SPIN}</style>
         {/* header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 24px", borderBottom: `1px solid ${T.border}` }}>
-          <h3 style={{ margin: 0, fontFamily: T.head, fontSize: 16, fontWeight: 700, color: T.text }}>{isEdit ? "Editar Segmento" : "Novo Segmento"}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={20} /></button>
+          <h3 style={{ margin: 0, fontFamily: T.head, fontSize: 16, fontWeight: 700, color: T.ink }}>{isEdit ? "Editar Segmento" : "Novo Segmento"}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={20} aria-hidden="true" /></button>
         </div>
 
         <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
           {/* left: form */}
           <div style={{ flex: "0 0 420px", padding: "20px 24px", borderRight: `1px solid ${T.border}`, overflowY: "auto" }}>
             {error && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 14 }}>
-                <AlertCircle size={15} color={T.danger} />
+              <div style={{ display: "flex", alignItems: "center", gap: 8, background: `${T.danger}14`, border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 14 }}>
+                <AlertCircle size={15} color={T.danger} aria-hidden="true" />
                 <span style={{ fontSize: 13, color: T.danger, fontFamily: T.font }}>{error}</span>
               </div>
             )}
@@ -247,8 +282,8 @@ function SegmentModal({ segment, onClose, onSave }) {
               <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Tipo</label>
               <div style={{ display: "flex", gap: 8 }}>
                 {[["dynamic","Dinâmico","Regras automáticas"], ["static","Estático","Lista manual"]].map(([v, l, sub]) => (
-                  <div key={v} onClick={() => setType(v)} style={{ flex: 1, padding: "10px 14px", borderRadius: 8, border: `1.5px solid ${type === v ? T.primary : T.border}`, background: type === v ? "#e8f5fb" : "#fff", cursor: "pointer" }}>
-                    <div style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: type === v ? T.primary : T.text }}>{l}</div>
+                  <div key={v} onClick={() => setType(v)} style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${type === v ? T.teal : T.border}`, background: type === v ? "#E8F5FB" : "#fff", cursor: "pointer" }}>
+                    <div style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: type === v ? T.teal : T.text }}>{l}</div>
                     <div style={{ fontFamily: T.font, fontSize: 11, color: T.muted, marginTop: 2 }}>{sub}</div>
                   </div>
                 ))}
@@ -259,12 +294,12 @@ function SegmentModal({ segment, onClose, onSave }) {
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                   <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Regras (AND)</label>
-                  <button onClick={addRule} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${T.primary}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, color: T.primary, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
-                    <Plus size={12} /> Adicionar regra
+                  <button onClick={addRule} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${T.teal}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, color: T.teal, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
+                    <Plus size={12} aria-hidden="true" /> Adicionar regra
                   </button>
                 </div>
                 {filters.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "20px 10px", background: T.bg, borderRadius: 8, color: T.muted, fontSize: 13, fontFamily: T.font }}>
+                  <div style={{ textAlign: "center", padding: "20px 10px", background: T.faint, borderRadius: 8, color: T.muted, fontSize: 13, fontFamily: T.font }}>
                     Sem regras = todos os leads. Clique em "Adicionar regra" para filtrar.
                   </div>
                 )}
@@ -275,8 +310,8 @@ function SegmentModal({ segment, onClose, onSave }) {
             )}
 
             {type === "static" && (
-              <div style={{ background: T.bg, borderRadius: 8, padding: 14, textAlign: "center" }}>
-                <Layers size={24} color={T.muted} style={{ marginBottom: 8 }} />
+              <div style={{ background: T.faint, borderRadius: 10, padding: 14, textAlign: "center" }}>
+                <Layers size={24} color={T.muted} style={{ marginBottom: 8 }} aria-hidden="true" />
                 <p style={{ fontFamily: T.font, fontSize: 13, color: T.muted, margin: 0 }}>Segmentos estáticos armazenam a lista atual de leads. Você poderá gerenciar os membros após criar o segmento.</p>
               </div>
             )}
@@ -285,36 +320,36 @@ function SegmentModal({ segment, onClose, onSave }) {
           {/* right: preview */}
           <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
             <div style={{ padding: "14px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 10 }}>
-              <Filter size={14} color={T.primary} />
-              <span style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: T.text }}>Preview</span>
+              <Filter size={14} color={T.teal} aria-hidden="true" />
+              <span style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: T.ink }}>Preview</span>
               {previewLoading
-                ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", marginLeft: "auto" }} />
+                ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", marginLeft: "auto" }} aria-hidden="true" />
                 : previewCount !== null
-                  ? <span style={{ marginLeft: "auto", fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.primary }}>{previewCount} leads</span>
+                  ? <span style={{ marginLeft: "auto", fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.teal }}>{previewCount} leads</span>
                   : null
               }
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "10px 20px" }}>
               {type === "static" ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.muted, gap: 8 }}>
-                  <Layers size={32} color={T.border} />
+                  <Layers size={32} color={T.border} aria-hidden="true" />
                   <span style={{ fontFamily: T.font, fontSize: 13 }}>Preview não disponível para segmentos estáticos</span>
                 </div>
               ) : previewLoading ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: T.muted }}>
-                  <Loader2 size={18} style={{ animation: "spin 0.7s linear infinite" }} />
+                  <Loader2 size={18} style={{ animation: "spin 0.7s linear infinite" }} aria-hidden="true" />
                   <span style={{ fontFamily: T.font, fontSize: 13 }}>Computando...</span>
                 </div>
               ) : preview.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.muted, gap: 8 }}>
-                  <Users size={32} color={T.border} />
+                  <Users size={32} color={T.border} aria-hidden="true" />
                   <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhum lead corresponde às regras</span>
                 </div>
               ) : (
                 preview.slice(0, 50).map(lead => (
                   <div key={lead.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0", borderBottom: `1px solid ${T.border}` }}>
-                    <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#e8f5fb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontFamily: T.head, fontSize: 12, fontWeight: 700, color: T.primary }}>{(lead.name || lead.email || "?")[0].toUpperCase()}</span>
+                    <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#E8F5FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontFamily: T.head, fontSize: 12, fontWeight: 700, color: T.teal }}>{(lead.name || lead.email || "?")[0].toUpperCase()}</span>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name || "—"}</div>
@@ -336,9 +371,9 @@ function SegmentModal({ segment, onClose, onSave }) {
 
         {/* footer */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, padding: "14px 24px", borderTop: `1px solid ${T.border}` }}>
-          <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 8, border: `1px solid ${T.border}`, background: "#fff", color: T.text, fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>Cancelar</button>
-          <button onClick={handleSave} disabled={saving} style={{ padding: "8px 22px", borderRadius: 8, border: "none", background: T.primary, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, fontFamily: T.font, display: "flex", alignItems: "center", gap: 6 }}>
-            {saving && <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite" }} />}
+          <button onClick={onClose} style={{ padding: "8px 18px", borderRadius: 10, border: `1px solid ${T.border}`, background: "#fff", color: T.text, fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>Cancelar</button>
+          <button onClick={handleSave} disabled={saving} style={{ padding: "8px 22px", borderRadius: 10, border: "none", background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1, fontFamily: T.font, display: "flex", alignItems: "center", gap: 6 }}>
+            {saving && <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite" }} aria-hidden="true" />}
             {isEdit ? "Salvar alterações" : "Criar segmento"}
           </button>
         </div>
@@ -350,15 +385,23 @@ function SegmentModal({ segment, onClose, onSave }) {
 /* ─── segment card ─── */
 function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelete }) {
   const [hov, setHov] = useState(false);
-  const typeBg   = segment.type === "dynamic" ? "#e8f5fb" : "#f2f5f8";
-  const typeCl   = segment.type === "dynamic" ? T.primary  : T.muted;
-  const typeIcon = segment.type === "dynamic" ? <Filter size={11} /> : <Layers size={11} />;
+  const typeBg   = segment.type === "dynamic" ? "#E8F5FB" : T.faint;
+  const typeCl   = segment.type === "dynamic" ? T.teal    : T.muted;
+  const typeIcon = segment.type === "dynamic" ? <Filter size={11} aria-hidden="true" /> : <Layers size={11} aria-hidden="true" />;
 
   return (
-    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${hov ? T.primary+"66" : T.border}`, padding: "18px 20px", transition: "all 0.15s", boxShadow: hov ? "0 4px 20px rgba(0,121,169,0.08)" : "0 1px 4px rgba(0,0,0,.04)" }}>
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{
+        background: "#fff", borderRadius: 14,
+        border: `1px solid ${hov ? T.teal + "66" : T.border}`,
+        padding: "18px 20px", transition: "all 0.15s",
+        boxShadow: hov
+          ? "0 1px 0 rgba(14,26,36,.04), 0 16px 36px -16px rgba(14,26,36,.15)"
+          : "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",
+      }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 10 }}>
         <div style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
-          <h3 style={{ margin: "0 0 4px", fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{segment.name}</h3>
+          <h3 style={{ margin: "0 0 4px", fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{segment.name}</h3>
           {segment.description && <p style={{ margin: 0, fontFamily: T.font, fontSize: 12, color: T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{segment.description}</p>}
         </div>
         <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "3px 8px", borderRadius: 20, background: typeBg, color: typeCl, fontWeight: 700, fontFamily: T.font, flexShrink: 0 }}>
@@ -368,8 +411,8 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
         {loading
-          ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} />
-          : <><Users size={14} color={T.primary} /><span style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.text }}>{leadCount ?? "—"}</span><span style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>leads</span></>
+          ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} aria-hidden="true" />
+          : <><Users size={14} color={T.teal} aria-hidden="true" /><span style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.ink, letterSpacing: "-0.035em", fontVariantNumeric: "tabular-nums" }}>{leadCount ?? "—"}</span><span style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>leads</span></>
         }
       </div>
 
@@ -379,29 +422,87 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
             const f = FIELDS.find(x => x.value === rule.field);
             const o = [...OPS.number, ...OPS.text, ...OPS.enum].find(x => x.v === rule.op);
             return (
-              <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>
+              <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>
                 {f?.label} {o?.l} {rule.value}
               </span>
             );
           })}
-          {segment.filters.length > 3 && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.bg, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>+{segment.filters.length - 3} regras</span>}
+          {segment.filters.length > 3 && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>+{segment.filters.length - 3} regras</span>}
         </div>
       )}
 
       <div style={{ display: "flex", gap: 6, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-        <button onClick={() => onEdit(segment)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "6px 0", borderRadius: 7, border: `1px solid ${T.border}`, background: "none", color: T.text, fontSize: 12, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>
-          <Edit2 size={12} /> Editar
+        <button onClick={() => onEdit(segment)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "6px 0", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.text, fontSize: 12, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>
+          <Edit2 size={12} aria-hidden="true" /> Editar
         </button>
-        <button onClick={() => onDuplicate(segment)} style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`, background: "none", color: T.muted, cursor: "pointer" }} title="Duplicar">
-          <Copy size={13} />
+        <button onClick={() => onDuplicate(segment)} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.muted, cursor: "pointer" }} title="Duplicar">
+          <Copy size={13} aria-hidden="true" />
         </button>
-        <button onClick={() => onDelete(segment.id)} style={{ padding: "6px 10px", borderRadius: 7, border: "none", background: "none", color: T.muted, cursor: "pointer" }} title="Remover">
-          <Trash2 size={13} />
+        <button onClick={() => onDelete(segment.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: T.muted, cursor: "pointer" }} title="Remover">
+          <Trash2 size={13} aria-hidden="true" />
         </button>
       </div>
     </div>
   );
 }
+
+/* ─── Phase 5: Hero KPI Components ─── */
+const SparklineChart = ({ data = [], color }) => {
+  const pts = (data.length >= 2 ? data : Array(7).fill(0));
+  const max = Math.max(...pts) || 1;
+  const min = Math.min(...pts);
+  const range = max - min || 1;
+  const W = 220, H = 36;
+  const x = (i) => (i / (pts.length - 1)) * W;
+  const y = (v) => H - ((v - min) / range) * (H - 6) - 3;
+  const line = pts.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${line} L${W},${H} L0,${H}Z`;
+  const gradId = `sg${color.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ display: "block", width: "calc(100% + 32px)", height: 36, margin: "8px -16px -1px" }}
+      aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.28" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
+const TrendChipHero = ({ value }) => {
+  const up = value >= 0;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, fontFamily: T.mono,
+      background: up ? `${T.green}14` : `${T.coral}14`, color: up ? T.green : T.coral }}>
+      {up ? "↗" : "↘"} {Math.abs(value)}%
+    </span>
+  );
+};
+
+const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData }) => (
+  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+    padding: "14px 16px 0", position: "relative", overflow: "hidden",
+    boxShadow: "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color, borderRadius: "14px 14px 0 0" }} />
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ width: 32, height: 32, borderRadius: 9, background: `${color}14`, display: "grid", placeItems: "center" }}>
+        {Icon && <Icon size={16} color={color} aria-hidden="true" />}
+      </div>
+      {trend !== undefined && <TrendChipHero value={trend} />}
+    </div>
+    <div style={{ fontSize: 28, fontWeight: 700, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em",
+      fontVariantNumeric: "tabular-nums", margin: "10px 0 3px", lineHeight: 1 }}>{value}</div>
+    <div style={{ fontSize: 11.5, color: T.muted, fontWeight: 600, fontFamily: T.font }}>{label}</div>
+    {sub && <div style={{ fontSize: 10.5, color, fontWeight: 700, fontFamily: T.mono, margin: "2px 0 8px" }}>{sub}</div>}
+    {!sub && <div style={{ height: 8 }} />}
+    <SparklineChart data={sparkData} color={color} />
+  </div>
+);
 
 /* ─── detail panel ─── */
 function SegmentDetail({ segment, onClose }) {
@@ -426,33 +527,33 @@ function SegmentDetail({ segment, onClose }) {
         <style>{`${SPIN}@keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "18px 20px", borderBottom: `1px solid ${T.border}` }}>
           <div>
-            <h3 style={{ margin: "0 0 2px", fontFamily: T.head, fontSize: 15, fontWeight: 700, color: T.text }}>{segment.name}</h3>
+            <h3 style={{ margin: "0 0 2px", fontFamily: T.head, fontSize: 15, fontWeight: 700, color: T.ink }}>{segment.name}</h3>
             {segment.description && <p style={{ margin: 0, fontFamily: T.font, fontSize: 12, color: T.muted }}>{segment.description}</p>}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={18} aria-hidden="true" /></button>
         </div>
         <div style={{ padding: "12px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
-          <Users size={14} color={T.primary} />
-          <span style={{ fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.text }}>{loading ? "..." : leads.length} leads</span>
-          {loading && <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} />}
+          <Users size={14} color={T.teal} aria-hidden="true" />
+          <span style={{ fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.ink }}>{loading ? "..." : leads.length} leads</span>
+          {loading && <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} aria-hidden="true" />}
         </div>
         {error && (
-          <div style={{ margin: "12px 20px", display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px" }}>
-            <AlertCircle size={14} color={T.danger} />
+          <div style={{ margin: "12px 20px", display: "flex", alignItems: "center", gap: 8, background: `${T.danger}14`, border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px" }}>
+            <AlertCircle size={14} color={T.danger} aria-hidden="true" />
             <span style={{ fontSize: 12, color: T.danger, fontFamily: T.font }}>{error}</span>
           </div>
         )}
         <div style={{ flex: 1, overflowY: "auto", padding: "8px 20px" }}>
           {!loading && leads.length === 0 && !error && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 8, color: T.muted }}>
-              <Users size={28} color={T.border} />
+              <Users size={28} color={T.border} aria-hidden="true" />
               <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhum lead corresponde a este segmento</span>
             </div>
           )}
           {leads.map(lead => (
             <div key={lead.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#e8f5fb", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <span style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: T.primary }}>{(lead.name || lead.email || "?")[0].toUpperCase()}</span>
+              <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#E8F5FB", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <span style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: T.teal }}>{(lead.name || lead.email || "?")[0].toUpperCase()}</span>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.name || "—"}</div>
@@ -477,9 +578,41 @@ export default function VantariSegments() {
   const [counting, setCounting]   = useState({});
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
-  const [modal, setModal]         = useState(null); // null | "new" | segment object
+  const [modal, setModal]         = useState(null);
   const [detail, setDetail]       = useState(null);
   const [search, setSearch]       = useState("");
+
+  const [segSpark, setSegSpark] = useState({ segments: [], leads: [], dynamic: [], staticS: [] });
+
+  useEffect(() => {
+    const loadSpark = async () => {
+      const sevenAgo = new Date();
+      sevenAgo.setMonth(sevenAgo.getMonth() - 7);
+      const [{ data: segData }, { data: leadsData }] = await Promise.all([
+        supabase.from("segments").select("created_at, type").gte("created_at", sevenAgo.toISOString()),
+        supabase.from("leads").select("created_at").gte("created_at", sevenAgo.toISOString()),
+      ]);
+      const now = new Date();
+      const buckets = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
+        return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, segs: 0, leads: 0, dyn: 0, stat: 0 };
+      });
+      (segData || []).forEach(r => {
+        const d = new Date(r.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const b = buckets.find(m => m.key === key);
+        if (b) { b.segs++; if (r.type === "dynamic") b.dyn++; else b.stat++; }
+      });
+      (leadsData || []).forEach(r => {
+        const d = new Date(r.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const b = buckets.find(m => m.key === key);
+        if (b) b.leads++;
+      });
+      setSegSpark({ segments: buckets.map(b => b.segs), leads: buckets.map(b => b.leads), dynamic: buckets.map(b => b.dyn), staticS: buckets.map(b => b.stat) });
+    };
+    loadSpark();
+  }, []);
 
   const loadSegments = useCallback(async () => {
     setLoading(true); setError(null);
@@ -490,7 +623,6 @@ export default function VantariSegments() {
     if (err) { setError(err.message); setLoading(false); return; }
     setSegments(data || []);
     setLoading(false);
-    /* compute lead counts for dynamic segments */
     for (const seg of (data || [])) {
       if (seg.type !== "dynamic") continue;
       setCounting(c => ({ ...c, [seg.id]: true }));
@@ -530,62 +662,106 @@ export default function VantariSegments() {
 
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: T.font, background: T.bg }}>
-      <style>{SPIN}</style>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #B3BFCA; border-radius: 99px; }
+        ${SPIN}
+      `}</style>
 
-      {/* sidebar */}
-      <div style={{ width: 220, flexShrink: 0, background: T.sidebar, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
-        <div style={{ padding: "22px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ fontFamily: T.head, fontWeight: 800, fontSize: 20, color: "#fff", letterSpacing: "0.04em" }}>Vantari</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Marketing Platform</div>
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        width: 240, flexShrink: 0,
+        background: T.sidebarBg,
+        display: "flex", flexDirection: "column",
+        height: "100vh", position: "sticky", top: 0,
+        overflow: "hidden",
+      }}>
+        {/* glow topo-direito */}
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)",
+        }} />
+
+        {/* Brand */}
+        <div style={{ padding: "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
+            </div>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
+
+        <div style={{ flex: 1, overflowY: "auto", paddingTop: 0, position: "relative" }}>
           <NavSection label="Principal" />
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"           path="/leads"        />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
           <NavSection label="Ferramentas" />
           <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
-          <NavItem icon={Filter}         label="Segmentação"     path="/segments" active />
+          <NavItem icon={Filter}         label="Segmentação"     path="/segments"     active />
           <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      />
           <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" />
           <NavItem icon={Zap}            label="Workflows"       path="/workflow"     />
           <NavSection label="Sistema" />
           <NavItem icon={Plug}           label="Integrações"     path="/integrations" />
-          <NavItem icon={Settings}       label="Configurações"   path="/settings"     />
+        </div>
+
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <NavItem icon={Settings} label="Configurações" path="/settings" />
         </div>
       </div>
 
-      {/* main */}
+      {/* ── MAIN ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* topbar */}
-        <div style={{ padding: "20px 28px 16px", borderBottom: `1px solid ${T.border}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ padding: "20px 28px 16px", borderBottom: `1px solid ${T.border}`, background: "#fff", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div>
-            <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.text, margin: 0 }}>Segmentação</h1>
+            <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.ink, margin: 0, letterSpacing: "-0.02em" }}>Segmentação</h1>
             <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0", fontFamily: T.font }}>
               {loading ? "Carregando..." : `${segments.length} segmentos criados`}
             </p>
           </div>
-          <button onClick={() => setModal("new")} style={{ display: "flex", alignItems: "center", gap: 6, background: T.primary, color: "#fff", border: "none", borderRadius: 9, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font }}>
-            <Plus size={15} /> Novo Segmento
+          <button onClick={() => setModal("new")} style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font, boxShadow: "0 4px 14px -4px rgba(13,116,145,.4)" }}>
+            <Plus size={15} aria-hidden="true" /> Novo Segmento
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px" }}>
-          {/* stat cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 14, marginBottom: 24 }}>
-            {[
-              { label: "Total de Segmentos", value: segments.length, icon: <Layers size={18} color={T.primary} />, bg: "#e8f5fb", cl: T.primary },
-              { label: "Dinâmicos",          value: segments.filter(s => s.type === "dynamic").length, icon: <Filter size={18} color={T.accent} />, bg: "#e6f9f2", cl: T.accent },
-              { label: "Leads Segmentados",  value: totalLeads, icon: <Users size={18} color="#6d45d9" />, bg: "#f3f0ff", cl: "#6d45d9" },
-            ].map(card => (
-              <div key={card.label} style={{ background: "#fff", border: `1px solid ${T.border}`, borderRadius: 11, padding: "16px 20px", display: "flex", alignItems: "center", gap: 14 }}>
-                <div style={{ width: 42, height: 42, borderRadius: 10, background: card.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{card.icon}</div>
-                <div>
-                  <div style={{ fontFamily: T.font, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>{card.label}</div>
-                  <div style={{ fontFamily: T.head, fontSize: 24, fontWeight: 700, color: T.text, lineHeight: 1.1 }}>{card.value}</div>
-                </div>
-              </div>
-            ))}
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px", background: "linear-gradient(180deg, #F7F4FF 0%, #F0EAFF 100%)" }}>
+          {/* Hero KPI cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
+            <HeroKpiCard
+              icon={Layers}   color={T.teal}   trend={0}
+              label="Total de Segmentos"
+              value={segments.length.toLocaleString("pt-BR")}
+              sub="criados"
+              sparkData={segSpark.segments}
+            />
+            <HeroKpiCard
+              icon={Users}    color={T.violet} trend={0}
+              label="Leads Segmentados"
+              value={totalLeads.toLocaleString("pt-BR")}
+              sub="em segmentos"
+              sparkData={segSpark.leads}
+            />
+            <HeroKpiCard
+              icon={Zap}      color={T.green}  trend={0}
+              label="Segmentos Dinâmicos"
+              value={segments.filter(s => s.type === "dynamic").length.toLocaleString("pt-BR")}
+              sub="regras automáticas"
+              sparkData={segSpark.dynamic}
+            />
+            <HeroKpiCard
+              icon={Filter}   color={T.amber}  trend={0}
+              label="Segmentos Estáticos"
+              value={segments.filter(s => s.type === "static").length.toLocaleString("pt-BR")}
+              sub="listas manuais"
+              sparkData={segSpark.staticS}
+            />
           </div>
 
           {/* search */}
@@ -598,25 +774,25 @@ export default function VantariSegments() {
           </div>
 
           {error && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#fef2f2", border: `1px solid ${T.danger}`, borderRadius: 8, padding: "12px 16px", marginBottom: 20 }}>
-              <AlertCircle size={16} color={T.danger} />
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: `${T.danger}14`, border: `1px solid ${T.danger}`, borderRadius: 8, padding: "12px 16px", marginBottom: 20 }}>
+              <AlertCircle size={16} color={T.danger} aria-hidden="true" />
               <span style={{ fontSize: 13, color: T.danger, fontFamily: T.font }}>{error}</span>
             </div>
           )}
 
           {loading ? (
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 60, color: T.muted }}>
-              <Loader2 size={20} style={{ animation: "spin 0.7s linear infinite" }} />
+              <Loader2 size={20} style={{ animation: "spin 0.7s linear infinite" }} aria-hidden="true" />
               <span style={{ fontFamily: T.font, fontSize: 14 }}>Carregando segmentos...</span>
             </div>
           ) : filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "60px 20px" }}>
-              <Filter size={48} color={T.border} style={{ marginBottom: 16 }} />
+              <Filter size={48} color={T.border} style={{ marginBottom: 16 }} aria-hidden="true" />
               <p style={{ fontFamily: T.font, fontSize: 14, color: T.muted, margin: "0 0 16px" }}>
                 {search ? `Nenhum segmento encontrado para "${search}"` : "Nenhum segmento criado ainda."}
               </p>
               {!search && (
-                <button onClick={() => setModal("new")} style={{ background: T.primary, color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
+                <button onClick={() => setModal("new")} style={{ background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
                   Criar primeiro segmento
                 </button>
               )}

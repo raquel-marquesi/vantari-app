@@ -11,29 +11,52 @@ import {
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════
-   DESIGN TOKENS — Vantari light system
+   DESIGN TOKENS — Vantari redesign
 ═══════════════════════════════════════════════════ */
 const T = {
-  bg:      "#f2f5f8",
-  white:   "#ffffff",
-  ink:     "#5f5f64",
-  ink2:    "#5f5f64",
-  muted:   "#888891",
-  faint3:  "#adadb5",
-  border:  "#e2e8f0",
-  border2: "#edf0f4",
-  blue:    "#0079a9",
-  blueL:   "#e8f5fb",
-  teal:    "#0079a9",
-  green:   "#05b27b",
-  amber:   "#e07b00",
-  red:     "#ef4444",
-  purple:  "#6d45d9",
-  purpleL: "#f3f0ff",
-  font:    "'Aptos', 'Nunito Sans', sans-serif",
-  head:    "'Montserrat', sans-serif",
-  sans:    "'Aptos', 'Nunito Sans', sans-serif",
-  mono:    "'Courier New', monospace",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  white:   "#FFFFFF",
+  border:  "#E8EEF3",
+  border2: "#EEF2F6",
+
+  // Ink scale
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Compat aliases used in this file
+  blueL:   "#DCF0F7",
+  purpleL: "#EDE9FF",
+  greenL:  "#DCFCE7",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  sans:    "'Inter', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ═══════════════════════════════════════════════════
@@ -84,19 +107,25 @@ const callAI = async (systemPrompt, userPrompt, model="claude-sonnet-4-20250514"
 const Btn = ({ children, onClick, variant="primary", size="md", icon:Icon, disabled, full, style:sx={} }) => {
   const [hov,setHov] = useState(false);
   const v = {
-    primary:   { bg:hov?"#006a93":T.blue,   color:"#fff",  border:"none",                              shadow:hov?`0 4px 16px ${T.blue}44`:`0 1px 4px ${T.blue}22` },
-    secondary: { bg:hov?T.blueL:T.white,     color:T.blue,  border:`1px solid ${hov?T.blue:T.border2}`, shadow:"none" },
-    ghost:     { bg:hov?T.border2:"transparent",color:T.ink,border:`0.5px solid ${T.border}`,           shadow:"none" },
-    danger:    { bg:hov?"#dc2626":"#fef2f2",  color:hov?"#fff":T.red, border:`0.5px solid ${T.red}55`,  shadow:"none" },
-    success:   { bg:hov?"#04996a":T.green,    color:"#fff",  border:"none",                              shadow:"none" },
-    purple:    { bg:hov?"#5b35c7":T.purple,   color:"#fff",  border:"none",                              shadow:`0 2px 8px ${T.purple}33` },
+    primary:   {
+      bg: hov
+        ? "linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)"
+        : "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+      color:"#fff", border:"none",
+      shadow: hov ? "0 8px 22px -6px rgba(13,116,145,.5)" : "0 4px 14px -4px rgba(13,116,145,.4)",
+    },
+    secondary: { bg:hov?T.blueL:T.white,     color:T.teal,  border:`1.5px solid ${hov?T.teal:T.border}`, shadow:"none" },
+    ghost:     { bg:hov?"#EEF2F6":"transparent",color:T.text,border:`0.5px solid ${T.border}`,            shadow:"none" },
+    danger:    { bg:hov?"#e04d42":"#FFE8E6",  color:hov?"#fff":T.red, border:`0.5px solid ${T.red}55`,   shadow:"none" },
+    success:   { bg:hov?"#108A60":T.green,    color:"#fff",  border:"none",                               shadow:"none" },
+    purple:    { bg:hov?"#6347E0":T.purple,   color:"#fff",  border:"none",                               shadow:`0 2px 8px ${T.purple}33` },
   }[variant]||{};
   const pad = {xs:"4px 9px",sm:"6px 13px",md:"9px 18px",lg:"12px 26px"}[size]||"9px 18px";
   const fs  = {xs:10,sm:12,md:13,lg:14}[size]||13;
   return (
     <button onClick={onClick} disabled={disabled}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{ display:"inline-flex",alignItems:"center",gap:6,padding:pad,fontSize:fs,fontFamily:T.font,fontWeight:700,borderRadius:8,border:v.border||"none",background:v.bg,color:v.color,boxShadow:v.shadow,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"all 0.15s",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",...sx }}>
+      style={{ display:"inline-flex",alignItems:"center",gap:6,padding:pad,fontSize:fs,fontFamily:T.font,fontWeight:700,borderRadius:10,border:v.border||"none",background:v.bg,color:v.color,boxShadow:v.shadow,cursor:disabled?"not-allowed":"pointer",opacity:disabled?.5:1,transition:"all 0.15s",width:full?"100%":"auto",justifyContent:full?"center":"flex-start",...sx }}>
       {Icon&&<Icon size={fs} aria-hidden="true"/>}{children}
     </button>
   );
@@ -108,7 +137,7 @@ const Select = ({ label, value, onChange, options, small, style:sx={} }) => {
     <div style={sx}>
       {label&&<label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>{label}</label>}
       <select value={value} onChange={e=>onChange(e.target.value)} onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-        style={{width:"100%",padding:small?"6px 10px":"10px 13px",fontFamily:T.font,fontSize:small?12:13,fontWeight:600,border:`1px solid ${foc?T.blue:T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer",transition:"border-color 0.15s",boxShadow:foc?`0 0 0 3px ${T.blue}18`:"none"}}>
+        style={{width:"100%",padding:small?"6px 10px":"10px 13px",fontFamily:T.font,fontSize:small?12:13,fontWeight:600,border:`1px solid ${foc?T.teal:T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.text,cursor:"pointer",transition:"border-color 0.15s",boxShadow:foc?`0 0 0 3px ${T.teal}18`:"none"}}>
         {options.map(o=><option key={o} value={o}>{o}</option>)}
       </select>
     </div>
@@ -122,19 +151,19 @@ const Textarea = ({ label, value, onChange, placeholder, rows=4, mono, style:sx=
       {label&&<label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>{label}</label>}
       <textarea value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} rows={rows}
         onFocus={()=>setFoc(true)} onBlur={()=>setFoc(false)}
-        style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:mono?T.mono:T.font,fontSize:13,fontWeight:600,border:`1px solid ${foc?T.blue:T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,resize:"vertical",transition:"border-color 0.15s",boxShadow:foc?`0 0 0 3px ${T.blue}18`:"none",lineHeight:1.6}}/>
+        style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:mono?T.mono:T.font,fontSize:13,fontWeight:600,border:`1px solid ${foc?T.teal:T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.text,resize:"vertical",transition:"border-color 0.15s",boxShadow:foc?`0 0 0 3px ${T.teal}18`:"none",lineHeight:1.6}}/>
     </div>
   );
 };
 
-const Badge = ({ label, color="#888891", bg="#f3f4f6", small }) => (
+const Badge = ({ label, color="#5A6B7A", bg="#EEF2F6", small }) => (
   <span style={{display:"inline-flex",alignItems:"center",gap:4,fontFamily:T.font,fontSize:small?10:11,fontWeight:700,color,background:bg,padding:small?"2px 7px":"3px 9px",borderRadius:20,whiteSpace:"nowrap"}}>
     {label}
   </span>
 );
 
 const Card = ({ children, style:sx={}, onClick }) => (
-  <div onClick={onClick} style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,overflow:"hidden",cursor:onClick?"pointer":"default",...sx}}>
+  <div onClick={onClick} style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:14,overflow:"hidden",cursor:onClick?"pointer":"default",boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",...sx}}>
     {children}
   </div>
 );
@@ -143,20 +172,20 @@ const Stars = ({ value, onChange }) => (
   <div style={{display:"flex",gap:2}}>
     {[1,2,3,4,5].map(s=>(
       <Star key={s} size={13} onClick={()=>onChange&&onChange(s)}
-        fill={s<=value?"#e07b00":"none"}
-        color={s<=value?"#e07b00":"#d1d5db"}
+        fill={s<=value?T.amber:"none"}
+        color={s<=value?T.amber:"#d1d5db"}
         style={{cursor:onChange?"pointer":"default",transition:"color 0.1s"}} aria-hidden="true"/>
     ))}
   </div>
 );
 
 const Spinner = () => (
-  <span style={{display:"inline-block",width:16,height:16,border:`2px solid ${T.blueL}`,borderTopColor:T.blue,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
+  <span style={{display:"inline-block",width:16,height:16,border:`2px solid ${T.blueL}`,borderTopColor:T.teal,borderRadius:"50%",animation:"spin 0.7s linear infinite"}}/>
 );
 
-/* NavSection / NavItem */
+/* ─── SIDEBAR NAV HELPERS ─── */
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
+  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
     {label}
   </div>
 );
@@ -166,7 +195,23 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
+      style={{
+        position:"relative",
+        display:"flex",alignItems:"center",gap:9,
+        padding:"8px 20px",fontSize:13.5,
+        fontWeight:active?700:600,
+        fontFamily:T.font,
+        color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
+        background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
+        cursor:"pointer",transition:"all 0.15s",userSelect:"none",
+      }}>
+      {active && (
+        <span style={{
+          position:"absolute",left:0,top:6,bottom:6,width:3,
+          background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
+          borderRadius:"0 3px 3px 0",
+        }}/>
+      )}
       {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
     </div>
   );
@@ -242,19 +287,19 @@ const EmailGenTab = ({ settings, onSave }) => {
         <div ref={chatRef} style={{flex:1,overflowY:"auto",padding:"18px 20px",display:"flex",flexDirection:"column",gap:12}}>
           {chat.map((m,i)=>(
             <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",flexDirection:m.role==="user"?"row-reverse":"row"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?T.blue:`linear-gradient(135deg,${T.purple},${T.blue})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:m.role==="user"?T.teal:`linear-gradient(135deg,${T.purple},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 {m.role==="user"
                   ? <User size={13} color="#fff" aria-hidden="true"/>
                   : <Sparkles size={13} color="#fff" aria-hidden="true"/>}
               </div>
-              <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:m.role==="user"?"14px 4px 14px 14px":"4px 14px 14px 14px",background:m.role==="user"?T.blue:T.bg,color:m.role==="user"?"#fff":T.ink,fontFamily:T.font,fontSize:13,lineHeight:1.6,fontWeight:600}}>
+              <div style={{maxWidth:"80%",padding:"10px 14px",borderRadius:m.role==="user"?"14px 4px 14px 14px":"4px 14px 14px 14px",background:m.role==="user"?T.teal:T.bg,color:m.role==="user"?"#fff":T.text,fontFamily:T.font,fontSize:13,lineHeight:1.6,fontWeight:600}}>
                 {m.content}
               </div>
             </div>
           ))}
           {loading&&(
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.blue})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:`linear-gradient(135deg,${T.purple},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <Sparkles size={13} color="#fff" aria-hidden="true"/>
               </div>
               <div style={{padding:"10px 14px",background:T.bg,borderRadius:"4px 14px 14px 14px",display:"flex",gap:8,alignItems:"center"}}>
@@ -268,9 +313,9 @@ const EmailGenTab = ({ settings, onSave }) => {
             <textarea value={input} onChange={e=>setInput(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send();}}}
               placeholder="Descreva o email que precisa… (Enter para enviar)"
-              rows={2} style={{flex:1,padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",resize:"none",background:T.white,color:T.ink,lineHeight:1.5}}/>
+              rows={2} style={{flex:1,padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",resize:"none",background:T.white,color:T.text,lineHeight:1.5}}/>
             <button onClick={send} disabled={loading||!input.trim()}
-              style={{width:40,height:40,borderRadius:8,background:T.blue,border:"none",color:"#fff",cursor:loading||!input.trim()?"not-allowed":"pointer",opacity:loading||!input.trim()?0.5:1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              style={{width:40,height:40,borderRadius:8,background:T.teal,border:"none",color:"#fff",cursor:loading||!input.trim()?"not-allowed":"pointer",opacity:loading||!input.trim()?0.5:1,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <Send size={16} aria-hidden="true"/>
             </button>
           </div>
@@ -282,7 +327,7 @@ const EmailGenTab = ({ settings, onSave }) => {
           <div style={{display:"flex",gap:6}}>
             {["result","raw"].map(t=>(
               <button key={t} onClick={()=>setPTab(t)}
-                style={{padding:"5px 12px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`0.5px solid ${previewTab===t?T.blue:T.border}`,borderRadius:7,background:previewTab===t?T.blueL:T.white,color:previewTab===t?T.blue:T.muted,cursor:"pointer"}}>
+                style={{padding:"5px 12px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`0.5px solid ${previewTab===t?T.teal:T.border}`,borderRadius:7,background:previewTab===t?T.blueL:T.white,color:previewTab===t?T.teal:T.muted,cursor:"pointer"}}>
                 {t==="result"?"Preview":"Texto bruto"}
               </button>
             ))}
@@ -300,7 +345,7 @@ const EmailGenTab = ({ settings, onSave }) => {
           {!generated&&!loading&&(
             <div style={{height:"100%",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16,color:T.muted}}>
               <div style={{width:72,height:72,borderRadius:20,background:`linear-gradient(135deg,${T.purpleL},${T.blueL})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <PenLine size={32} color={T.blue} aria-hidden="true"/>
+                <PenLine size={32} color={T.teal} aria-hidden="true"/>
               </div>
               <div style={{textAlign:"center"}}>
                 <p style={{fontFamily:T.head,fontSize:16,color:T.ink,margin:"0 0 6px",fontWeight:700}}>Preview do Email</p>
@@ -315,34 +360,34 @@ const EmailGenTab = ({ settings, onSave }) => {
           )}
           {generated&&previewTab==="result"&&(
             <Card style={{maxWidth:600,margin:"0 auto",boxShadow:"0 4px 24px rgba(0,0,0,0.07)"}}>
-              <div style={{background:`linear-gradient(135deg,${T.blue},${T.teal})`,padding:"28px 36px",textAlign:"center"}}>
+              <div style={{background:`linear-gradient(135deg,${T.teal},${T.green})`,padding:"28px 36px",textAlign:"center"}}>
                 <div style={{fontFamily:T.head,fontSize:16,fontWeight:700,color:"#fff",letterSpacing:"0.08em"}}>VANTARI</div>
               </div>
               <div style={{padding:"28px 36px"}}>
                 {generated.split("\n").map((line,i)=>{
                   if(line.startsWith("Assunto:")) return (
-                    <div key={i} style={{marginBottom:20,padding:"12px 16px",background:T.blueL,borderRadius:8,borderLeft:`3px solid ${T.blue}`}}>
-                      <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.06em"}}>Assunto: </span>
+                    <div key={i} style={{marginBottom:20,padding:"12px 16px",background:T.blueL,borderRadius:8,borderLeft:`3px solid ${T.teal}`}}>
+                      <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.teal,textTransform:"uppercase",letterSpacing:"0.06em"}}>Assunto: </span>
                       <span style={{fontFamily:T.font,fontSize:13,color:T.ink,fontWeight:700}}>{line.replace("Assunto:","").trim()}</span>
                     </div>
                   );
                   if(!line.trim()) return <div key={i} style={{height:10}}/>;
-                  return <p key={i} style={{fontFamily:T.font,fontSize:14,color:T.ink,margin:"0 0 10px",lineHeight:1.7,fontWeight:600}}>{line}</p>;
+                  return <p key={i} style={{fontFamily:T.font,fontSize:14,color:T.text,margin:"0 0 10px",lineHeight:1.7,fontWeight:600}}>{line}</p>;
                 })}
               </div>
               <div style={{padding:"16px 36px",borderTop:`0.5px solid ${T.border}`,background:T.bg,textAlign:"center"}}>
-                <p style={{fontFamily:T.font,fontSize:11,color:T.muted,margin:0,fontWeight:600}}>© 2025 Vantari · <a href="#" style={{color:T.blue,textDecoration:"none"}}>Descadastrar</a></p>
+                <p style={{fontFamily:T.font,fontSize:11,color:T.muted,margin:0,fontWeight:600}}>© 2025 Vantari · <a href="#" style={{color:T.teal,textDecoration:"none"}}>Descadastrar</a></p>
               </div>
             </Card>
           )}
           {generated&&previewTab==="raw"&&(
-            <div style={{background:T.bg,borderRadius:12,padding:20,fontFamily:T.mono,fontSize:13,lineHeight:1.7,color:T.ink,whiteSpace:"pre-wrap",maxWidth:700,margin:"0 auto"}}>{generated}</div>
+            <div style={{background:T.bg,borderRadius:12,padding:20,fontFamily:T.mono,fontSize:13,lineHeight:1.7,color:T.text,whiteSpace:"pre-wrap",maxWidth:700,margin:"0 auto"}}>{generated}</div>
           )}
           {generated&&genMeta&&(
             <div style={{maxWidth:600,margin:"16px auto 0",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-              <Badge label={genMeta.model.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.blue} bg={T.blueL}/>
+              <Badge label={genMeta.model.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.teal} bg={T.blueL}/>
               <Badge label={`${genMeta.tokens} tokens`} color={T.muted} bg={T.bg}/>
-              <Badge label={`~$${(genMeta.tokens*0.003/1000).toFixed(4)}`} color={T.green} bg="#f0fdf4"/>
+              <Badge label={`~$${(genMeta.tokens*0.003/1000).toFixed(4)}`} color={T.green} bg="#DCFCE7"/>
               <Badge label={new Date(genMeta.timestamp).toLocaleTimeString("pt-BR")} color={T.muted} bg={T.bg}/>
             </div>
           )}
@@ -405,7 +450,7 @@ const SubjectOptTab = ({ settings }) => {
           <input value={subject} onChange={e=>setSubject(e.target.value)}
             onKeyDown={e=>{if(e.key==="Enter")analyzeAndSuggest();}}
             placeholder="Cole seu assunto de email aqui…"
-            style={{flex:1,padding:"12px 16px",fontFamily:T.font,fontSize:14,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink,background:T.white}}/>
+            style={{flex:1,padding:"12px 16px",fontFamily:T.font,fontSize:14,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.text,background:T.white}}/>
           <Btn onClick={analyzeAndSuggest} disabled={loading||!subject.trim()} icon={loading?undefined:Search} size="lg">
             {loading?<><Spinner/> Analisando…</>:"Analisar"}
           </Btn>
@@ -432,7 +477,7 @@ const SubjectOptTab = ({ settings }) => {
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
               <div>
                 <p style={{fontFamily:T.head,fontSize:15,fontWeight:700,color:T.ink,margin:"0 0 4px"}}>Análise do Assunto Original</p>
-                <p style={{fontFamily:T.mono,fontSize:13,color:T.ink,margin:0,padding:"6px 10px",background:T.bg,borderRadius:7,display:"inline-block"}}>"{subject}"</p>
+                <p style={{fontFamily:T.mono,fontSize:13,color:T.text,margin:0,padding:"6px 10px",background:T.bg,borderRadius:7,display:"inline-block"}}>"{subject}"</p>
               </div>
               <div style={{textAlign:"center"}}>
                 <div style={{width:72,height:72,borderRadius:"50%",border:`4px solid ${scoreColor(results.score)}`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
@@ -451,7 +496,7 @@ const SubjectOptTab = ({ settings }) => {
                       <AIcon size={11} color={T.muted} aria-hidden="true"/>
                       <span style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>{meta.label}</span>
                     </div>
-                    <span style={{fontFamily:T.font,fontSize:12,color:T.ink,fontWeight:600}}>{v}</span>
+                    <span style={{fontFamily:T.font,fontSize:12,color:T.text,fontWeight:600}}>{v}</span>
                   </div>
                 );
               })}
@@ -460,7 +505,7 @@ const SubjectOptTab = ({ settings }) => {
 
           <div style={{marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <p style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,margin:0}}>Sugestões A/B com IA</p>
-            <Badge label={`${results.suggestions.length} variações`} color={T.blue} bg={T.blueL}/>
+            <Badge label={`${results.suggestions.length} variações`} color={T.teal} bg={T.blueL}/>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:12}}>
             {results.suggestions.map((s,i)=>(
@@ -521,7 +566,7 @@ const SummaryTab = ({ settings, leads }) => {
     setLoad(false);
   };
 
-  const stageColor = s => ({"Lead Frio":"#888891","Nutrindo":T.amber,"MQL":T.blue,"SQL":T.teal,"Pronto para Venda":T.green})[s]||T.muted;
+  const stageColor = s => ({"Lead Frio":T.muted,"Nutrindo":T.amber,"MQL":T.teal,"SQL":T.teal,"Pronto para Venda":T.green})[s]||T.muted;
   const sum = selected ? summaries[selected.id] : null;
 
   return (
@@ -534,7 +579,7 @@ const SummaryTab = ({ settings, leads }) => {
           </div>
         ) : leads.map(lead=>(
           <div key={lead.id} onClick={()=>generateSummary(lead)}
-            style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:selected?.id===lead.id?T.blueL:T.white,border:`0.5px solid ${selected?.id===lead.id?T.blue:T.border}`,transition:"all 0.15s"}}>
+            style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:selected?.id===lead.id?T.blueL:T.white,border:`0.5px solid ${selected?.id===lead.id?T.teal:T.border}`,transition:"all 0.15s"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
               <div>
                 <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink,margin:"0 0 2px"}}>{lead.name}</p>
@@ -587,7 +632,7 @@ const SummaryTab = ({ settings, leads }) => {
             <Card style={{padding:20,marginBottom:18,background:`linear-gradient(135deg,${T.blueL},${T.purpleL})`}}>
               <div style={{display:"flex",alignItems:"center",gap:20}}>
                 <div style={{textAlign:"center"}}>
-                  <div style={{fontFamily:T.head,fontSize:40,fontWeight:700,color:sum.intent_score>80?T.green:sum.intent_score>60?T.blue:T.amber}}>{sum.intent_score}</div>
+                  <div style={{fontFamily:T.head,fontSize:40,fontWeight:700,color:sum.intent_score>80?T.green:sum.intent_score>60?T.teal:T.amber}}>{sum.intent_score}</div>
                   <div style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em"}}>Score IA</div>
                 </div>
                 <div style={{flex:1}}>
@@ -605,12 +650,12 @@ const SummaryTab = ({ settings, leads }) => {
                   return (
                     <div key={i} style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                       <div style={{width:32,height:32,borderRadius:8,background:T.blueL,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                        <IIcon size={14} color={T.blue} aria-hidden="true"/>
+                        <IIcon size={14} color={T.teal} aria-hidden="true"/>
                       </div>
                       <div style={{flex:1}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                           <span style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink}}>{interaction.label}</span>
-                          <Badge label={`${interaction.count}x`} color={T.blue} bg={T.blueL} small/>
+                          <Badge label={`${interaction.count}x`} color={T.teal} bg={T.blueL} small/>
                         </div>
                         <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:"2px 0 0",fontWeight:600}}>{interaction.detail}</p>
                       </div>
@@ -626,13 +671,13 @@ const SummaryTab = ({ settings, leads }) => {
                 {sum.insights.map((ins,i)=>(
                   <div key={i} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"10px 14px",background:T.bg,borderRadius:8}}>
                     <ChevronRight size={14} color={T.green} style={{flexShrink:0,marginTop:2}} aria-hidden="true"/>
-                    <span style={{fontFamily:T.font,fontSize:13,color:T.ink,lineHeight:1.5,fontWeight:600}}>{ins}</span>
+                    <span style={{fontFamily:T.font,fontSize:13,color:T.text,lineHeight:1.5,fontWeight:600}}>{ins}</span>
                   </div>
                 ))}
               </div>
             </Card>
 
-            <Card style={{padding:20,border:`1px solid ${T.green}40`,borderLeft:`3px solid ${T.green}`,background:"#f0fdf7"}}>
+            <Card style={{padding:20,border:`1px solid ${T.green}40`,borderLeft:`3px solid ${T.green}`,background:"#EFFCF6"}}>
               <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
                 <div style={{width:36,height:36,borderRadius:8,background:`${T.green}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                   <Target size={16} color={T.green} aria-hidden="true"/>
@@ -701,11 +746,11 @@ const PersonalizationTab = ({ settings, leads }) => {
         <p style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 12px 4px"}}>Selecionar Lead</p>
         {leads.map(l=>(
           <div key={l.id} onClick={()=>{setLead(l);setResult(null);}}
-            style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:lead.id===l.id?T.blueL:T.white,border:`0.5px solid ${lead.id===l.id?T.blue:T.border}`,transition:"all 0.15s"}}>
+            style={{padding:"12px 14px",borderRadius:10,marginBottom:6,cursor:"pointer",background:lead.id===l.id?T.blueL:T.white,border:`0.5px solid ${lead.id===l.id?T.teal:T.border}`,transition:"all 0.15s"}}>
             <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink,margin:"0 0 2px"}}>{l.name}</p>
             <p style={{fontFamily:T.font,fontSize:11,color:T.muted,margin:"0 0 6px",fontWeight:600}}>{l.company}</p>
             <div style={{height:4,borderRadius:2,background:T.border2,overflow:"hidden"}}>
-              <div style={{height:"100%",width:`${l.score}%`,background:l.score>80?T.green:l.score>60?T.blue:T.amber,borderRadius:2}}/>
+              <div style={{height:"100%",width:`${l.score}%`,background:l.score>80?T.green:l.score>60?T.teal:T.amber,borderRadius:2}}/>
             </div>
           </div>
         ))}
@@ -729,22 +774,22 @@ const PersonalizationTab = ({ settings, leads }) => {
               </div>
             </div>
 
-            <Card style={{padding:22,marginBottom:20,border:`1px solid ${T.blue}40`,borderLeft:`3px solid ${T.blue}`,background:T.blueL}}>
+            <Card style={{padding:22,marginBottom:20,border:`1px solid ${T.teal}40`,borderLeft:`3px solid ${T.teal}`,background:T.blueL}}>
               <div style={{display:"flex",gap:14,alignItems:"flex-start"}}>
-                <div style={{width:40,height:40,borderRadius:10,background:`${T.blue}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <Target size={18} color={T.blue} aria-hidden="true"/>
+                <div style={{width:40,height:40,borderRadius:10,background:`${T.teal}18`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Target size={18} color={T.teal} aria-hidden="true"/>
                 </div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
-                    <p style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.07em",margin:0}}>Próxima Melhor Ação</p>
-                    <Badge label={result.next_best_action.channel} color={T.blue} bg="#dbeafe"/>
+                    <p style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.teal,textTransform:"uppercase",letterSpacing:"0.07em",margin:0}}>Próxima Melhor Ação</p>
+                    <Badge label={result.next_best_action.channel} color={T.teal} bg="#dbeafe"/>
                   </div>
                   <p style={{fontFamily:T.font,fontSize:14,fontWeight:700,color:T.ink,margin:"0 0 4px"}}>{result.next_best_action.action}</p>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:10}}>
                     <Clock size={11} color={T.muted} aria-hidden="true"/>
                     <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:0,fontWeight:600}}>{result.next_best_action.timing}</p>
                   </div>
-                  <div style={{padding:"12px 14px",background:T.white,borderRadius:8,fontFamily:T.mono,fontSize:12,color:T.ink,lineHeight:1.6,borderLeft:`3px solid ${T.blue}`}}>
+                  <div style={{padding:"12px 14px",background:T.white,borderRadius:8,fontFamily:T.mono,fontSize:12,color:T.text,lineHeight:1.6,borderLeft:`3px solid ${T.teal}`}}>
                     {result.next_best_action.script}
                   </div>
                 </div>
@@ -764,7 +809,7 @@ const PersonalizationTab = ({ settings, leads }) => {
                       <div style={{flex:1}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                           <div>
-                            <Badge label={rec.type.replace("_"," ")} color={T.teal} bg="#e0f2fe" small/>
+                            <Badge label={rec.type.replace("_"," ")} color={T.teal} bg="#DCF0F7" small/>
                             <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink,margin:"6px 0 4px"}}>{rec.title}</p>
                           </div>
                           <Badge label={`Urgência: ${rec.urgency}`} color={urgencyColor(rec.urgency)} bg={urgencyColor(rec.urgency)+"18"} small/>
@@ -834,8 +879,8 @@ const SettingsTab = ({ settings, onChange }) => {
       <Card style={{padding:24,marginBottom:20}}>
         <p style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",margin:"0 0 16px"}}>Temperatura / Criatividade</p>
         <div style={{display:"flex",alignItems:"center",gap:16}}>
-          <input type="range" min="0" max="1" step="0.1" value={local.temperature} onChange={e=>upd("temperature",parseFloat(e.target.value))} style={{flex:1,accentColor:T.blue}}/>
-          <div style={{fontFamily:T.head,fontSize:18,fontWeight:700,color:T.blue,width:40,textAlign:"center"}}>{local.temperature}</div>
+          <input type="range" min="0" max="1" step="0.1" value={local.temperature} onChange={e=>upd("temperature",parseFloat(e.target.value))} style={{flex:1,accentColor:T.teal}}/>
+          <div style={{fontFamily:T.head,fontSize:18,fontWeight:700,color:T.teal,width:40,textAlign:"center"}}>{local.temperature}</div>
         </div>
         <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
           <span style={{fontFamily:T.font,fontSize:11,color:T.muted,fontWeight:600}}>0 = Preciso / Determinístico</span>
@@ -860,7 +905,7 @@ const SettingsTab = ({ settings, onChange }) => {
 
       <Card style={{padding:20,marginBottom:24,background:`linear-gradient(135deg,${T.blueL},${T.purpleL})`}}>
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:14}}>
-          <Zap size={13} color={T.blue} aria-hidden="true"/>
+          <Zap size={13} color={T.teal} aria-hidden="true"/>
           <p style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.ink,textTransform:"uppercase",letterSpacing:"0.07em",margin:0}}>Custo Estimado por Operação</p>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
@@ -895,13 +940,13 @@ const HistoryTab = () => {
   const usedCount   = gens.filter(g=>g.used).length;
 
   const typeInfo = t => ({
-    email:   { Icon:Mail,     label:"Email",   color:T.blue   },
+    email:   { Icon:Mail,     label:"Email",   color:T.teal   },
     subject: { Icon:AtSign,   label:"Assunto", color:T.teal   },
     summary: { Icon:Brain,    label:"Resumo",  color:T.purple },
   })[t]||{ Icon:FileText, label:t, color:T.muted };
 
   const METRICS = [
-    { label:"Gerações Total",    value:gens.length,                  Icon:Sparkles,     color:T.blue   },
+    { label:"Gerações Total",    value:gens.length,                  Icon:Sparkles,     color:T.teal   },
     { label:"Usados em Emails",  value:usedCount,                    Icon:CheckCircle2, color:T.green  },
     { label:"Avaliação Média",   value:`${avgRating}/5`,              Icon:Star,         color:T.amber  },
     { label:"Tokens Consumidos", value:totalTokens.toLocaleString(), Icon:Zap,          color:T.purple },
@@ -932,7 +977,7 @@ const HistoryTab = () => {
           const FIcon = f==="all" ? Clock : (typeInfo(f).Icon);
           return (
             <button key={f} onClick={()=>setFilter(f)}
-              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 14px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`0.5px solid ${filter===f?T.blue:T.border}`,borderRadius:8,background:filter===f?T.blueL:T.white,color:filter===f?T.blue:T.muted,cursor:"pointer",transition:"all 0.15s"}}>
+              style={{display:"flex",alignItems:"center",gap:5,padding:"6px 14px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`0.5px solid ${filter===f?T.teal:T.border}`,borderRadius:8,background:filter===f?T.blueL:T.white,color:filter===f?T.teal:T.muted,cursor:"pointer",transition:"all 0.15s"}}>
               <FIcon size={12} aria-hidden="true"/> {FILTER_LABELS[f]}
             </button>
           );
@@ -953,7 +998,7 @@ const HistoryTab = () => {
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                     <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                       <Badge label={ti.label} color={ti.color} bg={ti.color+"14"} small/>
-                      {g.used&&<Badge label="Usado" color={T.green} bg="#dcfce7" small/>}
+                      {g.used&&<Badge label="Usado" color={T.green} bg="#DCFCE7" small/>}
                       <span style={{fontFamily:T.font,fontSize:11,color:T.muted,fontWeight:600}}>{new Date(g.created_at).toLocaleDateString("pt-BR")}</span>
                     </div>
                     <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -962,7 +1007,7 @@ const HistoryTab = () => {
                     </div>
                   </div>
                   <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:"0 0 6px",fontWeight:600}}>Prompt: {g.prompt}</p>
-                  <p style={{fontFamily:T.mono,fontSize:12,color:T.ink,margin:0,background:T.bg,padding:"8px 12px",borderRadius:7,lineHeight:1.6,overflow:"hidden",maxHeight:60}}>
+                  <p style={{fontFamily:T.mono,fontSize:12,color:T.text,margin:0,background:T.bg,padding:"8px 12px",borderRadius:7,lineHeight:1.6,overflow:"hidden",maxHeight:60}}>
                     {g.result.slice(0,200)}{g.result.length>200?"…":""}
                   </p>
                 </div>
@@ -1016,34 +1061,53 @@ export default function VantariAIMarketing() {
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         input[type=range] { -webkit-appearance:none; height:4px; border-radius:99px; cursor:pointer; background:${T.border}; }
         input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:14px; height:14px; border-radius:50%; cursor:pointer; border:2px solid #fff; box-shadow:0 1px 3px rgba(0,0,0,0.15); }
-        ::-webkit-scrollbar { width:5px; height:5px; }
+        ::-webkit-scrollbar { width:6px; height:6px; }
         ::-webkit-scrollbar-track { background:transparent; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
+        ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
         @keyframes spin { to { transform:rotate(360deg); } }
       `}</style>
 
-      {/* ── SIDEBAR — iconrs.png embutido */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        width: 240,
+        background: T.sidebarBg,
+        display:"flex", flexDirection:"column", flexShrink:0,
+        position:"relative", overflow:"hidden",
+      }}>
+        {/* glow topo-direito */}
+        <div style={{
+          position:"absolute", inset:0, pointerEvents:"none",
+          background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)",
+        }}/>
+
+        {/* Brand */}
+        <div style={{padding:"20px 20px 0", position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+            <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
+              <img src="/icone.png" alt="" style={{width:22,height:22}}/>
+            </div>
+            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
+            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+
+        <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
           <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"       />
-          <NavItem icon={Users}          label="Leads" path="/leads"           />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email" />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
           <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring" path="/scoring"         />
-          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
           <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" active/>
           <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
           <NavItem icon={Settings} label="Configurações" path="/settings"/>
         </div>
       </div>
@@ -1051,27 +1115,27 @@ export default function VantariAIMarketing() {
       {/* ── MAIN ── */}
       <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
         {/* Topbar */}
-        <div style={{height:52,background:T.white,borderBottom:`0.5px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0}}>
-          <span style={{fontSize:15,fontWeight:700,color:T.ink,fontFamily:T.head,letterSpacing:"-0.01em"}}>IA & Automação</span>
+        <div style={{height:56,background:T.white,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,zIndex:10}}>
+          <span style={{fontSize:18,fontWeight:700,color:T.ink,fontFamily:T.head,letterSpacing:"-0.02em"}}>IA & Automação</span>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <Badge label={settings.model_preference.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.blue} bg={T.blueL}/>
+            <Badge label={settings.model_preference.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.teal} bg={T.blueL}/>
             <Badge label={`Temp ${settings.temperature}`} color={T.muted} bg={T.bg}/>
             <Btn size="sm" variant="secondary" icon={Settings} onClick={()=>setTab("settings")}>Config</Btn>
           </div>
         </div>
 
         {/* Sub-tabs */}
-        <div style={{background:T.white,borderBottom:`0.5px solid ${T.border}`,overflowX:"auto",flexShrink:0}}>
-          <div style={{display:"flex",gap:0}}>
+        <div style={{background:T.white,borderBottom:`1px solid ${T.border}`,overflowX:"auto",flexShrink:0}}>
+          <div style={{display:"flex",gap:2,padding:"0 24px"}}>
             {TABS.map(t=>{
               const TIcon = t.Icon;
               const active = tab===t.id;
               return (
                 <button key={t.id} onClick={()=>setTab(t.id)}
-                  style={{display:"flex",alignItems:"center",gap:6,padding:"10px 16px",fontFamily:T.font,fontSize:12,fontWeight:active?700:600,color:active?T.blue:T.muted,background:"none",border:"none",borderBottom:active?`2px solid ${T.blue}`:"2px solid transparent",cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}}>
+                  style={{display:"flex",alignItems:"center",gap:6,padding:"10px 14px",fontFamily:T.font,fontSize:12,fontWeight:active?700:500,color:active?T.teal:T.muted,background:"none",border:"none",borderBottom:active?`2px solid ${T.teal}`:"2px solid transparent",cursor:"pointer",transition:"all 0.15s",whiteSpace:"nowrap"}}>
                   <TIcon size={13} aria-hidden="true"/>
                   {t.label}
-                  {t.badge&&<Badge label={t.badge} color={T.blue} bg={T.blueL} small/>}
+                  {t.badge&&<Badge label={t.badge} color={T.teal} bg={T.blueL} small/>}
                 </button>
               );
             })}
@@ -1079,7 +1143,7 @@ export default function VantariAIMarketing() {
         </div>
 
         {/* Content */}
-        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",background:"linear-gradient(180deg, #EEF9FC 0%, #E6F5FB 100%)"}}>
           {tab==="email"    && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><EmailGenTab    settings={settings}/></div>}
           {tab==="subject"  && <div style={{flex:1,overflowY:"auto"}}><SubjectOptTab  settings={settings}/></div>}
           {tab==="summary"  && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><SummaryTab     settings={settings} leads={leads}/></div>}

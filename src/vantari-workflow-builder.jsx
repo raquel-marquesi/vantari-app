@@ -6,16 +6,41 @@ import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 /* ─── design tokens ─── */
 const T = {
-  blue:    "#0079a9",
-  accent:  "#05b27b",
-  danger:  "#e53935",
-  sidebar: "linear-gradient(180deg,#0c2d48 0%,#0079a9 100%)",
-  font:    "'Aptos','Nunito Sans',sans-serif",
-  head:    "Montserrat,sans-serif",
-  border:  "#e8edf2",
-  bg:      "#f2f5f8",
-  text:    "#5f5f64",
-  muted:   "#888891",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  accent:  "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #EEF9FC 0%, #E6F5FB 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  danger:  "#FF6B5E",
+  cyan:    "#06B6D4",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale (text)
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ─── keyframes ─── */
@@ -31,23 +56,30 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
       onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
       style={{
+        position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13,
+        padding: "8px 20px", fontSize: 13.5,
         fontWeight: active ? 700 : 600, fontFamily: T.font,
-        color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
-        background: active ? "rgba(255,255,255,0.18)" : hov ? "rgba(255,255,255,0.08)" : "transparent",
-        borderRight: active ? "2px solid #fff" : "2px solid transparent",
+        color: active ? T.teal : hov ? T.text : T.muted,
+        background: active ? `${T.teal}12` : hov ? `${T.teal}06` : "transparent",
         cursor: "pointer", transition: "all 0.15s", userSelect: "none",
       }}
     >
+      {active && (
+        <span style={{
+          position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
+          background: T.gradient,
+          borderRadius: "0 3px 3px 0",
+        }} />
+      )}
       {Icon && <Icon size={16} aria-hidden="true" />}{label}
     </div>
   );
 };
 const NavSection = ({ label }) => (
   <div style={{
-    fontSize: 10, fontWeight: 700, letterSpacing: "0.1em",
-    color: "rgba(255,255,255,0.45)", padding: "10px 20px 4px",
+    fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
+    color: T.faint3, padding: "10px 20px 4px",
     textTransform: "uppercase", fontFamily: T.head,
   }}>{label}</div>
 );
@@ -142,7 +174,7 @@ function Minimap({ nodes, edges, sel, pan, zoom, containerRef }) {
         const c = NC[n.type];
         return e("rect", { key: n.id, x: n.x * sc + 6, y: n.y * sc + 6, width: NW * sc, height: NH * sc, rx: 1.5, fill: c.bg, stroke: c.bdr, strokeWidth: sel === n.id ? 1.5 : 0.5 });
       }),
-      e("rect", { x: (-pan.x / zoom) * sc + 6, y: (-pan.y / zoom) * sc + 6, width: (sz[0] / zoom) * sc, height: (sz[1] / zoom) * sc, fill: "none", stroke: T.blue, strokeWidth: 1, opacity: 0.7 })
+      e("rect", { x: (-pan.x / zoom) * sc + 6, y: (-pan.y / zoom) * sc + 6, width: (sz[0] / zoom) * sc, height: (sz[1] / zoom) * sc, fill: "none", stroke: T.teal, strokeWidth: 1, opacity: 0.7 })
     ),
     e("span", { style: { position: "absolute", top: 3, left: 6, fontSize: 8, color: T.muted, letterSpacing: ".05em", fontFamily: T.font } }, "MAP")
   );
@@ -284,10 +316,10 @@ function WFView({ onEdit }) {
   };
 
   const statusStyle = (s) => ({
-    active: { bg: "#e6f9f2", cl: "#05b27b" },
-    paused: { bg: "#fff4e6", cl: "#e07b00" },
-    draft:  { bg: "#f2f5f8", cl: "#888891" },
-  }[s] || { bg: "#f2f5f8", cl: "#888891" });
+    active: { bg: `${T.green}14`, cl: T.green },
+    paused: { bg: `${T.amber}18`, cl: T.amber },
+    draft:  { bg: T.faint,        cl: T.muted },
+  }[s] || { bg: T.faint, cl: T.muted });
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#fff" }}>
@@ -299,7 +331,7 @@ function WFView({ onEdit }) {
             {loading ? "Carregando..." : `${flows.length} workflow${flows.length !== 1 ? "s" : ""} · ${flows.filter(f => f.status === "active").length} ativo${flows.filter(f => f.status === "active").length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <button onClick={handleNew} disabled={creating} style={{ display: "flex", alignItems: "center", gap: 6, background: T.blue, color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer", opacity: creating ? 0.7 : 1, fontFamily: T.font }}>
+        <button onClick={handleNew} disabled={creating} style={{ display: "flex", alignItems: "center", gap: 6, background: T.gradient, color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer", opacity: creating ? 0.7 : 1, fontFamily: T.font, boxShadow: "0 4px 14px -4px rgba(13,116,145,.4)" }}>
           {creating
             ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite" }} />
             : <i className="ti ti-plus" style={{ fontSize: 13 }} />
@@ -324,7 +356,7 @@ function WFView({ onEdit }) {
         <div style={{ textAlign: "center", padding: "60px 20px", color: T.muted }}>
           <i className="ti ti-webhook" style={{ fontSize: 48, display: "block", marginBottom: 16, opacity: 0.4 }} />
           <p style={{ fontFamily: T.font, fontSize: 14, margin: "0 0 16px" }}>Nenhum workflow criado ainda.</p>
-          <button onClick={handleNew} style={{ background: T.blue, color: "#fff", border: "none", borderRadius: 8, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>Criar primeiro workflow</button>
+          <button onClick={handleNew} style={{ background: T.gradient, color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>Criar primeiro workflow</button>
         </div>
       ) : (
         <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
@@ -349,7 +381,7 @@ function WFView({ onEdit }) {
                 <div style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>{updatedAt}</div>
                 <div style={{ display: "flex", gap: 6 }}>
                   <button onClick={() => onEdit(wf.id)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: "none", border: `1px solid ${T.border}`, color: T.text, cursor: "pointer", fontFamily: T.font }}>Editar</button>
-                  <button onClick={() => handleToggle(wf)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: wf.status === "active" ? "#fff4e6" : "#e6f9f2", border: "none", color: wf.status === "active" ? "#e07b00" : T.accent, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
+                  <button onClick={() => handleToggle(wf)} style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, background: wf.status === "active" ? `${T.amber}18` : `${T.green}14`, border: "none", color: wf.status === "active" ? T.amber : T.green, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
                     {wf.status === "active" ? "Pausar" : "Ativar"}
                   </button>
                   <button onClick={() => handleDelete(wf.id)} style={{ fontSize: 11, padding: "4px 8px", borderRadius: 6, background: "none", border: "none", color: T.muted, cursor: "pointer" }}>
@@ -389,10 +421,10 @@ function LogView() {
 
   const filtered = filter === "all" ? runs : runs.filter(r => r.status === filter);
   const statusStyle = (s) => ({
-    success: { bg: "#e6f9f2", cl: "#05b27b" },
-    error:   { bg: "#fef2f2", cl: T.danger  },
-    waiting: { bg: "#fff4e6", cl: "#e07b00" },
-  }[s] || { bg: T.bg, cl: T.muted });
+    success: { bg: `${T.green}14`, cl: T.green },
+    error:   { bg: `${T.coral}14`, cl: T.coral },
+    waiting: { bg: `${T.amber}18`, cl: T.amber },
+  }[s] || { bg: T.faint, cl: T.muted });
 
   return (
     <div style={{ flex: 1, overflow: "auto", padding: 24, background: "#fff" }}>
@@ -404,7 +436,7 @@ function LogView() {
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           {["all","success","error","waiting"].map(f => (
-            <button key={f} onClick={() => setFilter(f)} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 20, fontWeight: filter === f ? 700 : 600, background: filter === f ? T.blue : "none", color: filter === f ? "#fff" : T.muted, border: filter === f ? "none" : `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.font }}>
+            <button key={f} onClick={() => setFilter(f)} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 20, fontWeight: filter === f ? 700 : 600, background: filter === f ? T.teal : "none", color: filter === f ? "#fff" : T.muted, border: filter === f ? "none" : `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.font }}>
               {f === "all" ? "Todos" : f}
             </button>
           ))}
@@ -441,7 +473,7 @@ function LogView() {
             return (
               <div key={run.id} style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1fr 80px", padding: "11px 16px", borderTop: `1px solid ${T.border}`, alignItems: "center", fontSize: 12, background: i % 2 ? T.bg : "#fff", fontFamily: T.font }}>
                 <div style={{ color: T.muted, fontSize: 11 }}>{time}</div>
-                <div style={{ color: T.blue, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.leads?.email || "—"}</div>
+                <div style={{ color: T.teal, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.leads?.email || "—"}</div>
                 <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.automation_flows?.name || "—"}</div>
                 <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.step || "—"}</div>
                 <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700 }}>{run.status}</span>
@@ -492,10 +524,10 @@ function AnaView() {
   );
 
   const cards = [
-    { lbl: "Total Execuções",  val: kpis.total,   sub: `${kpis.success} sucesso · ${kpis.errors} erro`, icon: "ti-chart-bar", cl: T.blue   },
-    { lbl: "Workflows Ativos", val: kpis.active,  sub: `${kpis.paused} pausado · ${kpis.draft} rascunho`, icon: "ti-webhook",   cl: T.accent },
-    { lbl: "Erros",            val: kpis.errors,  sub: kpis.total > 0 ? `${((kpis.errors/kpis.total)*100).toFixed(1)}% error rate` : "—", icon: "ti-alert-circle", cl: T.danger },
-    { lbl: "Em Espera",        val: kpis.waiting, sub: "aguardando condição",  icon: "ti-clock",  cl: "#e07b00" },
+    { lbl: "Total Execuções",  val: kpis.total,   sub: `${kpis.success} sucesso · ${kpis.errors} erro`, icon: "ti-chart-bar", cl: T.teal  },
+    { lbl: "Workflows Ativos", val: kpis.active,  sub: `${kpis.paused} pausado · ${kpis.draft} rascunho`, icon: "ti-webhook", cl: T.green },
+    { lbl: "Erros",            val: kpis.errors,  sub: kpis.total > 0 ? `${((kpis.errors/kpis.total)*100).toFixed(1)}% error rate` : "—", icon: "ti-alert-circle", cl: T.coral },
+    { lbl: "Em Espera",        val: kpis.waiting, sub: "aguardando condição", icon: "ti-clock",  cl: T.amber },
   ];
 
   return (
@@ -518,7 +550,7 @@ function AnaView() {
         <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 }}>
           <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 16px", fontFamily: T.head, color: T.text }}>Workflows</h3>
           {flows.map(f => {
-            const statusCl = { active: T.accent, paused: "#e07b00", draft: T.muted }[f.status] || T.muted;
+            const statusCl = { active: T.green, paused: T.amber, draft: T.muted }[f.status] || T.muted;
             return (
               <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <span style={{ fontSize: 13, color: T.text, fontFamily: T.font }}>{f.name}</span>
@@ -705,13 +737,13 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           onChange={ev => { setWfName(ev.target.value); setSaved(false); }}
           style={{ background: "none", border: "none", outline: "none", fontSize: 13, fontWeight: 700, color: T.text, textAlign: "right", width: 200, fontFamily: T.head }}
         />
-        <span style={{ fontSize: 11, color: saving ? "#e07b00" : saved ? T.accent : "#e07b00", fontFamily: T.font, minWidth: 64 }}>
+        <span style={{ fontSize: 11, color: saving ? T.amber : saved ? T.green : T.amber, fontFamily: T.font, minWidth: 64 }}>
           {saving ? "Salvando…" : saved ? "✓ Salvo" : "Não salvo"}
         </span>
         <button
           onClick={handleStatusToggle}
           disabled={!flowId}
-          style={{ background: wfStatus === "active" ? "#fff4e6" : T.blue, color: wfStatus === "active" ? "#e07b00" : "#fff", border: "none", borderRadius: 8, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: flowId ? "pointer" : "not-allowed", opacity: flowId ? 1 : 0.5, fontFamily: T.font }}
+          style={{ background: wfStatus === "active" ? `${T.amber}18` : T.gradient, color: wfStatus === "active" ? T.amber : "#fff", border: "none", borderRadius: 8, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: flowId ? "pointer" : "not-allowed", opacity: flowId ? 1 : 0.5, fontFamily: T.font }}
         >
           {wfStatus === "active" ? "⏸ Pausar" : "▶ Ativar"}
         </button>
@@ -760,7 +792,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
             conn && (() => {
               const sn = nodes.find(n => n.id === conn.src); if (!sn) return null;
               const s = outP(sn), dx = Math.max(60, Math.abs(mouse.x - s.x) * 0.4);
-              return e("path", { d: `M${s.x},${s.y} C${s.x+dx},${s.y} ${mouse.x-dx},${mouse.y} ${mouse.x},${mouse.y}`, stroke: T.blue, strokeWidth: 1.5, strokeDasharray: "6,3", fill: "none" });
+              return e("path", { d: `M${s.x},${s.y} C${s.x+dx},${s.y} ${mouse.x-dx},${mouse.y} ${mouse.x},${mouse.y}`, stroke: T.teal, strokeWidth: 1.5, strokeDasharray: "6,3", fill: "none" });
             })()
           ),
           ...nodes.map(node =>
@@ -790,7 +822,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           e("div", { style: { textAlign: "center", fontSize: 9, color: T.muted, fontFamily: T.font } }, `${Math.round(zoom * 100)}%`)
         ),
         e(Minimap, { nodes, edges, sel, pan, zoom, containerRef: ref }),
-        conn && e("div", { style: { position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", background: "#e8f5fb", color: T.blue, padding: "4px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, zIndex: 20, border: `0.5px solid ${T.blue}40`, whiteSpace: "nowrap", fontFamily: T.font } },
+        conn && e("div", { style: { position: "absolute", top: 10, left: "50%", transform: "translateX(-50%)", background: `${T.teal}14`, color: T.teal, padding: "4px 14px", borderRadius: 20, fontSize: 11, fontWeight: 700, zIndex: 20, border: `0.5px solid ${T.teal}40`, whiteSpace: "nowrap", fontFamily: T.font } },
           e("i", { className: "ti ti-arrows-join", "aria-hidden": "true", style: { fontSize: 11, marginRight: 6 } }),
           "Clique em um nó para conectar · ESC cancela"
         )
@@ -823,11 +855,11 @@ function WorkflowWidget() {
       {/* tab bar */}
       <div style={{ display: "flex", alignItems: "center", height: 46, borderBottom: `0.5px solid ${T.border}`, background: "#fff", padding: "0 14px", gap: 0, flexShrink: 0, position: "relative" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginRight: 20 }}>
-          <i className="ti ti-webhook" aria-hidden="true" style={{ fontSize: 18, color: T.blue }} />
+          <i className="ti ti-webhook" aria-hidden="true" style={{ fontSize: 18, color: T.teal }} />
           <span style={{ fontWeight: 700, fontSize: 13, fontFamily: T.head, color: T.text }}>AutoFlow</span>
         </div>
         {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", padding: "0 12px", height: "100%", fontSize: 12, fontWeight: tab === t.id ? 700 : 600, fontFamily: T.font, color: tab === t.id ? T.text : T.muted, borderBottom: tab === t.id ? `2px solid ${T.blue}` : "2px solid transparent", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
+          <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", padding: "0 12px", height: "100%", fontSize: 12, fontWeight: tab === t.id ? 700 : 600, fontFamily: T.font, color: tab === t.id ? T.teal : T.muted, borderBottom: tab === t.id ? `2px solid ${T.teal}` : "2px solid transparent", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
             <i className={`ti ${t.icon}`} aria-hidden="true" style={{ fontSize: 14 }} /> {t.lbl}
           </button>
         ))}
@@ -850,13 +882,23 @@ function WorkflowWidget() {
 export default function WorkflowBuilderPage() {
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: T.font, background: T.bg }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');*{box-sizing:border-box;}::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#B3BFCA;border-radius:99px;}`}</style>
+
       {/* sidebar */}
-      <div style={{ width: 220, flexShrink: 0, background: T.sidebar, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0 }}>
-        <div style={{ padding: "22px 20px 16px", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <div style={{ fontFamily: T.head, fontWeight: 800, fontSize: 20, color: "#fff", letterSpacing: "0.04em" }}>Vantari</div>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginTop: 2 }}>Marketing Platform</div>
+      <div style={{ width: 240, flexShrink: 0, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, borderRight: `1px solid ${T.border}` }}>
+
+        {/* Brand */}
+        <div style={{ padding: "20px 20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, background: T.teal, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
+            </div>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: T.ink }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: `${T.teal}14`, padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: T.teal }}>PRO</span>
+          </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", paddingTop: 8 }}>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px" }}>
           <NavSection label="Principal" />
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"           path="/leads"        />
@@ -874,11 +916,11 @@ export default function WorkflowBuilderPage() {
 
       {/* main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "20px 28px 16px", borderBottom: `1px solid ${T.border}`, background: "#fff", flexShrink: 0 }}>
-          <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.text, margin: 0 }}>Automação de Workflows</h1>
+        <div style={{ padding: "20px 28px 16px", borderBottom: `1px solid ${T.border}`, background: T.surface, flexShrink: 0 }}>
+          <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.ink, margin: 0, letterSpacing: "-0.02em" }}>Automação de Workflows</h1>
           <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0", fontFamily: T.font }}>Crie e gerencie fluxos de automação de marketing</p>
         </div>
-        <div style={{ flex: 1, padding: 24, overflow: "hidden", display: "flex" }}>
+        <div style={{ flex: 1, padding: 24, overflow: "hidden", display: "flex", background: T.bg }}>
           <WorkflowWidget />
         </div>
       </div>

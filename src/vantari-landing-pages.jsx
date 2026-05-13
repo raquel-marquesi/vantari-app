@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Zap, BookOpen, Calendar, Trophy, Lightbulb,
@@ -11,23 +12,45 @@ import {
    DESIGN TOKENS
 ════════════════════════════════════════════════════════════════════════ */
 const T = {
-  blue:    "#0079a9",
-  teal:    "#0079a9",
-  green:   "#05b27b",
-  amber:   "#e07b00",
-  red:     "#ef4444",
-  purple:  "#6d45d9",
-  bg:      "#f2f5f8",
-  surface: "#ffffff",
-  border:  "#e2e8f0",
-  border2: "#edf0f4",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  faint:   "#f8fafc",
-  font:    "'Aptos', 'Nunito Sans', sans-serif",
-  head:    "'Montserrat', sans-serif",
-  shadow:   "0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04)",
-  shadowMd: "0 4px 16px rgba(0,0,0,.07), 0 2px 6px rgba(0,0,0,.04)",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+  border2: "#E8EEF3",
+
+  // Ink scale (text)
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
+
+  shadow:   "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",
+  shadowMd: "0 1px 0 rgba(14,26,36,.04), 0 16px 36px -16px rgba(14,26,36,.15)",
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -128,9 +151,9 @@ const fmtDate = (iso) => new Date(iso).toLocaleDateString("pt-BR",{day:"2-digit"
 const fmtNum  = (n) => n>=1000?(n/1000).toFixed(1)+"k":String(n);
 
 const statusColors = {
-  published:{ bg:"#f0fdf7",text:"#065f46",border:"#6ee7b7",label:"Publicada" },
-  draft:    { bg:"#fff4e6",text:"#92400e",border:"#f5c78a",label:"Rascunho"  },
-  paused:   { bg:"#f1f5f9",text:"#475569",border:"#cbd5e1",label:"Pausada"   },
+  published:{ bg:"#ECFDF5",text:"#065f46",border:"#6ee7b7",label:"Publicada" },
+  draft:    { bg:"#FEF3C7",text:"#92400e",border:"#f5c78a",label:"Rascunho"  },
+  paused:   { bg:"#EEF2F6",text:"#475569",border:"#cbd5e1",label:"Pausada"   },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -138,21 +161,29 @@ const statusColors = {
 ════════════════════════════════════════════════════════════════════════ */
 const Btn = ({ children, onClick, variant="primary", size="md", icon, disabled, style:extra={} }) => {
   const [hov,setHov] = useState(false);
-  const styles = {
-    primary:   {bg:T.blue,    fg:"#fff",    hbg:"#006a93", border:T.blue    },
-    secondary: {bg:T.surface, fg:T.text,    hbg:T.border2, border:T.border  },
-    ghost:     {bg:"transparent",fg:T.muted,hbg:T.border2, border:"transparent"},
-    danger:    {bg:"#fef2f2", fg:T.red,     hbg:"#fee2e2", border:"#fecaca" },
-    success:   {bg:"#f0fdf7", fg:"#065f46", hbg:"#d1fae5", border:"#6ee7b7" },
-    teal:      {bg:T.teal,    fg:"#fff",    hbg:"#006a93", border:T.teal    },
-  };
-  const s   = styles[variant]||styles.primary;
   const pad = size==="sm"?"5px 10px":size==="lg"?"10px 22px":"7px 15px";
   const fs  = size==="sm"?12:size==="lg"?15:13;
+  const styles = {
+    primary:   {
+      bg: hov ? "linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)" : "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+      fg: "#fff", border: "none",
+      shadow: hov ? "0 8px 22px -6px rgba(13,116,145,.5)" : "0 4px 14px -4px rgba(13,116,145,.4)",
+    },
+    secondary: {bg:hov?`${T.teal}14`:T.surface, fg:T.teal, border:`1.5px solid ${hov?T.teal:T.border}`, shadow:"none"},
+    ghost:     {bg:hov?"#EEF2F6":"transparent", fg:T.text,  border:"none", shadow:"none"},
+    danger:    {bg:hov?"#fef2f2":"#FFF0EF",     fg:T.red,   border:`0.5px solid ${T.red}55`, shadow:"none"},
+    success:   {bg:hov?"#ECFDF5":"#ECFDF5",     fg:"#065f46",border:"0.5px solid #6ee7b7", shadow:"none"},
+    teal:      {
+      bg: hov ? "linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)" : "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+      fg: "#fff", border: "none",
+      shadow: hov ? "0 8px 22px -6px rgba(13,116,145,.5)" : "0 4px 14px -4px rgba(13,116,145,.4)",
+    },
+  };
+  const s = styles[variant]||styles.primary;
   return (
     <button disabled={disabled} onClick={onClick}
       onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
-      style={{display:"inline-flex",alignItems:"center",gap:6,padding:pad,fontSize:fs,fontWeight:700,fontFamily:T.font,borderRadius:8,border:`1px solid ${s.border}`,cursor:disabled?"not-allowed":"pointer",background:hov&&!disabled?s.hbg:s.bg,color:s.fg,transition:"all .15s",opacity:disabled?.5:1,...extra}}>
+      style={{display:"inline-flex",alignItems:"center",gap:6,padding:pad,fontSize:fs,fontWeight:700,fontFamily:T.font,borderRadius:10,border:s.border||"none",cursor:disabled?"not-allowed":"pointer",background:s.bg,color:s.fg,boxShadow:s.shadow||"none",transition:"all .15s",opacity:disabled?.5:1,transform:hov&&variant==="primary"?"translateY(-1px)":"none",...extra}}>
       {icon&&<Ico d={icon} size={fs+2} color={s.fg}/>}{children}
     </button>
   );
@@ -187,7 +218,7 @@ const Divider = ({ label }) => (
   </div>
 );
 
-/* Toggle — verde #05b27b quando ativo */
+/* Toggle — verde #14A273 quando ativo */
 const Toggle = ({ checked, onChange, label }) => (
   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
     <div onClick={()=>onChange(!checked)}
@@ -209,18 +240,95 @@ const MetricCard = ({ label, value, sub, color=T.blue, icon }) => (
   </div>
 );
 
+/* ─── Phase 5: Hero KPI Components ─── */
+const SparklineChart = ({ data = [], color }) => {
+  const pts = (data.length >= 2 ? data : Array(7).fill(0));
+  const max = Math.max(...pts) || 1;
+  const min = Math.min(...pts);
+  const range = max - min || 1;
+  const W = 220, H = 36;
+  const x = (i) => (i / (pts.length - 1)) * W;
+  const y = (v) => H - ((v - min) / range) * (H - 6) - 3;
+  const line = pts.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const area = `${line} L${W},${H} L0,${H}Z`;
+  const gradId = `sg${color.replace(/[^a-z0-9]/gi, "")}`;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
+      style={{ display: "block", width: "calc(100% + 32px)", height: 36, margin: "8px -16px -1px" }}
+      aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0.28" />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={line} stroke={color} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+};
+
+const TrendChipHero = ({ value }) => {
+  const up = value >= 0;
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, fontFamily: T.mono,
+      background: up ? `${T.green}14` : `${T.coral}14`, color: up ? T.green : T.coral }}>
+      {up ? "↗" : "↘"} {Math.abs(value)}%
+    </span>
+  );
+};
+
+const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData }) => (
+  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14,
+    padding: "14px 16px 0", position: "relative", overflow: "hidden",
+    boxShadow: "0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: color, borderRadius: "14px 14px 0 0" }} />
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ width: 32, height: 32, borderRadius: 9, background: `${color}14`, display: "grid", placeItems: "center" }}>
+        {Icon && <Ico d={Icon} size={16} color={color} aria-hidden="true" />}
+      </div>
+      {trend !== undefined && <TrendChipHero value={trend} />}
+    </div>
+    <div style={{ fontSize: 28, fontWeight: 700, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em",
+      fontVariantNumeric: "tabular-nums", margin: "10px 0 3px", lineHeight: 1 }}>{value}</div>
+    <div style={{ fontSize: 11.5, color: T.muted, fontWeight: 600, fontFamily: T.font }}>{label}</div>
+    {sub && <div style={{ fontSize: 10.5, color, fontWeight: 700, fontFamily: T.mono, margin: "2px 0 8px" }}>{sub}</div>}
+    {!sub && <div style={{ height: 8 }} />}
+    <SparklineChart data={sparkData} color={color} />
+  </div>
+);
+
 /* NavSection / NavItem */
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+    {label}
+  </div>
 );
-const NavItem = ({ icon:Icon, label, active=false, path }) => {
-  const [hov,setHov] = useState(false);
+const NavItem = ({ icon: Icon, label, active = false, path }) => {
+  const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:T.font,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
-      {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
+      style={{
+        position: "relative",
+        display: "flex", alignItems: "center", gap: 9,
+        padding: "8px 20px", fontSize: 13.5,
+        fontWeight: active ? 700 : 600,
+        fontFamily: T.font,
+        color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
+        background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
+        cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+      }}>
+      {active && (
+        <span style={{
+          position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
+          background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
+          borderRadius: "0 3px 3px 0",
+        }} />
+      )}
+      {Icon && <Icon size={16} aria-hidden="true" />}
+      {label}
     </div>
   );
 };
@@ -232,7 +340,7 @@ const SectionPreview = ({ section }) => {
   const { type, content:c } = section;
   const base = { fontFamily:T.font, width:"100%", overflow:"hidden" };
   if(type==="header") return (
-    <div style={{...base,background:"#fff",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid #e2e8f0`}}>
+    <div style={{...base,background:"#fff",padding:"12px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",borderBottom:`1px solid ${T.border}`}}>
       <span style={{fontWeight:700,color:T.blue,fontSize:16,fontFamily:T.head}}>{c.logo||"Logo"}</span>
       <div style={{display:"flex",gap:16}}>{(c.links||[]).map(l=><span key={l} style={{fontSize:12,color:T.muted,fontWeight:600}}>{l}</span>)}</div>
       <div style={{background:T.blue,color:"#fff",padding:"5px 12px",borderRadius:6,fontSize:11,fontWeight:700}}>{c.ctaText||"CTA"}</div>
@@ -500,12 +608,12 @@ const AnalyticsView = ({ page }) => {
           <div style={{display:"grid",gridTemplateColumns:"repeat(10,1fr)",gap:2,background:T.bg,borderRadius:8,padding:8}}>
             {heatmapCells.map((cell,i)=>{
               const heat=cell.intensity;
-              const col=heat>.7?"#ef4444":heat>.5?"#f97316":heat>.3?"#fbbf24":heat>.15?"#86efac":"#dbeafe";
+              const col=heat>.7?"#FF6B5E":heat>.5?"#f97316":heat>.3?"#fbbf24":heat>.15?"#86efac":"#dbeafe";
               return <div key={i} style={{aspectRatio:"1",borderRadius:3,background:col,opacity:.8+heat*.2}}/>;
             })}
           </div>
           <div style={{display:"flex",gap:6,marginTop:8,alignItems:"center"}}>
-            {["#dbeafe","#86efac","#fbbf24","#f97316","#ef4444"].map((c,i)=><div key={i} style={{width:16,height:8,borderRadius:2,background:c}}/>)}
+            {["#dbeafe","#86efac","#fbbf24","#f97316","#FF6B5E"].map((c,i)=><div key={i} style={{width:16,height:8,borderRadius:2,background:c}}/>)}
             <span style={{fontSize:10,fontWeight:600,color:T.muted,fontFamily:T.font}}>Baixo → Alto</span>
           </div>
         </div>
@@ -745,10 +853,10 @@ const PageBuilder = ({ page:initialPage, onSave, onBack }) => {
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
+        ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
         input[type=range] { accent-color:${T.green}; }
       `}</style>
 
@@ -1023,6 +1131,29 @@ export default function VantariLandingPages() {
   const [search,      setSearch]  = useState("");
   const [filterStatus,setFilter]  = useState("all");
   const [toast,       setToast]   = useState(null);
+  const [landingSpark, setLandingSpark] = useState({ pages: [], visitors: [], leads: [], conv: [] });
+
+  useEffect(() => {
+    const loadSpark = async () => {
+      const sevenAgo = new Date();
+      sevenAgo.setMonth(sevenAgo.getMonth() - 7);
+      const { data } = await supabase.from("form_submissions").select("created_at").gte("created_at", sevenAgo.toISOString());
+      const now = new Date();
+      const buckets = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
+        return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, count: 0 };
+      });
+      (data || []).forEach(r => {
+        const d = new Date(r.created_at);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        const b = buckets.find(m => m.key === key);
+        if (b) b.count++;
+      });
+      const counts = buckets.map(b => b.count);
+      setLandingSpark({ pages: counts, visitors: counts, leads: counts, conv: counts });
+    };
+    loadSpark();
+  }, []);
 
   const showToast = (msg,type="success") => { setToast({msg,type});setTimeout(()=>setToast(null),3200); };
 
@@ -1048,31 +1179,50 @@ export default function VantariLandingPages() {
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *, *::before, *::after { box-sizing:border-box; }
         ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
+        ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
       `}</style>
 
-      {/* ── SIDEBAR — iconrs.png embutido */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      {/* ── SIDEBAR ── */}
+      <div style={{
+        width: 240,
+        background: T.sidebarBg,
+        display: "flex", flexDirection: "column", flexShrink: 0,
+        position: "relative", overflow: "hidden",
+      }}>
+        {/* glow topo-direito */}
+        <div style={{
+          position: "absolute", inset: 0, pointerEvents: "none",
+          background: "radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)",
+        }} />
+
+        {/* Brand */}
+        <div style={{ padding: "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+            <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
+              <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
+            </div>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics" path="/dashboard"        />
-          <NavItem icon={Users}          label="Leads" path="/leads"            />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"  />
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring" path="/scoring"          />
-          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" active/>
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"   />
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações" path="/integrations"      />
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
+          <NavSection label="Principal" />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
+          <NavSection label="Ferramentas" />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing" active />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
+          <NavSection label="Sistema" />
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings"/>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <NavItem icon={Settings} label="Configurações" path="/settings" />
         </div>
       </div>
 
@@ -1093,13 +1243,37 @@ export default function VantariLandingPages() {
         </div>
 
         {/* Content */}
-        <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-          {/* KPI strip */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14,marginBottom:24}}>
-            <MetricCard label="Páginas publicadas" value={publishedCount}        sub={`de ${pages.length} total`}   icon={IC.globe}  color={T.blue}  />
-            <MetricCard label="Total visitantes"   value={fmtNum(totalVisitors)} sub="Todas as páginas"              icon={IC.eye}    color={T.teal}  />
-            <MetricCard label="Total leads"        value={fmtNum(totalLeads)}    sub="Conversões geradas"            icon={IC.form}   color={T.green} />
-            <MetricCard label="Conv. média"        value={`${avgConv}%`}         sub="Média entre publicadas"        icon={IC.chart}  color={T.amber} />
+        <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #EEFCF7 0%, #E6FAF0 100%)"}}>
+          {/* Hero KPI strip */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
+            <HeroKpiCard
+              icon={IC.globe}  color={T.blue}  trend={0}
+              label="Páginas Publicadas"
+              value={publishedCount}
+              sub={`de ${pages.length} total`}
+              sparkData={landingSpark.pages}
+            />
+            <HeroKpiCard
+              icon={IC.eye}    color={T.teal}  trend={0}
+              label="Total de Visitantes"
+              value={fmtNum(totalVisitors)}
+              sub="todas as páginas"
+              sparkData={landingSpark.visitors}
+            />
+            <HeroKpiCard
+              icon={IC.form}   color={T.green} trend={0}
+              label="Total de Leads"
+              value={fmtNum(totalLeads)}
+              sub="conversões geradas"
+              sparkData={landingSpark.leads}
+            />
+            <HeroKpiCard
+              icon={IC.chart}  color={T.amber} trend={0}
+              label="Conv. Média"
+              value={`${avgConv}%`}
+              sub="entre publicadas"
+              sparkData={landingSpark.conv}
+            />
           </div>
 
           {/* Filters */}

@@ -86,19 +86,40 @@ import { BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings } fro
 
 /* ───── DESIGN TOKENS — mirrors vantari-analytics-dashboard ───── */
 const T = {
-  blue:    "#0C59AD",
-  teal:    "#0E7CA3",
-  green:   "#11AA7C",
-  purple:  "#7C3AED",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
   orange:  "#F59E0B",
-  red:     "#EF4444",
-  bg:      "#f0f4f8",
-  surface: "#ffffff",
-  border:  "#e2e8f0",
-  text:    "#0f172a",
-  muted:   "#64748b",
-  faint:   "#f8fafc",
-  font:    "'Plus Jakarta Sans', sans-serif",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale (text)
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 
 /* ───── MOCK DATA ───── */
@@ -113,9 +134,9 @@ const MOCK_MEMBERS = [
 const MOCK_AUDIT = [];
 
 const MOCK_USAGE = {
-  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     icon:"👥", color:T.blue   },
+  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     icon:"👥", color:T.teal   },
   emails_sent:       { used:0, limit:25000,  label:"Emails Enviados",       icon:"📧", color:T.teal   },
-  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       icon:"⚡", color:T.purple },
+  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       icon:"⚡", color:T.violet },
   contacts_enriched: { used:0, limit:1000,   label:"Contatos Enriquecidos", icon:"✨", color:T.green  },
 };
 
@@ -157,7 +178,7 @@ const useToast = () => {
 const Toasts = ({toasts}) => (
   <div style={{position:"fixed",bottom:24,right:24,zIndex:9999,display:"flex",flexDirection:"column",gap:8}}>
     {toasts.map(t=>(
-      <div key={t.id} style={{padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,color:"#fff",background:t.type==="success"?T.green:t.type==="error"?T.red:T.blue,boxShadow:"0 4px 20px rgba(0,0,0,0.14)",fontFamily:T.font,animation:"toastIn 0.25s ease"}}>{t.msg}</div>
+      <div key={t.id} style={{padding:"11px 18px",borderRadius:10,fontSize:13,fontWeight:600,color:"#fff",background:t.type==="success"?T.green:t.type==="error"?T.coral:T.teal,boxShadow:"0 4px 20px rgba(0,0,0,0.14)",fontFamily:T.font,animation:"toastIn 0.25s ease"}}>{t.msg}</div>
     ))}
   </div>
 );
@@ -166,32 +187,32 @@ const Toasts = ({toasts}) => (
 const Btn = ({children,onClick,variant="primary",size="sm",icon,disabled,style:sx={}}) => {
   const [hov,setHov] = useState(false);
   const v = {
-    primary:  {bg:hov?"#0a4d99":T.blue,   color:"#fff",  border:"none",                      shadow:hov?"0 4px 12px rgba(12,89,173,0.35)":"0 1px 4px rgba(12,89,173,0.2)"},
-    secondary:{bg:hov?"#f0f7ff":"#fff",    color:T.blue,  border:`1.5px solid ${T.blue}`,     shadow:"none"},
-    ghost:    {bg:hov?"#f1f5f9":"transparent",color:T.text,border:"none",                     shadow:"none"},
-    danger:   {bg:hov?"#dc2626":T.red,    color:"#fff",  border:"none",                      shadow:"none"},
-    success:  {bg:hov?"#059669":T.green,  color:"#fff",  border:"none",                      shadow:"none"},
-    outline:  {bg:"transparent",          color:T.muted, border:`1.5px solid ${T.border}`,   shadow:"none"},
+    primary:  {bg:hov?"linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)":"linear-gradient(135deg, #0D7491 0%, #14A273 100%)",color:"#fff",border:"none",shadow:hov?"0 8px 22px -6px rgba(13,116,145,.5)":"0 4px 14px -4px rgba(13,116,145,.4)"},
+    secondary:{bg:hov?`${T.teal}14`:"#fff",color:T.teal,border:`1.5px solid ${T.teal}`,shadow:"none"},
+    ghost:    {bg:hov?"#EEF2F6":"transparent",color:T.text,border:"none",shadow:"none"},
+    danger:   {bg:hov?"#e04d42":T.coral,color:"#fff",border:"none",shadow:"none"},
+    success:  {bg:hov?"#108A60":T.green,color:"#fff",border:"none",shadow:"none"},
+    outline:  {bg:"transparent",color:T.muted,border:`1.5px solid ${T.border}`,shadow:"none"},
   }[variant]||{};
   const pad={xs:"4px 8px",sm:"7px 14px",md:"9px 18px",lg:"11px 22px"}[size];
   const fs={xs:10,sm:12,md:13,lg:14}[size];
-  return <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:"inline-flex",alignItems:"center",gap:6,background:v.bg,color:v.color,border:v.border||"none",borderRadius:8,padding:pad,fontSize:fs,fontWeight:600,fontFamily:T.font,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,boxShadow:v.shadow,transition:"all 0.15s",whiteSpace:"nowrap",...sx}}>{icon&&<span style={{fontSize:fs+1}}>{icon}</span>}{children}</button>;
+  return <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:"inline-flex",alignItems:"center",gap:6,background:v.bg,color:v.color,border:v.border||"none",borderRadius:10,padding:pad,fontSize:fs,fontWeight:700,fontFamily:T.font,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,boxShadow:v.shadow,transition:"all 0.15s",whiteSpace:"nowrap",...sx}}>{icon&&<span style={{fontSize:fs+1}}>{icon}</span>}{children}</button>;
 };
 
-const Card = ({children,style:s={}}) => <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:20,boxShadow:"0 1px 4px rgba(0,0,0,0.05)",...s}}>{children}</div>;
+const Card = ({children,style:s={}}) => <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:20,boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",...s}}>{children}</div>;
 
-const SectionTitle = ({children,sub}) => <div style={{marginBottom:16}}><h2 style={{fontSize:16,fontWeight:700,color:T.text,fontFamily:T.font,margin:0}}>{children}</h2>{sub&&<p style={{fontSize:12,color:T.muted,margin:"4px 0 0",fontFamily:T.font}}>{sub}</p>}</div>;
+const SectionTitle = ({children,sub}) => <div style={{marginBottom:16}}><h2 style={{fontSize:15,fontWeight:700,color:T.ink,fontFamily:T.head,margin:0,letterSpacing:"-0.01em"}}>{children}</h2>{sub&&<p style={{fontSize:12,color:T.muted,margin:"4px 0 0",fontFamily:T.font,fontWeight:500}}>{sub}</p>}</div>;
 
 const Badge = ({children,color=T.blue,bg}) => <span style={{display:"inline-block",background:bg||`${color}18`,color,border:`1px solid ${color}30`,borderRadius:20,padding:"2px 9px",fontSize:11,fontWeight:600,fontFamily:T.font}}>{children}</span>;
 
-const FL = ({children}) => <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,fontFamily:T.font}}>{children}</div>;
+const FL = ({children}) => <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:6,fontFamily:T.head}}>{children}</div>;
 
 const Input = ({label,value,onChange,type="text",placeholder,hint,disabled}) => (
   <div style={{display:"flex",flexDirection:"column",gap:6}}>
     {label&&<FL>{label}</FL>}
     <input type={type} value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
       style={{padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,background:disabled?T.faint:"#fff",outline:"none",fontFamily:T.font,transition:"border 0.15s",width:"100%",boxSizing:"border-box"}}
-      onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
+      onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
     {hint&&<span style={{fontSize:11,color:T.muted,fontFamily:T.font}}>{hint}</span>}
   </div>
 );
@@ -257,32 +278,32 @@ const OnboardingCard = () => {
   const isComplete = pct === 100;
 
   return (
-    <Card style={{borderLeft:`4px solid ${isComplete ? "#05b27b" : "#0079a9"}`,background: isComplete ? "#f0fdf8" : "#f0f7fc"}}>
+    <Card style={{borderLeft:`4px solid ${isComplete ? T.green : T.teal}`,background: isComplete ? "#f0fdf8" : "#EEF9FC"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <div style={{flex:1}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
             <span style={{fontSize:20}}>{isComplete ? "✅" : "🚀"}</span>
-            <span style={{fontFamily:"Montserrat,sans-serif",fontWeight:700,fontSize:15,color:"#2d2d32"}}>
+            <span style={{fontFamily:T.head,fontWeight:700,fontSize:15,color:T.ink}}>
               {isComplete ? "Onboarding concluído!" : "Configure sua conta"}
             </span>
-            <span style={{background: isComplete ? "#05b27b" : "#0079a9",color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:600}}>
+            <span style={{background: isComplete ? T.green : T.teal,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>
               {pct}%
             </span>
           </div>
-          <div style={{fontSize:13,color:"#888891",fontFamily:"'Aptos','Nunito Sans',sans-serif",marginBottom:10}}>
+          <div style={{fontSize:13,color:T.muted,fontFamily:T.font,marginBottom:10}}>
             {isComplete
               ? "Todos os passos do onboarding foram concluídos."
               : "Complete os passos iniciais para ativar todos os recursos da plataforma."}
           </div>
-          <div style={{background:"#e5e7eb",borderRadius:99,height:6,width:"100%",maxWidth:360}}>
-            <div style={{background: isComplete ? "#05b27b" : "#0079a9",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.4s"}}/>
+          <div style={{background:T.border,borderRadius:99,height:6,width:"100%",maxWidth:360}}>
+            <div style={{background: isComplete ? T.green : T.teal,borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.4s"}}/>
           </div>
           <div style={{display:"flex",gap:16,marginTop:8}}>
             {phases.map(p => {
               const phaseDone = p.fields.filter(f => saved[f] && String(saved[f]).trim()).length;
               const ok = phaseDone === p.fields.length;
               return (
-                <span key={p.key} style={{fontSize:12,color: ok ? "#05b27b" : "#888891",fontFamily:"'Aptos','Nunito Sans',sans-serif"}}>
+                <span key={p.key} style={{fontSize:12,color: ok ? T.green : T.muted,fontFamily:T.font}}>
                   {ok ? "✓" : "○"} {p.label}
                 </span>
               );
@@ -291,7 +312,7 @@ const OnboardingCard = () => {
         </div>
         <button
           onClick={() => navigate("/onboarding")}
-          style={{background:"#0079a9",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontFamily:"Montserrat,sans-serif",fontWeight:600,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
+          style={{background:T.gradient,color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontFamily:T.head,fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
         >
           {isComplete ? "Ver resumo" : pct > 0 ? "Continuar configuração" : "Iniciar configuração"}
         </button>
@@ -301,7 +322,7 @@ const OnboardingCard = () => {
 };
 
 const WorkspaceTab = ({toast}) => {
-  const [f,setF] = useState({companyName:"Empresa LTDA",domain:"empresa.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0C59AD"});
+  const [f,setF] = useState({companyName:"Empresa LTDA",domain:"empresa.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491"});
   const [saving,setSaving] = useState(false);
   const fileRef = useRef();
   const u=(k,v)=>setF(x=>({...x,[k]:v}));
@@ -340,7 +361,7 @@ const WorkspaceTab = ({toast}) => {
           <div>
             <FL>Predefinidos</FL>
             <div style={{display:"flex",gap:6}}>
-              {["#0C59AD","#11AA7C","#7C3AED","#E91E8C","#F59E0B","#EF4444"].map(c=>(
+              {["#0D7491","#14A273","#7C5CFF","#E91E8C","#F59E0B","#FF6B5E"].map(c=>(
                 <div key={c} onClick={()=>u("primaryColor",c)} style={{width:30,height:30,borderRadius:8,background:c,cursor:"pointer",border:`3px solid ${f.primaryColor===c?T.text:"transparent"}`,transition:"border 0.15s"}}/>
               ))}
             </div>
@@ -405,8 +426,8 @@ const TeamTab = ({toast}) => {
   const openPerms=m=>{setPerms(ROLE_DEFAULTS[m.role]||{});setPermTarget(m);};
   const toggleAction=(res,action)=>setPerms(p=>{const cur=p[res]||[];return{...p,[res]:cur.includes(action)?cur.filter(a=>a!==action):[...cur,action]};});
 
-  const statusS={active:{color:T.green,bg:"#ecfdf5"},invited:{color:T.orange,bg:"#fef3c7"},suspended:{color:T.red,bg:"#fee2e2"}};
-  const roleC={admin:T.purple,manager:T.blue,user:T.muted};
+  const statusS={active:{color:T.green,bg:`${T.green}14`},invited:{color:T.amber,bg:`${T.amber}18`},suspended:{color:T.coral,bg:`${T.coral}14`}};
+  const roleC={admin:T.violet,manager:T.teal,user:T.muted};
   const roleL={admin:"Admin",manager:"Gerente",user:"Usuário"};
   const statusL={active:"Ativo",invited:"Convidado",suspended:"Suspenso"};
 
@@ -483,7 +504,7 @@ const TeamTab = ({toast}) => {
                   <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                     {["view","create","edit","delete","manage"].map(action=>{
                       const has=(perms[res]||[]).includes(action);
-                      return <button key={action} onClick={()=>toggleAction(res,action)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.blue:T.border}`,background:has?T.blue+"15":"#fff",color:has?T.blue:T.muted,fontFamily:T.font,transition:"all 0.15s"}}>{action}</button>;
+                      return <button key={action} onClick={()=>toggleAction(res,action)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.teal:T.border}`,background:has?T.teal+"15":"#fff",color:has?T.teal:T.muted,fontFamily:T.font,transition:"all 0.15s"}}>{action}</button>;
                     })}
                   </div>
                 </div>
@@ -544,7 +565,7 @@ const EmailTab = ({toast}) => {
                 <div style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font,marginBottom:2}}>{r.label}</div>
                 <code style={{fontSize:11,color:T.text,fontFamily:"monospace",wordBreak:"break-all"}}>{r.value}</code>
               </div>
-              <Badge color={r.status==="verified"?T.green:T.orange} bg={r.status==="verified"?"#ecfdf5":"#fef3c7"}>{r.status==="verified"?"✓ Verificado":"⏳ Pendente"}</Badge>
+              <Badge color={r.status==="verified"?T.green:T.amber} bg={r.status==="verified"?`${T.green}14`:`${T.amber}18`}>{r.status==="verified"?"✓ Verificado":"⏳ Pendente"}</Badge>
             </div>
           ))}
         </div>
@@ -655,7 +676,7 @@ const AdvancedTab = ({toast}) => {
         </div>
         <FL>Escopos</FL>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-          {SCOPE_OPTIONS.map(s=>{const has=nk.scopes.includes(s);return <button key={s} onClick={()=>tScope(s)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.blue:T.border}`,background:has?T.blue+"15":"#fff",color:has?T.blue:T.muted,fontFamily:T.font}}>{s}</button>;})}
+          {SCOPE_OPTIONS.map(s=>{const has=nk.scopes.includes(s);return <button key={s} onClick={()=>tScope(s)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.teal:T.border}`,background:has?T.teal+"15":"#fff",color:has?T.teal:T.muted,fontFamily:T.font}}>{s}</button>;})}
         </div>
         {createdKey&&(
           <div style={{padding:14,background:"#ecfdf5",border:`1px solid #6ee7b7`,borderRadius:10,marginBottom:12}}>
@@ -732,7 +753,7 @@ const AdvancedTab = ({toast}) => {
 
 const AuditTab = () => {
   const [filter,setFilter]=useState("all");
-  const actionColor={updated:T.blue,created:T.green,deleted:T.red,invited:T.orange,revoked:T.red};
+  const actionColor={updated:T.teal,created:T.green,deleted:T.coral,invited:T.amber,revoked:T.coral};
   const filterOptions=[{id:"all",label:"Todos"},{id:"created",label:"Criou"},{id:"updated",label:"Atualizou"},{id:"deleted",label:"Deletou"},{id:"invited",label:"Convidou"}];
   const filtered=filter==="all"?MOCK_AUDIT:MOCK_AUDIT.filter(a=>a.action===filter);
   return (
@@ -742,7 +763,7 @@ const AuditTab = () => {
           <SectionTitle sub="Registro completo de ações no workspace">Activity Log</SectionTitle>
           <div style={{display:"flex",gap:5}}>
             {filterOptions.map(fo=>(
-              <button key={fo.id} onClick={()=>setFilter(fo.id)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,border:`1.5px solid ${filter===fo.id?T.blue:T.border}`,background:filter===fo.id?T.blue:"#fff",color:filter===fo.id?"#fff":T.muted,transition:"all 0.15s"}}>{fo.label}</button>
+              <button key={fo.id} onClick={()=>setFilter(fo.id)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,border:`1.5px solid ${filter===fo.id?T.teal:T.border}`,background:filter===fo.id?T.teal:"#fff",color:filter===fo.id?"#fff":T.muted,transition:"all 0.15s"}}>{fo.label}</button>
             ))}
           </div>
         </div>
@@ -799,7 +820,7 @@ const SupportTab = ({toast}) => {
             <FL>Descrição</FL>
             <textarea value={ticket.body} onChange={e=>setTicket(t=>({...t,body:e.target.value}))} rows={4} placeholder="Descreva em detalhes — inclua passos para reproduzir o problema..."
               style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,fontFamily:T.font,resize:"vertical",outline:"none",boxSizing:"border-box"}}
-              onFocus={e=>e.target.style.borderColor=T.blue} onBlur={e=>e.target.style.borderColor=T.border}/>
+              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
           <div style={{display:"flex",justifyContent:"flex-end"}}>
             <Btn onClick={async()=>{if(!ticket.subject||!ticket.body)return toast("Preencha assunto e descrição","error");setSubmitting(true);await new Promise(r=>setTimeout(r,900));setTicket({subject:"",body:"",priority:"normal"});setSubmitting(false);toast("Ticket enviado! Resposta em até 24h.","success");}} disabled={submitting} size="md" icon={submitting?"⏳":"📨"}>{submitting?"Enviando...":"Enviar Ticket"}</Btn>
@@ -811,7 +832,7 @@ const SupportTab = ({toast}) => {
         <SectionTitle sub="Últimas atualizações da plataforma">Changelog</SectionTitle>
         {changelog.map((c,i)=>(
           <div key={c.version} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:i<changelog.length-1?`1px solid ${T.border}`:"none",alignItems:"center"}}>
-            <span style={{fontSize:11,fontWeight:700,color:"#fff",background:T.blue,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap",fontFamily:T.font}}>{c.version}</span>
+            <span style={{fontSize:11,fontWeight:700,color:"#fff",background:T.teal,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap",fontFamily:T.font}}>{c.version}</span>
             <span style={{fontSize:13,color:T.text,fontFamily:T.font,flex:1}}>{c.desc}</span>
             <span style={{fontSize:11,color:T.muted,fontFamily:T.font,whiteSpace:"nowrap"}}>{c.date}</span>
           </div>
@@ -824,11 +845,8 @@ const SupportTab = ({toast}) => {
 /* ═══════════════════════════════════════════════════════════
    ROOT — topbar idêntico ao vantari-analytics-dashboard
 ═══════════════════════════════════════════════════════════ */
-const NAV_FONT  = "'Aptos', 'Nunito Sans', sans-serif";
-const NAV_HEAD  = "'Montserrat', sans-serif";
-
 const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:"rgba(255,255,255,0.45)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:NAV_HEAD}}>{label}</div>
+  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
 );
 
 const NavItem = ({ icon: Icon, label, active = false, path }) => {
@@ -837,7 +855,18 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
-      style={{display:"flex",alignItems:"center",gap:9,padding:"8px 20px",fontSize:13,fontWeight:active?700:600,fontFamily:NAV_FONT,color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",background:active?"rgba(255,255,255,0.18)":hov?"rgba(255,255,255,0.08)":"transparent",borderRight:active?"2px solid #fff":"2px solid transparent",cursor:"pointer",transition:"all 0.15s",userSelect:"none"}}>
+      style={{
+        position:"relative",
+        display:"flex",alignItems:"center",gap:9,
+        padding:"8px 20px",fontSize:13.5,
+        fontWeight:active?700:600,fontFamily:T.font,
+        color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
+        background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
+        cursor:"pointer",transition:"all 0.15s",userSelect:"none",
+      }}>
+      {active && (
+        <span style={{position:"absolute",left:0,top:6,bottom:6,width:3,background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",borderRadius:"0 3px 3px 0"}} />
+      )}
       {Icon && <Icon size={16} aria-hidden="true" />}{label}
     </div>
   );
@@ -850,20 +879,31 @@ export default function VantariSettingsAdmin() {
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Nunito+Sans:wght@500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
         *{box-sizing:border-box;}
         ::-webkit-scrollbar{width:6px;height:6px;}
         ::-webkit-scrollbar-track{background:transparent;}
-        ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:99px;}
+        ::-webkit-scrollbar-thumb{background:#B3BFCA;border-radius:99px;}
         @keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
       `}</style>
 
       {/* ── SIDEBAR ── */}
-      <div style={{width:220,background:"#0079a9",display:"flex",flexDirection:"column",flexShrink:0}}>
-        <div style={{padding:"16px 20px 14px",borderBottom:"1px solid rgba(255,255,255,0.12)",display:"flex",alignItems:"center"}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:28,width:"auto"}}/>
+      <div style={{width:240,background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"hidden"}}>
+        {/* glow topo-direito */}
+        <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)"}} />
+
+        {/* Brand */}
+        <div style={{padding:"20px 20px 0",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+            <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
+              <img src="/icone.png" alt="" style={{width:22,height:22}}/>
+            </div>
+            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
+            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+          </div>
         </div>
-        <div style={{flex:1,overflowY:"auto",padding:"8px 0"}}>
+
+        <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
           <NavSection label="Principal"/>
           <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"     />
           <NavItem icon={Users}          label="Leads"          path="/leads"         />
@@ -875,7 +915,7 @@ export default function VantariSettingsAdmin() {
           <NavSection label="Sistema"/>
           <NavItem icon={Plug}           label="Integrações"    path="/integrations"  />
         </div>
-        <div style={{borderTop:"1px solid rgba(255,255,255,0.12)",padding:"8px 0"}}>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
           <NavItem icon={Settings} label="Configurações" path="/settings" active />
         </div>
       </div>
@@ -888,17 +928,17 @@ export default function VantariSettingsAdmin() {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:60}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:32,height:32,borderRadius:8,background:`linear-gradient(135deg,${T.blue},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚙️</div>
+              <div style={{width:32,height:32,borderRadius:8,background:T.gradient,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚙️</div>
               <div>
-                <div style={{fontSize:14,fontWeight:800,color:T.text,letterSpacing:"-0.02em"}}>Configurações</div>
-                <div style={{fontSize:10,color:T.muted,fontWeight:500}}>Vantari Platform</div>
+                <div style={{fontSize:14,fontWeight:800,color:T.ink,letterSpacing:"-0.02em",fontFamily:T.head}}>Configurações</div>
+                <div style={{fontSize:10,color:T.muted,fontWeight:500,fontFamily:T.font}}>Vantari Platform</div>
               </div>
             </div>
             <div style={{width:1,height:28,background:T.border}}/>
             <div style={{display:"flex",gap:2}}>
               {TABS.map(t=>(
                 <button key={t.id} onClick={()=>setActiveTab(t.id)}
-                  style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?T.blue:T.muted,fontFamily:T.font,borderBottom:activeTab===t.id?`2px solid ${T.blue}`:"2px solid transparent",transition:"all 0.15s"}}>
+                  style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?T.teal:T.muted,fontFamily:T.font,borderBottom:activeTab===t.id?`2px solid ${T.teal}`:"2px solid transparent",transition:"all 0.15s"}}>
                   <span>{t.icon}</span>{t.label}
                 </button>
               ))}
@@ -911,7 +951,7 @@ export default function VantariSettingsAdmin() {
         </div>
       </div>
 
-      <div style={{flex:1,overflowY:"auto"}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
+      <div style={{flex:1,overflowY:"auto",background:T.bg}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
         {activeTab==="workspace"&&<WorkspaceTab toast={toast}/>}
         {activeTab==="team"     &&<TeamTab      toast={toast}/>}
         {activeTab==="email"    &&<EmailTab     toast={toast}/>}

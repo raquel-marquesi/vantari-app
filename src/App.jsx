@@ -9,7 +9,9 @@ const EmailMarketing = lazy(() => import("./vantari-email-marketing"));
 const LandingPages   = lazy(() => import("./vantari-landing-pages"));
 const AIMarketing    = lazy(() => import("./vantari-ai-marketing"));
 const Integrations   = lazy(() => import("./vantari-integrations-hub"));
-const Settings       = lazy(() => import("./vantari-settings-admin"));
+const Settings         = lazy(() => import("./vantari-settings-admin"));
+const Onboarding       = lazy(() => import("./vantari-onboarding-wizard"));
+const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
 
 function PageLoader() {
   return (
@@ -63,6 +65,8 @@ export default function App() {
           <Route path="/ai-marketing"   element={<AIMarketing />} />
           <Route path="/integrations"   element={<Integrations />} />
           <Route path="/settings"       element={<Settings />} />
+          <Route path="/onboarding"     element={<Onboarding />} />
+          <Route path="/workflow"       element={<WorkflowBuilder />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

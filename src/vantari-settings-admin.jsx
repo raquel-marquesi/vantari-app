@@ -261,6 +261,64 @@ const UsageBar = ({data}) => {
 /* ═══════════════════════════════════════════════════════════
    TAB SECTIONS
 ═══════════════════════════════════════════════════════════ */
+const OnboardingCard = () => {
+  const navigate = useNavigate();
+  const saved = (() => { try { return JSON.parse(localStorage.getItem("vantari_onboarding") || "{}"); } catch { return {}; } })();
+  const phases = [
+    { key:"empresa",     label:"Conta e Identidade",    fields:["companyName","cnpj","segment","teamSize","timezone","currency","respName","respRole","respEmail"] },
+    { key:"equipe",      label:"Equipe e Acessos",       fields:["inviteEmail","inviteRole"] },
+    { key:"tecnico",     label:"Configuração Técnica",   fields:["sendDomain","senderEmail"] },
+    { key:"negocios",    label:"Regras de Negócio",      fields:["stage0","stage1","stage2","stage3","stage4"] },
+  ];
+  const total = phases.reduce((acc, p) => acc + p.fields.length, 0);
+  const done  = phases.reduce((acc, p) => acc + p.fields.filter(f => saved[f] && String(saved[f]).trim()).length, 0);
+  const pct = Math.round((done / total) * 100);
+  const isComplete = pct === 100;
+
+  return (
+    <Card style={{borderLeft:`4px solid ${isComplete ? "#05b27b" : "#0079a9"}`,background: isComplete ? "#f0fdf8" : "#f0f7fc"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+            <span style={{fontSize:20}}>{isComplete ? "✅" : "🚀"}</span>
+            <span style={{fontFamily:"Montserrat,sans-serif",fontWeight:700,fontSize:15,color:"#2d2d32"}}>
+              {isComplete ? "Onboarding concluído!" : "Configure sua conta"}
+            </span>
+            <span style={{background: isComplete ? "#05b27b" : "#0079a9",color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:600}}>
+              {pct}%
+            </span>
+          </div>
+          <div style={{fontSize:13,color:"#888891",fontFamily:"'Aptos','Nunito Sans',sans-serif",marginBottom:10}}>
+            {isComplete
+              ? "Todos os passos do onboarding foram concluídos."
+              : "Complete os passos iniciais para ativar todos os recursos da plataforma."}
+          </div>
+          <div style={{background:"#e5e7eb",borderRadius:99,height:6,width:"100%",maxWidth:360}}>
+            <div style={{background: isComplete ? "#05b27b" : "#0079a9",borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.4s"}}/>
+          </div>
+          <div style={{display:"flex",gap:16,marginTop:8}}>
+            {phases.map(p => {
+              const phaseDone = p.fields.filter(f => saved[f] && String(saved[f]).trim()).length;
+              const ok = phaseDone === p.fields.length;
+              return (
+                <span key={p.key} style={{fontSize:12,color: ok ? "#05b27b" : "#888891",fontFamily:"'Aptos','Nunito Sans',sans-serif"}}>
+                  {ok ? "✓" : "○"} {p.label}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+        <button
+          onClick={() => navigate("/onboarding")}
+          style={{background:"#0079a9",color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontFamily:"Montserrat,sans-serif",fontWeight:600,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
+        >
+          {isComplete ? "Ver resumo" : pct > 0 ? "Continuar configuração" : "Iniciar configuração"}
+        </button>
+      </div>
+    </Card>
+  );
+};
+
 const WorkspaceTab = ({toast}) => {
   const [f,setF] = useState({companyName:"Empresa LTDA",domain:"empresa.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0C59AD"});
   const [saving,setSaving] = useState(false);
@@ -270,6 +328,7 @@ const WorkspaceTab = ({toast}) => {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <OnboardingCard />
       <Card>
         <SectionTitle sub="Nome, logo e domínio customizado">Identidade da Empresa</SectionTitle>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>

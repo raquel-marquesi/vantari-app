@@ -14,6 +14,7 @@ Módulos existentes:
 - [x] IA Marketing
 - [x] Integrações
 - [x] Settings / Admin
+- [x] Onboarding Wizard
 
 ---
 
@@ -31,10 +32,16 @@ Módulos existentes:
 
 ### Funcionalidades
 - [x] Adicionar rota `/settings` para o módulo `vantari-settings-admin.jsx`
+- [x] Adicionar rota `/onboarding` com wizard de 4 fases
+- [x] Card de progresso de onboarding na aba Workspace de Configurações
 - [ ] Implementar autenticação real (atualmente apenas UI)
 - [ ] Conectar módulos a uma API/backend
 
 ### UX
 - [x] Adicionar estado de loading entre navegações
 - [x] Tratar erros de rota (página 404)
+- [x] Navegação funcional em todas as páginas via `useNavigate`
+- [x] Corrigir sidebar dupla (cada página gerencia seu próprio layout)
+- [x] Corrigir tela branca na página de Integrações (bug com ícones Lucide + forwardRef)
+- [x] Adicionar sidebar com navegação na página de Configurações
 - [ ] Tornar layout responsivo para mobile

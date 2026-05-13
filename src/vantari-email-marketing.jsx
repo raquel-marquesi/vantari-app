@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
@@ -8,8 +8,10 @@ import {
   Search, Plus, Copy, Trash2, Download, ChevronLeft,
   Monitor, Tablet, Smartphone, Tag, Newspaper, FileText,
   CornerDownRight, Lightbulb, TrendingUp, MailOpen, Link2,
-  AlertTriangle, XCircle, ArrowUp, ArrowDown, X
+  AlertTriangle, XCircle, ArrowUp, ArrowDown, X,
+  Loader2, AlertCircle
 } from "lucide-react";
+import { supabase } from "./supabase";
 
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
@@ -46,13 +48,6 @@ const STATUS_META = {
   failed:    { label:"Falhou",   color:"#ef4444", bg:"#fef2f2" },
 };
 
-const mkCampaigns = () => [
-  { id:"c1", name:"Black Friday 2024",   subject:"50% OFF só hoje — Oferta exclusiva para você",             sender:"marketing@vantari.com.br", status:"sent",      type:"promotional",  audience:"Todos os leads",    audienceCount:6284, scheduledAt:"2024-11-29T09:00:00Z", metrics:{sent:6284,delivered:6102,opened:2840,clicked:892,bounced:182,unsubscribed:24,openRate:46.5,clickRate:14.6}, thumbnail:"promo"       },
-  { id:"c2", name:"Newsletter Novembro", subject:"As tendências de marketing digital que você precisa saber", sender:"conteudo@vantari.com.br",  status:"sent",      type:"newsletter",   audience:"Newsletter",         audienceCount:3820, scheduledAt:"2024-11-15T08:00:00Z", metrics:{sent:3820,delivered:3741,opened:1642,clicked:318, bounced:79, unsubscribed:11,openRate:43.9,clickRate:8.5 }, thumbnail:"newsletter"  },
-  { id:"c3", name:"Follow-up Demo Q4",   subject:"{{lead.name}}, sua demo está esperando",                   sender:"vendas@vantari.com.br",    status:"scheduled",type:"follow-up",  audience:"Demo Solicitada",    audienceCount:91,   scheduledAt:"2024-12-05T10:00:00Z", metrics:{sent:0,delivered:0,opened:0,clicked:0,bounced:0,unsubscribed:0,openRate:0,clickRate:0},              thumbnail:"followup"    },
-  { id:"c4", name:"Reativação Dezembro", subject:"Sentimos sua falta, {{lead.name}}",                        sender:"marketing@vantari.com.br", status:"draft",     type:"reactivation", audience:"Inativos 30d",       audienceCount:840,  scheduledAt:null,                   metrics:{sent:0,delivered:0,opened:0,clicked:0,bounced:0,unsubscribed:0,openRate:0,clickRate:0},              thumbnail:"reactivation"},
-  { id:"c5", name:"Webinar Conversão",   subject:"[Hoje às 15h] Webinar exclusivo: Como escalar leads",      sender:"eventos@vantari.com.br",   status:"sent",      type:"event",        audience:"MQL + SQL",          audienceCount:2460, scheduledAt:"2024-11-20T14:00:00Z", metrics:{sent:2460,delivered:2398,opened:1198,clicked:641,bounced:62, unsubscribed:8, openRate:49.9,clickRate:26.7}, thumbnail:"event"       },
-];
 
 const TEMPLATES = [
   { id:"t1", name:"Newsletter Mensal",   category:"newsletter",  desc:"Layout editorial com destaque para artigos e conteúdo", blocks:[
@@ -667,7 +662,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
 /* ═══════════════════════════════════════════════════
    CAMPAIGN LIST
 ═══════════════════════════════════════════════════ */
-const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate }) => {
+const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelete }) => {
   const [filter,setFilter] = useState("all");
   const [search,setSearch] = useState("");
 
@@ -751,7 +746,7 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate }) => {
                     ?<Btn onClick={()=>onReport(camp)} variant="primary" size="xs" icon={BarChart2} sx={{flex:1,justifyContent:"center"}}>Relatório</Btn>
                     :<Btn onClick={()=>onEdit(camp)} variant="secondary" size="xs" icon={Pencil} sx={{flex:1,justifyContent:"center"}}>Editar</Btn>}
                   <Btn onClick={()=>onDuplicate(camp)} variant="ghost" size="xs" icon={Copy} sx={{flex:1,justifyContent:"center"}}>Duplicar</Btn>
-                  {camp.status!=="sent"&&<Btn variant="ghost" size="xs" icon={Trash2} sx={{flex:"0 0 32px",justifyContent:"center",padding:"6px"}}/>}
+                  {camp.status!=="sent"&&<Btn onClick={()=>onDelete(camp.id)} variant="ghost" size="xs" icon={Trash2} sx={{flex:"0 0 32px",justifyContent:"center",padding:"6px"}}/>}
                 </div>
               </div>
             </div>
@@ -878,23 +873,97 @@ const MODULE_TABS = [
 ];
 
 export default function VantariEmailMarketing() {
-  const [campaigns,    setCampaigns]   = useState(mkCampaigns);
-  const [view,         setView]        = useState("list");
-  const [editCamp,     setEditCamp]    = useState(null);
-  const [reportCamp,   setReportCamp]  = useState(null);
+  const [campaigns,  setCampaigns]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState(null);
+  const [view,       setView]       = useState("list");
+  const [editCamp,   setEditCamp]   = useState(null);
+  const [reportCamp, setReportCamp] = useState(null);
 
-  const handleNew         = ()  => { setEditCamp(null); setView("form"); };
-  const handleEdit        = (c) => { setEditCamp(c); setView("form"); };
-  const handleReport      = (c) => { setReportCamp(c); setView("report"); };
-  const handleOpenEditor  = (c) => { setEditCamp(c); setView("editor"); };
-  const handleSaveCampaign= (data) => {
-    if(editCamp?.id) setCampaigns(p=>p.map(c=>c.id===editCamp.id?{...c,...data}:c));
-    else setCampaigns(p=>[{id:`c${Date.now()}`,...data,audienceCount:1000,metrics:{sent:0,delivered:0,opened:0,clicked:0,bounced:0,unsubscribed:0,openRate:0,clickRate:0},thumbnail:"newsletter"},...p]);
+  const fetchCampaigns = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: err } = await supabase
+        .from("campaigns")
+        .select(`id, name, subject, sender, status, type, audience, audience_count, scheduled_at,
+                 campaign_sends(delivered, opened, clicked, bounced, unsubscribed)`)
+        .order("created_at", { ascending: false });
+      if (err) throw err;
+      setCampaigns((data || []).map(c => {
+        const sends        = c.campaign_sends || [];
+        const sent         = sends.length;
+        const delivered    = sends.filter(s => s.delivered).length;
+        const opened       = sends.filter(s => s.opened).length;
+        const clicked      = sends.filter(s => s.clicked).length;
+        const bounced      = sends.filter(s => s.bounced).length;
+        const unsubscribed = sends.filter(s => s.unsubscribed).length;
+        return {
+          id:            c.id,
+          name:          c.name || "—",
+          subject:       c.subject || "",
+          sender:        c.sender || "marketing@vantari.com.br",
+          status:        c.status || "draft",
+          type:          c.type || "newsletter",
+          audience:      c.audience || "Todos os leads",
+          audienceCount: c.audience_count || 0,
+          scheduledAt:   c.scheduled_at,
+          thumbnail:     c.type || "newsletter",
+          metrics: {
+            sent, delivered, opened, clicked, bounced, unsubscribed,
+            openRate:  sent > 0 ? +((opened  / sent) * 100).toFixed(1) : 0,
+            clickRate: sent > 0 ? +((clicked / sent) * 100).toFixed(1) : 0,
+          },
+        };
+      }));
+    } catch (e) {
+      setError(e.message || "Erro ao carregar campanhas.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  const handleNew        = ()  => { setEditCamp(null); setView("form"); };
+  const handleEdit       = (c) => { setEditCamp(c);    setView("form"); };
+  const handleReport     = (c) => { setReportCamp(c);  setView("report"); };
+  const handleOpenEditor = (c) => { setEditCamp(c);    setView("editor"); };
+
+  const handleSaveCampaign = useCallback(async (data) => {
+    const payload = {
+      name:           data.name,
+      subject:        data.subject,
+      sender:         data.sender,
+      status:         data.status || "draft",
+      type:           data.type   || "newsletter",
+      audience:       data.audience || "Todos os leads",
+      audience_count: data.audienceCount || 0,
+      scheduled_at:   data.schedule === "scheduled" && data.scheduledAt
+                        ? new Date(data.scheduledAt).toISOString()
+                        : null,
+    };
+    const { error: err } = editCamp?.id
+      ? await supabase.from("campaigns").update(payload).eq("id", editCamp.id)
+      : await supabase.from("campaigns").insert(payload);
+    if (err) { setError(err.message); return; }
+    await fetchCampaigns();
     setView("list"); setEditCamp(null);
-  };
-  const handleDuplicate = (c) => {
-    setCampaigns(p=>[{...c,id:`c${Date.now()}`,name:`${c.name} (cópia)`,status:"draft",scheduledAt:null},...p]);
-  };
+  }, [editCamp, fetchCampaigns]);
+
+  const handleDuplicate = useCallback(async (c) => {
+    const { error: err } = await supabase.from("campaigns").insert({
+      name: `${c.name} (cópia)`, subject: c.subject, sender: c.sender,
+      status: "draft", type: c.type, audience: c.audience, audience_count: c.audienceCount,
+      scheduled_at: null,
+    });
+    if (!err) fetchCampaigns();
+  }, [fetchCampaigns]);
+
+  const handleDelete = useCallback(async (id) => {
+    const { error: err } = await supabase.from("campaigns").delete().eq("id", id);
+    if (!err) fetchCampaigns();
+  }, [fetchCampaigns]);
 
   const activeTabLabel = view==="list"?"Campanhas":view==="templates"?"Templates":view==="form"?editCamp?.id?"Editar Campanha":"Nova Campanha":view==="report"?reportCamp?.name:"Email Marketing";
 
@@ -908,6 +977,7 @@ export default function VantariEmailMarketing() {
         ::-webkit-scrollbar { width:5px; height:5px; }
         ::-webkit-scrollbar-thumb { background:${T.border}; border-radius:3px; }
         @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
       `}</style>
 
       {/* ── SIDEBAR — iconrs.png embutido */}
@@ -924,6 +994,7 @@ export default function VantariEmailMarketing() {
           <NavItem icon={Star}           label="Scoring" path="/scoring"         />
           <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"   />
           <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
+          <NavItem icon={Zap}            label="Workflows" path="/workflow"           />
           <NavSection label="Sistema"/>
           <NavItem icon={Plug}           label="Integrações" path="/integrations"     />
         </div>
@@ -960,32 +1031,46 @@ export default function VantariEmailMarketing() {
 
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
-          {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate}/>}
-          {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
-          {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
-          {view==="templates"&&(
-            <div>
-              <h2 style={{margin:"0 0 20px",fontFamily:T.head,fontSize:18,fontWeight:700,color:T.ink,letterSpacing:"-0.01em"}}>Templates de Email</h2>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
-                {TEMPLATES.map(tpl=>(
-                  <div key={tpl.id} style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,overflow:"hidden",cursor:"pointer",transition:"all 0.2s"}}
-                    onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
-                    onMouseLeave={e=>e.currentTarget.style.transform="none"}>
-                    <div style={{height:120,background:`linear-gradient(135deg,${T.blue},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <TypeIcon type={tpl.category} size={32}/>
-                    </div>
-                    <div style={{padding:"16px 18px"}}>
-                      <div style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,marginBottom:4}}>{tpl.name}</div>
-                      <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted,marginBottom:12}}>{tpl.desc}</div>
-                      <div style={{display:"flex",gap:6}}>
-                        <Btn onClick={()=>{setEditCamp({emailBlocks:tpl.blocks});setView("editor");}} variant="primary" size="xs" sx={{flex:1,justifyContent:"center"}}>Usar Template</Btn>
-                        <Btn variant="ghost" size="xs" sx={{flex:1,justifyContent:"center"}}>Preview</Btn>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+          {loading && view==="list" ? (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:300,gap:10,color:T.muted}}>
+              <Loader2 size={22} style={{animation:"spin 1s linear infinite"}} aria-hidden="true"/>
+              <span style={{fontFamily:T.font,fontSize:14,fontWeight:600}}>Carregando campanhas...</span>
             </div>
+          ) : error ? (
+            <div style={{display:"flex",alignItems:"center",gap:10,background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"14px 18px",color:T.red}}>
+              <AlertCircle size={18} aria-hidden="true"/>
+              <span style={{fontFamily:T.font,fontSize:13,fontWeight:600}}>{error}</span>
+            </div>
+          ) : (
+            <>
+              {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete}/>}
+              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
+              {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
+              {view==="templates"&&(
+                <div>
+                  <h2 style={{margin:"0 0 20px",fontFamily:T.head,fontSize:18,fontWeight:700,color:T.ink,letterSpacing:"-0.01em"}}>Templates de Email</h2>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
+                    {TEMPLATES.map(tpl=>(
+                      <div key={tpl.id} style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,overflow:"hidden",cursor:"pointer",transition:"all 0.2s"}}
+                        onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
+                        onMouseLeave={e=>e.currentTarget.style.transform="none"}>
+                        <div style={{height:120,background:`linear-gradient(135deg,${T.blue},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <TypeIcon type={tpl.category} size={32}/>
+                        </div>
+                        <div style={{padding:"16px 18px"}}>
+                          <div style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,marginBottom:4}}>{tpl.name}</div>
+                          <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted,marginBottom:12}}>{tpl.desc}</div>
+                          <div style={{display:"flex",gap:6}}>
+                            <Btn onClick={()=>{setEditCamp({emailBlocks:tpl.blocks});setView("editor");}} variant="primary" size="xs" sx={{flex:1,justifyContent:"center"}}>Usar Template</Btn>
+                            <Btn variant="ghost" size="xs" sx={{flex:1,justifyContent:"center"}}>Preview</Btn>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

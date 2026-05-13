@@ -13,6 +13,7 @@ const Integrations   = lazy(() => import("./vantari-integrations-hub"));
 const Settings         = lazy(() => import("./vantari-settings-admin"));
 const Onboarding       = lazy(() => import("./vantari-onboarding-wizard"));
 const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
+const Segments         = lazy(() => import("./vantari-segments"));
 
 function PageLoader() {
   return (
@@ -85,6 +86,7 @@ export default function App() {
           <Route path="/settings"       element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/onboarding"     element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
           <Route path="/workflow"       element={<ProtectedRoute><WorkflowBuilder /></ProtectedRoute>} />
+          <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

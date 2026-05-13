@@ -662,7 +662,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
 /* ═══════════════════════════════════════════════════
    CAMPAIGN LIST
 ═══════════════════════════════════════════════════ */
-const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelete }) => {
+const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelete, onSend }) => {
   const [filter,setFilter] = useState("all");
   const [search,setSearch] = useState("");
 
@@ -745,7 +745,10 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
                   {camp.status==="sent"
                     ?<Btn onClick={()=>onReport(camp)} variant="primary" size="xs" icon={BarChart2} sx={{flex:1,justifyContent:"center"}}>Relatório</Btn>
                     :<Btn onClick={()=>onEdit(camp)} variant="secondary" size="xs" icon={Pencil} sx={{flex:1,justifyContent:"center"}}>Editar</Btn>}
-                  <Btn onClick={()=>onDuplicate(camp)} variant="ghost" size="xs" icon={Copy} sx={{flex:1,justifyContent:"center"}}>Duplicar</Btn>
+                  {["draft","scheduled"].includes(camp.status) && (
+                    <Btn onClick={e=>{e.stopPropagation();onSend(camp);}} variant="success" size="xs" icon={Send} sx={{flex:1,justifyContent:"center"}}>Enviar</Btn>
+                  )}
+                  <Btn onClick={()=>onDuplicate(camp)} variant="ghost" size="xs" icon={Copy} sx={{flex:"0 0 32px",justifyContent:"center",padding:"6px"}}/>
                   {camp.status!=="sent"&&<Btn onClick={()=>onDelete(camp.id)} variant="ghost" size="xs" icon={Trash2} sx={{flex:"0 0 32px",justifyContent:"center",padding:"6px"}}/>}
                 </div>
               </div>
@@ -865,6 +868,145 @@ const ReportView = ({ campaign, onBack }) => {
 };
 
 /* ═══════════════════════════════════════════════════
+   SEND MODAL
+═══════════════════════════════════════════════════ */
+const SendModal = ({ campaign, onClose, onDone }) => {
+  const [testEmail, setTestEmail]   = useState("");
+  const [sending,   setSending]     = useState(false);
+  const [result,    setResult]      = useState(null); // {sent, total, test, error}
+  const [mode,      setMode]        = useState("confirm"); // confirm | test | done
+
+  const invoke = async (isTest) => {
+    setSending(true); setResult(null);
+    try {
+      const body = isTest ? { campaign_id: campaign.id, test_email: testEmail } : { campaign_id: campaign.id };
+      const { data, error: fnErr } = await supabase.functions.invoke("send-campaign", { body });
+      if (fnErr) throw new Error(fnErr.message);
+      if (data?.error) throw new Error(data.error);
+      setResult({ ...data, test: isTest });
+      setMode("done");
+      if (!isTest) onDone();
+    } catch (e) {
+      setResult({ error: e.message });
+    }
+    setSending(false);
+  };
+
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)",backdropFilter:"blur(4px)"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:T.white,borderRadius:14,width:"90%",maxWidth:480,boxShadow:"0 25px 60px rgba(0,0,0,0.18)",overflow:"hidden"}}>
+
+        {/* header */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"18px 24px",borderBottom:`1px solid ${T.border}`}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:"#e6f9f2",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <Send size={17} color={T.green} aria-hidden="true"/>
+            </div>
+            <div>
+              <div style={{fontFamily:T.head,fontSize:15,fontWeight:700,color:T.ink}}>Enviar Campanha</div>
+              <div style={{fontFamily:T.font,fontSize:12,color:T.muted}}>{campaign.name}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,padding:4}}><X size={18}/></button>
+        </div>
+
+        <div style={{padding:"20px 24px"}}>
+          {/* result banner */}
+          {result?.error && (
+            <div style={{display:"flex",alignItems:"center",gap:8,background:"#fef2f2",border:`1px solid ${T.red}`,borderRadius:8,padding:"10px 14px",marginBottom:16}}>
+              <AlertCircle size={15} color={T.red} aria-hidden="true"/>
+              <span style={{fontFamily:T.font,fontSize:13,color:T.red}}>{result.error}</span>
+            </div>
+          )}
+          {mode==="done" && !result?.error && (
+            <div style={{textAlign:"center",padding:"20px 0"}}>
+              <div style={{width:56,height:56,borderRadius:"50%",background:"#e6f9f2",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 16px"}}>
+                <Send size={24} color={T.green}/>
+              </div>
+              <h3 style={{fontFamily:T.head,fontSize:16,fontWeight:700,color:T.ink,margin:"0 0 8px"}}>
+                {result?.test ? "Email de teste enviado!" : "Campanha enviada!"}
+              </h3>
+              <p style={{fontFamily:T.font,fontSize:13,color:T.muted,margin:"0 0 20px"}}>
+                {result?.test
+                  ? `Email enviado para ${testEmail}`
+                  : `${result?.sent ?? 0} de ${result?.total ?? 0} emails enviados com sucesso`}
+              </p>
+              <Btn onClick={onClose} variant="primary" size="md" full>Fechar</Btn>
+            </div>
+          )}
+
+          {mode!=="done" && (
+            <>
+              {/* campaign summary */}
+              <div style={{background:T.bg,borderRadius:10,padding:"14px 16px",marginBottom:20}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  {[
+                    ["Assunto",   campaign.subject || "—"],
+                    ["Remetente", campaign.fromEmail || campaign.sender || "—"],
+                    ["Conteúdo",  campaign.htmlContent ? "HTML salvo" : "⚠ Nenhum HTML"],
+                  ].map(([k,v])=>(
+                    <div key={k}>
+                      <div style={{fontFamily:T.head,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>{k}</div>
+                      <div style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:v.startsWith("⚠")?T.amber:T.ink}}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* mode tabs */}
+              <div style={{display:"flex",gap:6,marginBottom:18}}>
+                {[["confirm","Envio Real"],["test","Envio de Teste"]].map(([m,lbl])=>(
+                  <button key={m} onClick={()=>setMode(m)}
+                    style={{flex:1,padding:"8px",fontFamily:T.font,fontSize:13,fontWeight:700,border:`1px solid ${mode===m?T.blue:T.border}`,borderRadius:8,background:mode===m?T.blueL:T.white,color:mode===m?T.blue:T.ink,cursor:"pointer"}}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {mode==="confirm" && (
+                <div>
+                  <div style={{background:"#fff4e6",border:`0.5px solid ${T.amber}`,borderRadius:8,padding:"12px 14px",marginBottom:18,fontFamily:T.font,fontSize:13,fontWeight:600,color:"#92400e"}}>
+                    Isso enviará o email para <strong>todos os leads ativos</strong> (não descadastrados). Esta ação não pode ser desfeita.
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <Btn onClick={onClose} variant="ghost" size="md" sx={{flex:1,justifyContent:"center"}}>Cancelar</Btn>
+                    <Btn onClick={()=>invoke(false)} variant="success" size="md" icon={sending?undefined:Send} disabled={sending} sx={{flex:1,justifyContent:"center"}}>
+                      {sending
+                        ? <><Loader2 size={14} style={{animation:"spin 0.7s linear infinite",marginRight:6}}/>Enviando...</>
+                        : "Confirmar Envio"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+
+              {mode==="test" && (
+                <div>
+                  <div style={{marginBottom:14}}>
+                    <label style={{display:"block",fontFamily:T.head,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>Email para teste</label>
+                    <input value={testEmail} onChange={e=>setTestEmail(e.target.value)} placeholder="voce@exemplo.com"
+                      type="email"
+                      style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink}}/>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <Btn onClick={onClose} variant="ghost" size="md" sx={{flex:1,justifyContent:"center"}}>Cancelar</Btn>
+                    <Btn onClick={()=>invoke(true)} variant="primary" size="md" icon={sending?undefined:Send} disabled={sending||!testEmail} sx={{flex:1,justifyContent:"center"}}>
+                      {sending
+                        ? <><Loader2 size={14} style={{animation:"spin 0.7s linear infinite",marginRight:6}}/>Enviando...</>
+                        : "Enviar Teste"}
+                    </Btn>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════ */
 const MODULE_TABS = [
@@ -879,6 +1021,7 @@ export default function VantariEmailMarketing() {
   const [view,       setView]       = useState("list");
   const [editCamp,   setEditCamp]   = useState(null);
   const [reportCamp, setReportCamp] = useState(null);
+  const [sendModal,  setSendModal]  = useState(null);
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -886,7 +1029,7 @@ export default function VantariEmailMarketing() {
     try {
       const { data, error: err } = await supabase
         .from("campaigns")
-        .select(`id, name, subject, sender, status, type, audience, audience_count, scheduled_at,
+        .select(`id, name, subject, sender, html_content, from_name, from_email, status, type, audience, audience_count, scheduled_at,
                  campaign_sends(delivered, opened, clicked, bounced, unsubscribed)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
@@ -903,6 +1046,9 @@ export default function VantariEmailMarketing() {
           name:          c.name || "—",
           subject:       c.subject || "",
           sender:        c.sender || "marketing@vantari.com.br",
+          htmlContent:   c.html_content || "",
+          fromName:      c.from_name  || "Vantari",
+          fromEmail:     c.from_email || "onboarding@resend.dev",
           status:        c.status || "draft",
           type:          c.type || "newsletter",
           audience:      c.audience || "Todos os leads",
@@ -929,12 +1075,16 @@ export default function VantariEmailMarketing() {
   const handleEdit       = (c) => { setEditCamp(c);    setView("form"); };
   const handleReport     = (c) => { setReportCamp(c);  setView("report"); };
   const handleOpenEditor = (c) => { setEditCamp(c);    setView("editor"); };
+  const handleSend       = (c) => setSendModal(c);
 
   const handleSaveCampaign = useCallback(async (data) => {
     const payload = {
       name:           data.name,
       subject:        data.subject,
       sender:         data.sender,
+      html_content:   data.htmlContent || null,
+      from_name:      data.fromName  || "Vantari",
+      from_email:     data.fromEmail || null,
       status:         data.status || "draft",
       type:           data.type   || "newsletter",
       audience:       data.audience || "Todos os leads",
@@ -1043,7 +1193,7 @@ export default function VantariEmailMarketing() {
             </div>
           ) : (
             <>
-              {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete}/>}
+              {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete} onSend={handleSend}/>}
               {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
               {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
               {view==="templates"&&(
@@ -1077,6 +1227,15 @@ export default function VantariEmailMarketing() {
 
       {/* Email editor overlay */}
       {view==="editor"&&<EmailEditor campaign={editCamp} onSave={(data)=>{setEditCamp(p=>({...p,...data}));setView("form");}} onClose={()=>setView(editCamp?.id?"form":"list")}/>}
+
+      {/* Send modal */}
+      {sendModal && (
+        <SendModal
+          campaign={sendModal}
+          onClose={() => setSendModal(null)}
+          onDone={() => { setSendModal(null); fetchCampaigns(); }}
+        />
+      )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { supabase } from "./supabase";
 
 const AuthSystem     = lazy(() => import("./vantari-auth-system"));
 const Analytics      = lazy(() => import("./vantari-analytics-dashboard"));
@@ -50,6 +51,23 @@ function NotFound() {
   );
 }
 
+function useSession() {
+  const [session, setSession] = useState(undefined);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => setSession(s));
+    return () => subscription.unsubscribe();
+  }, []);
+  return session;
+}
+
+function ProtectedRoute({ children }) {
+  const session = useSession();
+  if (session === undefined) return <PageLoader />;
+  if (!session) return <Navigate to="/login" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -57,16 +75,16 @@ export default function App() {
         <Routes>
           <Route path="/"               element={<Navigate to="/dashboard" replace />} />
           <Route path="/login"          element={<AuthSystem />} />
-          <Route path="/dashboard"      element={<Analytics />} />
-          <Route path="/leads"          element={<Leads />} />
-          <Route path="/scoring"        element={<Scoring />} />
-          <Route path="/email"          element={<EmailMarketing />} />
-          <Route path="/landing"        element={<LandingPages />} />
-          <Route path="/ai-marketing"   element={<AIMarketing />} />
-          <Route path="/integrations"   element={<Integrations />} />
-          <Route path="/settings"       element={<Settings />} />
-          <Route path="/onboarding"     element={<Onboarding />} />
-          <Route path="/workflow"       element={<WorkflowBuilder />} />
+          <Route path="/dashboard"      element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+          <Route path="/leads"          element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+          <Route path="/scoring"        element={<ProtectedRoute><Scoring /></ProtectedRoute>} />
+          <Route path="/email"          element={<ProtectedRoute><EmailMarketing /></ProtectedRoute>} />
+          <Route path="/landing"        element={<ProtectedRoute><LandingPages /></ProtectedRoute>} />
+          <Route path="/ai-marketing"   element={<ProtectedRoute><AIMarketing /></ProtectedRoute>} />
+          <Route path="/integrations"   element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
+          <Route path="/settings"       element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/onboarding"     element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
+          <Route path="/workflow"       element={<ProtectedRoute><WorkflowBuilder /></ProtectedRoute>} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

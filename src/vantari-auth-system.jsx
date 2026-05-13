@@ -1,4 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 
 // ─── DESIGN TOKENS ─────────────────────────────────────────────────────────────
 const C = {
@@ -17,39 +19,6 @@ const C = {
 };
 const FONT = "'Aptos', 'Nunito Sans', sans-serif";
 const HEAD = "'Montserrat', sans-serif";
-
-// ─── SUPABASE CLIENT (mock-ready) ──────────────────────────────────────────────
-const createSupabaseClient = () => {
-  const fakeUsers = [{ email:"demo@vantari.com.br", password:"demo1234", name:"Ana Costa", company:"Vantari", role:"admin" }];
-  let currentUser = null;
-  const listeners = [];
-  return {
-    auth: {
-      signInWithPassword: async ({ email, password }) => {
-        await new Promise(r=>setTimeout(r,900));
-        const user = fakeUsers.find(u=>u.email===email&&u.password===password);
-        if(!user) return { error:{ message:"Email ou senha incorretos" } };
-        currentUser = { id:"usr_demo", email:user.email, user_metadata:{ name:user.name, company:user.company, role:user.role } };
-        listeners.forEach(fn=>fn("SIGNED_IN",{ user:currentUser }));
-        return { data:{ user:currentUser }, error:null };
-      },
-      signUp: async ({ email, password, options }) => {
-        await new Promise(r=>setTimeout(r,900));
-        currentUser = { id:"usr_"+Date.now(), email, user_metadata:options?.data||{} };
-        listeners.forEach(fn=>fn("SIGNED_IN",{ user:currentUser }));
-        return { data:{ user:currentUser }, error:null };
-      },
-      resetPasswordForEmail: async () => { await new Promise(r=>setTimeout(r,700)); return { error:null }; },
-      signOut: async () => { currentUser=null; listeners.forEach(fn=>fn("SIGNED_OUT",null)); return { error:null }; },
-      getUser: async () => ({ data:{ user:currentUser }, error:null }),
-      onAuthStateChange: (fn) => {
-        listeners.push(fn);
-        return { data:{ subscription:{ unsubscribe:()=>{ const i=listeners.indexOf(fn); if(i>-1) listeners.splice(i,1); } } } };
-      }
-    }
-  };
-};
-const supabase = createSupabaseClient();
 
 // ─── CONTEXTS ──────────────────────────────────────────────────────────────────
 const AuthContext  = createContext(null);
@@ -205,7 +174,7 @@ const AuthProvider = ({ children }) => {
 
   const signIn         = async (email,password) => { const {data,error}=await supabase.auth.signInWithPassword({email,password}); if(error) throw error; return data; };
   const signUp         = async (email,password,meta) => { const {data,error}=await supabase.auth.signUp({email,password,options:{data:meta}}); if(error) throw error; return data; };
-  const resetPassword  = async (email) => { const {error}=await supabase.auth.resetPasswordForEmail({email}); if(error) throw error; };
+  const resetPassword  = async (email) => { const {error}=await supabase.auth.resetPasswordForEmail(email); if(error) throw error; };
   const signOut        = async () => { await supabase.auth.signOut(); toast?.add("Você saiu da sua conta.","info"); };
 
   return (
@@ -219,6 +188,7 @@ const AuthProvider = ({ children }) => {
 const LoginScreen = () => {
   const { signIn, signUp, resetPassword } = useContext(AuthContext);
   const toast = useContext(ToastContext);
+  const navigate = useNavigate();
   const [mode,setMode]         = useState("login");
   const [email,setEmail]       = useState("");
   const [password,setPassword] = useState("");
@@ -245,8 +215,8 @@ const LoginScreen = () => {
     if(!validate()) return;
     setLoading(true);
     try {
-      if(mode==="login"){ await signIn(email,password); toast.add("Bem-vindo de volta!","success"); }
-      else if(mode==="signup"){ await signUp(email,password,{name,company}); toast.add("Conta criada com sucesso!","success"); }
+      if(mode==="login"){ await signIn(email,password); toast.add("Bem-vindo de volta!","success"); navigate("/dashboard"); }
+      else if(mode==="signup"){ await signUp(email,password,{name,company}); toast.add("Conta criada com sucesso!","success"); navigate("/dashboard"); }
       else { await resetPassword(email); toast.add("Email de recuperação enviado!","success"); setMode("login"); }
     } catch(err){ toast.add(err.message||"Ocorreu um erro","error"); }
     finally{ setLoading(false); }
@@ -330,13 +300,6 @@ const LoginScreen = () => {
             </div>
           </div>
 
-          {mode==="login"&&(
-            <div style={{marginTop:32,padding:"14px 18px",background:C.blueL||"#e8f5fb",border:`0.5px solid ${C.blue}40`,borderRadius:10}}>
-              <p style={{margin:0,fontSize:12,fontWeight:600,color:C.blue,fontFamily:FONT}}>
-                <strong>Demo:</strong> demo@vantari.com.br / demo1234
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -619,13 +582,19 @@ const MainApp = ({ user }) => {
 // ─── ROOT ──────────────────────────────────────────────────────────────────────
 const AppContent = () => {
   const { user, loading } = useContext(AuthContext);
+  const navigate = useNavigate();
+
+  useEffect(()=>{
+    if(!loading && user) navigate("/dashboard", { replace:true });
+  },[user, loading, navigate]);
+
   if(loading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.faint,flexDirection:"column",gap:16}}>
       <img src="iconrs.png" alt="Vantari" style={{height:44,width:"auto",animation:"pulse 1.5s ease infinite"}}/>
       <span style={{fontFamily:FONT,fontWeight:600,color:C.muted,fontSize:14}}>Carregando...</span>
     </div>
   );
-  return user ? <MainApp user={user}/> : <LoginScreen/>;
+  return user ? null : <LoginScreen/>;
 };
 
 export default function VantariAuthSystem() {

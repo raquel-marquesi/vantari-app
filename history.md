@@ -136,12 +136,96 @@ Funcionalidades com dados reais:
 
 ---
 
-## Pendente para próximas sessões
+## 2026-05-13 — Correção de build Vite 8 + Supabase Auth real
 
-- [ ] `vantari-scoring-system.jsx` → conectar `lead_events`
-- [ ] `vantari-email-marketing.jsx` → conectar `campaigns` + `campaign_sends`
-- [ ] Criar `vantari-automation-flows.jsx` do zero (ou conectar workflow builder ao Supabase)
-- [ ] Supabase Auth real (substituir auth mock)
-- [ ] Segmentação dinâmica (`segments`)
-- [ ] Reports com dados reais
-- [ ] RLS com `auth.uid()` antes de produção
+### Problema: tela branca em produção
+- Vite 8 usa Rolldown (bundler Rust). No Linux (Vercel), o Rolldown externalizava `@supabase/supabase-js` por causa da dependência `ws` (Node.js built-in). O browser recebia um import não resolvido e quebrava.
+- Tentativa inicial: `rolldownOptions.onwarn` para suprimir o warning — **errada**, o pacote ainda era externalizado.
+- **Solução correta**: instalado `vite-plugin-node-polyfills@0.26.0` em `vite.config.js`. O plugin polyfilla os built-ins do Node para browser, forçando o bundle correto do Supabase.
+
+### Supabase Auth real
+- `ProtectedRoute` implementado em `App.jsx` usando `supabase.auth.getSession()` + `onAuthStateChange`
+- Todas as rotas protegidas; `/login` redireciona para `/dashboard` se já autenticado
+- Problema: senha de `raquel@vantari.com.br` desconhecida; magic link redirecionava para `localhost:3000` (Site URL estava errada no Supabase)
+- Corrigido Site URL para `https://vantari-app.vercel.app` em Supabase → Auth → URL Configuration
+- Senha redefinida via SQL: `UPDATE auth.users SET encrypted_password = crypt('...', gen_salt('bf')) WHERE email = '...'`
+- Dois usuários ativos: `raquel@vantari.com.br` e `catarina.quartucci@vantari.com.br`
+
+---
+
+## 2026-05-13 — Settings conectado ao Supabase + novos módulos
+
+### team_members
+- Criada tabela `team_members` no Supabase com RLS `using (true)`
+- `vantari-settings-admin.jsx` — aba Equipe reescrita: lista, convida e remove membros via Supabase (sem mock)
+
+### Edge Function de envio de email
+- Criada `supabase/functions/send-campaign/index.ts` (Deno)
+- Envia campanhas em lotes de 100 via API Resend
+- Suporte a `test_email` para envio de teste
+- Substitui variáveis `{{lead.name}}`, `{{lead.email}}`, `{{lead.company}}` no HTML
+- Status da campanha atualizado: `sending` → `sent` / `failed`
+- Registra em `campaign_sends` (delivered, opened, clicked, bounced)
+- **Pendente**: deploy via `supabase functions deploy send-campaign`
+
+### Módulo Segmentos (`/segments`)
+- Criado `src/vantari-segments.jsx` com estado vazio, pronto para dados reais
+- Rota `/segments` adicionada em `App.jsx`
+
+---
+
+## 2026-05-13 — Zeragem de dados fictícios
+
+### Objetivo
+Plataforma preparada para receber dados reais — todos os mocks removidos.
+
+### O que foi feito no banco
+- `TRUNCATE leads, lead_events, campaigns, campaign_sends, automation_flows, flow_runs, landing_pages, form_submissions, segments RESTART IDENTITY CASCADE`
+- Usuários de autenticação preservados (raquel + catarina)
+
+### O que foi feito no código (commit `9dcfa2d`)
+| Arquivo | Alteração |
+|---|---|
+| `vantari-analytics-dashboard.jsx` | Todos os arrays mock zerados; KPIs reais via Supabase (leads, MQL, SQL, campanhas enviadas) |
+| `vantari-ai-marketing.jsx` | `MOCK_LEADS` e `MOCK_GENERATIONS` removidos; leads reais via Supabase com estado vazio se nenhum |
+| `vantari-leads-module.jsx` | Quaisquer dados remanescentes limpos; já conectado ao Supabase |
+| `vantari-settings-admin.jsx` | `MOCK_AUDIT`, `MOCK_KEYS`, `MOCK_WEBHOOKS`, `MOCK_INVOICES` zerados; uso (`MOCK_USAGE`) com `used: 0` |
+
+---
+
+## 2026-05-13 — Redesign Visual Fases 1–5 (commit `d1e32cb`)
+
+### Fase 1 — Design System (todos os 12 módulos)
+- Novo objeto `T` com tokens atualizados: gradiente teal→green, sidebar bg gradiente, fontes Sora/Inter/JBMono, ink scale azulada
+- Mapeamento de cores: `#0079a9` → `#0D7491`, `#05b27b` → `#14A273`, `#5f5f64` → `#2E3D4B`, etc.
+- Sidebar redesenhada em todos os módulos: gradiente vertical, glow radial, ícone `/icone.png`, badge PRO, barra left-gradient no item ativo
+- Backgrounds tonais por contexto (teal para dashboard, amber para leads, violet para scoring, etc.)
+- `index.html`: fontes Google atualizadas (Sora + Inter + JetBrains Mono)
+- `index.css`: keyframe `pulse-live` global
+- `App.jsx`: cores corrigidas no `PageLoader` e `NotFound`
+
+### Fase 2 — Hero KPIs + Chart Interativo (dashboard)
+- `HeroKpiCard`: card com barra colorida 3px no topo, ícone 32px, valor Sora 28px, sub JBMono, sparkline SVG que sangra às bordas
+- `SparklineChart`: SVG com gradient area + stroke, `calc(100% + 32px)` width, `margin: 8px -16px -1px`
+- `TrendChipHero`: pill JBMono com ↗/↘
+- `OverviewSection`: busca 7 meses de `leads.created_at, stage` do Supabase; bucketa por mês; hero AreaChart com linha de meta dashed
+- `ChartTooltip`: tooltip rico (Sora título + JBMono valores)
+
+### Fase 3 — Anel de Campanhas + Feed ao Vivo (dashboard)
+- `CampaignRing`: 3 anéis SVG concêntricos (r=95/75/55), animação `stroke-dashoffset`, fetch de `campaign_sends` + `campaigns`
+- `RealtimeSection`: polling `lead_events` a cada 5s, `EVENT_META` com formatação por tipo, separadores dashed, header "AO VIVO · atualiza a cada 5s" em JBMono cyan, animação `slideIn`
+- Keyframes adicionados: `pulse`, `pulse-live`, `slideIn`
+
+### Fase 4 — Alertas com Severidade + Funil Horizontal (dashboard)
+- Alertas: fetch `dashboard_alerts` via Supabase; cards com barra esquerda 4px + pill pulsante (coral/amber/cyan) no top-right
+- Keyframes: `pulse-coral`, `pulse-amber`, `pulse-cyan2`
+- `FunnelSection` reescrita: fetch `leads.stage` do Supabase; `grid-template-columns: 120px 1fr 90px`; barras coloridas JBMono; chips de conversão ↘ entre linhas; mini KPI cards abaixo
+
+### Fase 5 — Replicação HeroKpiCard aos demais módulos
+- `vantari-leads-module.jsx`: 4 stat cards → HeroKpiCard + sparklines de `leads.created_at` (total, hot, mql, customer)
+- `vantari-scoring-system.jsx`: 4 StatCards → HeroKpiCard + sparklines de `leads.score` (total, média, SQL, hot)
+- `vantari-email-marketing.jsx`: KPI row adicionada do zero; fetch `campaigns` + `campaign_sends` (total, enviadas, abertura, ativas)
+- `vantari-landing-pages.jsx`: MetricCard strip → HeroKpiCard + sparklines de `form_submissions.created_at`
+- `vantari-segments.jsx`: flat stat tiles → HeroKpiCard + sparklines de `segments` + `leads` (total, leads, dinâmicos, estáticos)
+
+**Deploy:** commit `d1e32cb` → push → Vercel auto-deploy → https://vantari-app.vercel.app

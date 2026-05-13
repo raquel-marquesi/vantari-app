@@ -31,17 +31,18 @@ src/
   supabase.js                      # Cliente Supabase (createClient)
   main.jsx                         # Entry point
   index.css / App.css              # Estilos globais
-  vantari-auth-system.jsx          # /login
-  vantari-analytics-dashboard.jsx  # /dashboard
-  vantari-leads-module.jsx         # /leads  ← conectado ao Supabase
-  vantari-scoring-system.jsx       # /scoring
-  vantari-email-marketing.jsx      # /email
-  vantari-landing-pages.jsx        # /landing
-  vantari-ai-marketing.jsx         # /ai-marketing
+  vantari-auth-system.jsx          # /login         ← Supabase Auth
+  vantari-analytics-dashboard.jsx  # /dashboard     ← KPIs reais via Supabase + design Fases 2-4
+  vantari-leads-module.jsx         # /leads         ← Supabase (CRUD completo) + HeroKpiCard
+  vantari-scoring-system.jsx       # /scoring       ← HeroKpiCard + sparklines
+  vantari-email-marketing.jsx      # /email         ← HeroKpiCard + sparklines (campaigns/sends)
+  vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions)
+  vantari-ai-marketing.jsx         # /ai-marketing  ← leads reais via Supabase
   vantari-integrations-hub.jsx     # /integrations
-  vantari-settings-admin.jsx       # /settings
-  vantari-onboarding-wizard.jsx    # /onboarding
+  vantari-settings-admin.jsx       # /settings      ← team_members via Supabase
+  vantari-onboarding-wizard.jsx    # /onboarding    ← localStorage
   vantari-workflow-builder.jsx     # /workflow
+  vantari-segments.jsx             # /segments      ← HeroKpiCard + sparklines
   assets/                          # hero.png, react.svg, vite.svg
 ```
 
@@ -61,6 +62,7 @@ src/
 | `/settings` | Settings |
 | `/onboarding` | Onboarding (wizard 4 fases) |
 | `/workflow` | WorkflowBuilder |
+| `/segments` | Segments |
 
 ## Comandos úteis
 
@@ -72,25 +74,79 @@ git push             # dispara deploy automático no Vercel via GitHub
 vercel --prod --yes  # deploy direto pelo CLI (alternativo)
 ```
 
-## Design System
+## Design System — atual (pós Fase 1–5)
 
 ```js
 const T = {
-  bg:      "#f2f5f8",
-  surface: "#fff",
-  primary: "#0079a9",
-  accent:  "#05b27b",
-  text:    "#5f5f64",
-  muted:   "#888891",
-  danger:  "#e53935",
-  border:  "#e8edf2",
+  // Brand
+  teal:    "#0D7491",
+  blue:    "#0D7491",
+  green:   "#14A273",
+  brand2:  "#1F76BC",
+  deep:    "#0A3D4D",
+  gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
+
+  // Data accents
+  violet:  "#7C5CFF",
+  amber:   "#F59E0B",
+  orange:  "#F59E0B",
+  coral:   "#FF6B5E",
+  red:     "#FF6B5E",
+  cyan:    "#06B6D4",
+  rose:    "#EC4899",
+  purple:  "#7C5CFF",
+
+  // Surfaces & ink
+  bg:      "#F5F8FB",
+  surface: "#FFFFFF",
+  border:  "#E8EEF3",
+
+  // Ink scale
+  ink:     "#0E1A24",
+  text:    "#2E3D4B",
+  muted:   "#5A6B7A",
+  faint3:  "#8696A5",
+  faint:   "#F5F8FB",
+
+  // Fonts
+  font:    "'Inter', system-ui, sans-serif",
+  head:    "'Sora', system-ui, sans-serif",
+  mono:    "'JetBrains Mono', monospace",
 };
 ```
-- Fonte display/títulos: `Montserrat, sans-serif`
-- Fonte corpo: `'Aptos', 'Nunito Sans', sans-serif`
+
+- Fonte display/títulos: `Sora` (pesos 600–800)
+- Fonte corpo: `Inter` (pesos 400–700)
+- Fonte mono/código/IDs: `JetBrains Mono` (pesos 500–700)
 - Bordas: `borderRadius` entre 8–16px
-- Sombras leves: `0 1px 4px rgba(0,0,0,.05)`
+- Sombras: `0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)` (card), lift no hover
 - Estilos todos inline (sem arquivos CSS por página)
+
+## Componentes visuais implementados (Fases 2–5)
+
+Estes componentes estão definidos em cada arquivo que os usa (padrão do projeto: tudo self-contained):
+
+| Componente | Descrição | Arquivos |
+|---|---|---|
+| `HeroKpiCard` | Card com barra colorida 3px no topo, ícone, valor Sora 28px, sub JBMono, sparkline | dashboard, leads, scoring, email, landing, segments |
+| `SparklineChart` | SVG area+line que sangra às bordas do card (`calc(100% + 32px)`) | idem |
+| `TrendChipHero` | Pill JBMono com ↗/↘ e % colorido | idem |
+| `CampaignRing` | 3 anéis SVG concêntricos para métricas de campanha | dashboard |
+| `RealtimeSection` | Feed de eventos via polling Supabase 5s com `slideIn` | dashboard |
+| `FunnelSection` | Funil horizontal com barras coloridas e chips de conversão | dashboard |
+| Alertas severity | Cards com barra esquerda 4px + pill pulsante (pulse-coral/amber/cyan2) | dashboard |
+
+## Keyframes CSS (no `<style>` do dashboard e `index.css`)
+
+```css
+@keyframes pulse-live   /* dot cyan pulsante no live feed */
+@keyframes pulse        /* dot verde geral */
+@keyframes slideIn      /* entrada dos itens do feed */
+@keyframes pulse-coral  /* alerta crítico */
+@keyframes pulse-amber  /* alerta atenção */
+@keyframes pulse-cyan2  /* alerta info */
+```
 
 ## Regras de código
 
@@ -98,12 +154,14 @@ const T = {
 2. Dados reais via Supabase. Nunca retornar a dados mock após conectar.
 3. `useEffect` + `useCallback` para fetches com dependências de filtro.
 4. Loading state com `<Loader2>` do lucide-react + `@keyframes spin`.
-5. Error state com banner vermelho (`T.danger`) e ícone `<AlertCircle>`.
+5. Error state com banner vermelho (`T.coral`) e ícone `<AlertCircle>`.
 6. Formulários sem tag `<form>` — usar `onClick` nos botões.
 7. Busca e filtros por estágio aplicados diretamente na query Supabase (não no array local).
 8. Deduplicação de leads garantida pelo `UNIQUE` na coluna `email`.
 9. Navegação interna sempre via `useNavigate` do react-router-dom.
 10. Ícones Lucide: sempre checar com `typeof icon !== "string"` (são objetos `forwardRef`, não funções).
+11. Sparklines: buscar `created_at` + campo relevante dos últimos 7 meses, bucketar por mês em JS.
+12. Cores de severidade: coral = crítico, amber = atenção, cyan = info.
 
 ## Tabelas Supabase
 
@@ -118,6 +176,17 @@ const T = {
 | `landing_pages` | Páginas e formulários |
 | `form_submissions` | Submissões com UTM |
 | `segments` | Listas estáticas e dinâmicas |
+| `team_members` | Membros da equipe (usado em /settings → Equipe) |
+| `dashboard_alerts` | Alertas configurados (usado em /dashboard → Overview) |
+
+## Usuários de autenticação (Supabase Auth)
+
+| Email | Perfil |
+|---|---|
+| `raquel@vantari.com.br` | Admin (acesso total) |
+| `catarina.quartucci@vantari.com.br` | Membro |
+
+Senhas gerenciadas via Supabase Auth. Para redefinir: `UPDATE auth.users SET encrypted_password = crypt('NovaSenha', gen_salt('bf')) WHERE email = '...'`
 
 ## Score thresholds
 

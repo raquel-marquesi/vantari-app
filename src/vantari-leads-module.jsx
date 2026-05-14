@@ -379,7 +379,7 @@ function LeadPanel({ lead, onClose, onEdit, onDelete }) {
         {/* Score + Stage */}
         <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
           <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: score.bg, color: score.color, fontFamily: T.font }}>
-            ★ {lead.score || 0} — {score.label}
+            {lead.score || 0} pts — {score.label}
           </span>
           <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, background: stage.bg, color: stage.color, fontFamily: T.font }}>
             {lead.stage || "Visitor"}

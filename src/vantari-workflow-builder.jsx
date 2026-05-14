@@ -738,7 +738,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           style={{ background: "none", border: "none", outline: "none", fontSize: 13, fontWeight: 700, color: T.text, textAlign: "right", width: 200, fontFamily: T.head }}
         />
         <span style={{ fontSize: 11, color: saving ? T.amber : saved ? T.green : T.amber, fontFamily: T.font, minWidth: 64 }}>
-          {saving ? "Salvando…" : saved ? "✓ Salvo" : "Não salvo"}
+          {saving ? "Salvando…" : saved ? "Salvo" : "Não salvo"}
         </span>
         <button
           onClick={handleStatusToggle}

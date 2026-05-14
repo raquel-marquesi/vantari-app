@@ -237,7 +237,7 @@ const FooterNav = ({ isFirst, isLast, phase, subStep, onPrev, onNext, onSave }) 
       <div style={{display:"flex",gap:8}}>
         {!isFirst && <Btn variant="ghost" icon={ChevronLeft} onClick={onPrev} size="sm">Anterior</Btn>}
         {isLast
-          ? <Btn variant="success" onClick={onNext} size="sm">Concluir Onboarding ✓</Btn>
+          ? <Btn variant="success" onClick={onNext} size="sm">Concluir Onboarding</Btn>
           : <Btn variant="primary" icon={ChevronRight} onClick={onNext} size="sm">Próximo</Btn>
         }
       </div>
@@ -442,7 +442,7 @@ const Step_Dominio = ({ data, setField, errors, verifyingDns, setVerifyingDns })
     <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,fontFamily:T.font,
       background:s==="verified"?`${T.green}14`:s==="pending"?T.faint:`${T.coral}14`,
       color:s==="verified"?T.green:s==="pending"?T.muted:T.coral}}>
-      {s==="verified"?"✓ Verificado":s==="pending"?"Pendente":"Erro"}
+      {s==="verified"?"Verificado":s==="pending"?"Pendente":"Erro"}
     </span>
   );
 

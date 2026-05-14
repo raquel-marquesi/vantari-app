@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
-import { BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings } from "lucide-react";
+import {
+  BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings,
+  Building2, CreditCard, ClipboardList, Headphones, Zap, Sparkles,
+  Save, Send, Key, Package, RefreshCw, Download, FileText, Plus,
+  FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
+  Loader2, AlertTriangle, ArrowUp,
+} from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
    DATABASE SCHEMA (Supabase-compatible)
@@ -134,10 +140,10 @@ const MOCK_MEMBERS = [
 const MOCK_AUDIT = [];
 
 const MOCK_USAGE = {
-  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     icon:"👥", color:T.teal   },
-  emails_sent:       { used:0, limit:25000,  label:"Emails Enviados",       icon:"📧", color:T.teal   },
-  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       icon:"⚡", color:T.violet },
-  contacts_enriched: { used:0, limit:1000,   label:"Contatos Enriquecidos", icon:"✨", color:T.green  },
+  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     Icon:Users,    color:T.teal   },
+  emails_sent:       { used:0, limit:25000,  label:"Emails Enviados",       Icon:Mail,     color:T.teal   },
+  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       Icon:Zap,      color:T.violet },
+  contacts_enriched: { used:0, limit:1000,   label:"Contatos Enriquecidos", Icon:Sparkles, color:T.green  },
 };
 
 const MOCK_KEYS = [];
@@ -147,13 +153,13 @@ const MOCK_WEBHOOKS = [];
 const MOCK_INVOICES = [];
 
 const TABS = [
-  { id:"workspace", icon:"🏢", label:"Workspace"  },
-  { id:"team",      icon:"👥", label:"Equipe"      },
-  { id:"email",     icon:"📧", label:"Email"       },
-  { id:"billing",   icon:"💳", label:"Billing"     },
-  { id:"advanced",  icon:"⚙️", label:"Avançado"   },
-  { id:"audit",     icon:"📋", label:"Audit Log"   },
-  { id:"support",   icon:"🎧", label:"Suporte"     },
+  { id:"workspace", Icon:Building2,     label:"Workspace"  },
+  { id:"team",      Icon:Users,         label:"Equipe"      },
+  { id:"email",     Icon:Mail,          label:"Email"       },
+  { id:"billing",   Icon:CreditCard,    label:"Billing"     },
+  { id:"advanced",  Icon:Settings,      label:"Avançado"   },
+  { id:"audit",     Icon:ClipboardList, label:"Audit Log"   },
+  { id:"support",   Icon:Headphones,    label:"Suporte"     },
 ];
 
 const PERMISSIONS = { campaigns:"Campanhas", leads:"Leads", integrations:"Integrações", analytics:"Analytics", billing:"Billing", settings:"Configurações" };
@@ -238,18 +244,19 @@ const Toggle = ({checked,onChange,label}) => (
 const UsageBar = ({data}) => {
   const p=pct(data.used,data.limit);
   const barColor=p>=95?T.red:p>=80?T.orange:data.color;
+  const IconComp = data.Icon;
   return (
     <div style={{padding:"14px 0",borderBottom:`1px solid ${T.border}`}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <span style={{fontSize:18}}>{data.icon}</span>
+          <IconComp size={18} color={data.color}/>
           <div>
             <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{data.label}</div>
             <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>{fmt(data.used)} / {fmt(data.limit)}</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {p>=80&&<Badge color={p>=95?T.red:T.orange} bg={p>=95?"#fee2e2":"#fef3c7"}>{p>=95?"⚠️ Crítico":"⚠️ Atenção"}</Badge>}
+          {p>=80&&<Badge color={p>=95?T.red:T.orange} bg={p>=95?"#fee2e2":"#fef3c7"}>{p>=95?"Crítico":"Atenção"}</Badge>}
           <span style={{fontSize:13,fontWeight:700,color:barColor,fontFamily:T.font}}>{p}%</span>
         </div>
       </div>
@@ -282,7 +289,10 @@ const OnboardingCard = () => {
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
         <div style={{flex:1}}>
           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-            <span style={{fontSize:20}}>{isComplete ? "✅" : "🚀"}</span>
+            {isComplete
+              ? <CheckCircle size={20} color={T.green}/>
+              : <Settings size={20} color={T.teal}/>
+            }
             <span style={{fontFamily:T.head,fontWeight:700,fontSize:15,color:T.ink}}>
               {isComplete ? "Onboarding concluído!" : "Configure sua conta"}
             </span>
@@ -304,7 +314,7 @@ const OnboardingCard = () => {
               const ok = phaseDone === p.fields.length;
               return (
                 <span key={p.key} style={{fontSize:12,color: ok ? T.green : T.muted,fontFamily:T.font}}>
-                  {ok ? "✓" : "○"} {p.label}
+                  {ok ? "+" : "·"} {p.label}
                 </span>
               );
             })}
@@ -339,9 +349,9 @@ const WorkspaceTab = ({toast}) => {
         </div>
         <FL>Logotipo</FL>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:56,height:56,borderRadius:12,background:T.faint,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:22}}>🏢</div>
+          <div style={{width:56,height:56,borderRadius:12,background:T.faint,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Building2 size={22} color={T.muted}/></div>
           <div>
-            <Btn variant="outline" size="sm" onClick={()=>fileRef.current?.click()} icon="📁">Escolher arquivo</Btn>
+            <Btn variant="outline" size="sm" onClick={()=>fileRef.current?.click()} icon={<FolderOpen size={12}/>}>Escolher arquivo</Btn>
             <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}/>
             <div style={{fontSize:11,color:T.muted,marginTop:4,fontFamily:T.font}}>PNG, SVG ou JPG — máx. 2 MB</div>
           </div>
@@ -372,14 +382,14 @@ const WorkspaceTab = ({toast}) => {
       <Card>
         <SectionTitle sub="Fuso horário e formatação regional">Região e Idioma</SectionTitle>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-          <Sel label="Idioma"          value={f.language}   onChange={e=>u("language",e.target.value)}   options={[{value:"pt-BR",label:"🇧🇷 Português (Brasil)"},{value:"en-US",label:"🇺🇸 English (US)"},{value:"es-ES",label:"🇪🇸 Español"}]}/>
+          <Sel label="Idioma"          value={f.language}   onChange={e=>u("language",e.target.value)}   options={[{value:"pt-BR",label:"Português (Brasil)"},{value:"en-US",label:"English (US)"},{value:"es-ES",label:"Español"}]}/>
           <Sel label="Fuso Horário"    value={f.timezone}   onChange={e=>u("timezone",e.target.value)}   options={[{value:"America/Sao_Paulo",label:"Brasília (UTC-3)"},{value:"America/Manaus",label:"Manaus (UTC-4)"},{value:"America/Recife",label:"Recife (UTC-3)"}]}/>
           <Sel label="Formato de Data" value={f.dateFormat} onChange={e=>u("dateFormat",e.target.value)} options={[{value:"DD/MM/YYYY",label:"DD/MM/AAAA"},{value:"MM/DD/YYYY",label:"MM/DD/AAAA"},{value:"YYYY-MM-DD",label:"AAAA-MM-DD"}]}/>
         </div>
       </Card>
 
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={save} disabled={saving} size="md" icon={saving?"⏳":"💾"}>{saving?"Salvando...":"Salvar Configurações"}</Btn>
+        <Btn onClick={save} disabled={saving} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Configurações"}</Btn>
       </div>
     </div>
   );
@@ -438,7 +448,7 @@ const TeamTab = ({toast}) => {
         <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
           <div style={{flex:1}}><Input label="Email" value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="usuario@empresa.com.br"/></div>
           <Sel label="Papel" value={invRole} onChange={e=>setInvRole(e.target.value)} options={[{value:"admin",label:"Admin"},{value:"manager",label:"Gerente"},{value:"user",label:"Usuário"}]}/>
-          <Btn onClick={invite} disabled={inviting} icon={inviting?"⏳":"✉️"} size="md">{inviting?"Enviando...":"Convidar"}</Btn>
+          <Btn onClick={invite} disabled={inviting} icon={inviting?<Loader2 size={12}/>:<Send size={12}/>} size="md">{inviting?"Enviando...":"Convidar"}</Btn>
         </div>
       </Card>
 
@@ -495,7 +505,7 @@ const TeamTab = ({toast}) => {
                 <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>Permissões — {permTarget.name}</div>
                 <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Controle granular por recurso</div>
               </div>
-              <button onClick={()=>setPermTarget(null)} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:T.muted}}>✕</button>
+              <button onClick={()=>setPermTarget(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><Plus size={16} style={{transform:"rotate(45deg)"}}/></button>
             </div>
             <div style={{padding:22}}>
               {Object.entries(PERMISSIONS).map(([res,label])=>(
@@ -547,7 +557,7 @@ const EmailTab = ({toast}) => {
             <Input label="Porta"     value={smtp.port} onChange={e=>su("port",e.target.value)}/>
             <Input label="Usuário"   value={smtp.user} onChange={e=>su("user",e.target.value)} placeholder="usuario@empresa.com.br"/>
             <Input label="Senha"     value={smtp.pass} onChange={e=>su("pass",e.target.value)} type="password"/>
-            <Btn variant="outline" onClick={async()=>{setTesting(true);await new Promise(r=>setTimeout(r,1100));setTesting(false);toast("✅ SMTP conectado!","success");}} disabled={testing} icon={testing?"⏳":"🔌"}>{testing?"Testando...":"Testar Conexão"}</Btn>
+            <Btn variant="outline" onClick={async()=>{setTesting(true);await new Promise(r=>setTimeout(r,1100));setTesting(false);toast("SMTP conectado!","success");}} disabled={testing} icon={testing?<Loader2 size={12}/>:<Plug size={12}/>}>{testing?"Testando...":"Testar Conexão"}</Btn>
           </div>
         )}
       </Card>
@@ -565,7 +575,7 @@ const EmailTab = ({toast}) => {
                 <div style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font,marginBottom:2}}>{r.label}</div>
                 <code style={{fontSize:11,color:T.text,fontFamily:"monospace",wordBreak:"break-all"}}>{r.value}</code>
               </div>
-              <Badge color={r.status==="verified"?T.green:T.amber} bg={r.status==="verified"?`${T.green}14`:`${T.amber}18`}>{r.status==="verified"?"✓ Verificado":"⏳ Pendente"}</Badge>
+              <Badge color={r.status==="verified"?T.green:T.amber} bg={r.status==="verified"?`${T.green}14`:`${T.amber}18`}>{r.status==="verified"?"Verificado":"Pendente"}</Badge>
             </div>
           ))}
         </div>
@@ -580,7 +590,7 @@ const EmailTab = ({toast}) => {
       </Card>
 
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={async()=>{setSaving(true);await new Promise(r=>setTimeout(r,800));setSaving(false);toast("Email Config salvo!","success");}} disabled={saving} size="md" icon={saving?"⏳":"💾"}>{saving?"Salvando...":"Salvar Email Config"}</Btn>
+        <Btn onClick={async()=>{setSaving(true);await new Promise(r=>setTimeout(r,800));setSaving(false);toast("Email Config salvo!","success");}} disabled={saving} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Email Config"}</Btn>
       </div>
     </div>
   );
@@ -604,8 +614,8 @@ const BillingTab = ({toast}) => {
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="md" icon="⬆️">Fazer Upgrade</Btn>
-          <Btn variant="outline"   size="md" icon="💳">Atualizar Cartão</Btn>
+          <Btn variant="secondary" size="md" icon={<ArrowUp size={12}/>}>Fazer Upgrade</Btn>
+          <Btn variant="outline"   size="md" icon={<CreditCard size={12}/>}>Atualizar Cartão</Btn>
           <Btn variant="danger"    size="sm">Cancelar Plano</Btn>
         </div>
       </Card>
@@ -618,7 +628,7 @@ const BillingTab = ({toast}) => {
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>Histórico de Faturas</div>
-          <Btn variant="outline" size="sm" icon="📥">Exportar Todas</Btn>
+          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Todas</Btn>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{background:T.faint}}>
@@ -631,9 +641,9 @@ const BillingTab = ({toast}) => {
               <tr key={inv.id} style={{borderTop:`1px solid ${T.border}`}}>
                 <td style={{padding:"13px 18px",fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{inv.period}</td>
                 <td style={{padding:"13px 18px",fontSize:13,color:T.text,fontFamily:T.font}}>{inv.amount}</td>
-                <td style={{padding:"13px 18px"}}><Badge color={T.green} bg="#ecfdf5">✓ Pago</Badge></td>
+                <td style={{padding:"13px 18px"}}><Badge color={T.green} bg="#ecfdf5">Pago</Badge></td>
                 <td style={{padding:"13px 18px",fontSize:13,color:T.muted,fontFamily:T.font}}>{inv.date}</td>
-                <td style={{padding:"13px 18px"}}><Btn variant="outline" size="xs" onClick={()=>toast("Fatura baixada!","success")} icon="📄">PDF</Btn></td>
+                <td style={{padding:"13px 18px"}}><Btn variant="outline" size="xs" onClick={()=>toast("Fatura baixada!","success")} icon={<FileText size={10}/>}>PDF</Btn></td>
               </tr>
             ))}
           </tbody>
@@ -663,7 +673,7 @@ const AdvancedTab = ({toast}) => {
   };
 
   const tScope=s=>setNk(k=>({...k,scopes:k.scopes.includes(s)?k.scopes.filter(x=>x!==s):[...k.scopes,s]}));
-  const flagLabels={ai_assistant:"🤖 Assistente IA (beta)",beta_scoring:"⭐ Novo Scoring Engine",dark_mode:"🌙 Dark Mode",bulk_import:"📥 Importação em Massa"};
+  const flagLabels={ai_assistant:"Assistente IA (beta)",beta_scoring:"Novo Scoring Engine",dark_mode:"Dark Mode",bulk_import:"Importação em Massa"};
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -672,7 +682,7 @@ const AdvancedTab = ({toast}) => {
         <SectionTitle sub="Autorize integrações externas com escopos granulares">Chaves de API</SectionTitle>
         <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"flex-end"}}>
           <div style={{flex:1}}><Input label="Nome da Chave" value={nk.name} onChange={e=>setNk(k=>({...k,name:e.target.value}))} placeholder="Ex: Integração HubSpot"/></div>
-          <Btn onClick={createKey} disabled={creating} size="md" icon={creating?"⏳":"🔑"}>{creating?"Gerando...":"Nova Chave"}</Btn>
+          <Btn onClick={createKey} disabled={creating} size="md" icon={creating?<Loader2 size={12}/>:<Key size={12}/>}>{creating?"Gerando...":"Nova Chave"}</Btn>
         </div>
         <FL>Escopos</FL>
         <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
@@ -680,7 +690,7 @@ const AdvancedTab = ({toast}) => {
         </div>
         {createdKey&&(
           <div style={{padding:14,background:"#ecfdf5",border:`1px solid #6ee7b7`,borderRadius:10,marginBottom:12}}>
-            <div style={{fontSize:12,fontWeight:700,color:T.green,marginBottom:6,fontFamily:T.font}}>🔑 Copie agora — não será exibida novamente</div>
+            <div style={{fontSize:12,fontWeight:700,color:T.green,marginBottom:6,fontFamily:T.font,display:"flex",alignItems:"center",gap:6}}><Key size={12}/>Copie agora — não será exibida novamente</div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               <code style={{fontSize:11,fontFamily:"monospace",color:T.text,flex:1,wordBreak:"break-all"}}>{createdKey}</code>
               <Btn variant="success" size="xs" onClick={()=>{navigator.clipboard?.writeText(createdKey);toast("Copiado!","success");setCreatedKey(null);}}>Copiar</Btn>
@@ -713,7 +723,7 @@ const AdvancedTab = ({toast}) => {
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font,display:"flex",alignItems:"center",gap:8}}>
-                    {w.name}{w.failCount>0&&<Badge color={T.red} bg="#fee2e2">⚠️ {w.failCount} falhas</Badge>}
+                    {w.name}{w.failCount>0&&<Badge color={T.red} bg="#fee2e2">{w.failCount} falhas</Badge>}
                   </div>
                   <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{w.url}</code>
                   <div style={{display:"flex",gap:4,marginTop:6}}>{w.events.map(e=><Badge key={e} color={T.teal}>{e}</Badge>)}</div>
@@ -723,7 +733,7 @@ const AdvancedTab = ({toast}) => {
               <div style={{fontSize:11,color:T.muted,marginTop:6,fontFamily:T.font}}>Último disparo: {w.lastTriggered}</div>
             </div>
           ))}
-          <Btn variant="outline" size="sm" icon="➕">Adicionar Webhook</Btn>
+          <Btn variant="outline" size="sm" icon={<Plus size={12}/>}>Adicionar Webhook</Btn>
         </div>
       </Card>
 
@@ -734,8 +744,8 @@ const AdvancedTab = ({toast}) => {
           <Toggle checked={lgpd} onChange={setLgpd} label="Modo LGPD ativo — anonimiza dados ao excluir"/>
           <Sel label="Retenção de Dados" value={retention} onChange={e=>setRetention(e.target.value)} options={[{value:"90",label:"90 dias"},{value:"180",label:"180 dias"},{value:"365",label:"1 ano"},{value:"730",label:"2 anos"},{value:"never",label:"Indefinido"}]}/>
           <div style={{display:"flex",gap:8}}>
-            <Btn variant="outline" size="sm" icon="📦" onClick={()=>toast("Backup iniciado!","success")}>Exportar Backup</Btn>
-            <Btn variant="outline" size="sm" icon="🔄" onClick={()=>toast("Restauração iniciada","success")}>Restaurar Config</Btn>
+            <Btn variant="outline" size="sm" icon={<Package size={12}/>} onClick={()=>toast("Backup iniciado!","success")}>Exportar Backup</Btn>
+            <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={()=>toast("Restauração iniciada","success")}>Restaurar Config</Btn>
           </div>
         </div>
       </Card>
@@ -779,7 +789,7 @@ const AuditTab = () => {
           </div>
         ))}
         <div style={{marginTop:14,textAlign:"center"}}>
-          <Btn variant="outline" size="sm" icon="📥">Exportar Logs CSV</Btn>
+          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Logs CSV</Btn>
         </div>
       </Card>
     </div>
@@ -799,9 +809,9 @@ const SupportTab = ({toast}) => {
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-        {[{icon:"📚",title:"Documentação",desc:"Guides e tutoriais completos",action:"Acessar Docs"},{icon:"🎥",title:"Vídeo Tutoriais",desc:"Aprenda no YouTube",action:"Ver Vídeos"},{icon:"💬",title:"Comunidade",desc:"Tire dúvidas com outros usuários",action:"Acessar"}].map(r=>(
+        {[{Icon:BookOpen,title:"Documentação",desc:"Guides e tutoriais completos",action:"Acessar Docs"},{Icon:Play,title:"Vídeo Tutoriais",desc:"Aprenda no YouTube",action:"Ver Vídeos"},{Icon:MessageSquare,title:"Comunidade",desc:"Tire dúvidas com outros usuários",action:"Acessar"}].map(r=>(
           <Card key={r.title} style={{textAlign:"center",cursor:"pointer"}}>
-            <div style={{fontSize:28,marginBottom:8}}>{r.icon}</div>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><r.Icon size={28} color={T.teal}/></div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font}}>{r.title}</div>
             <div style={{fontSize:12,color:T.muted,fontFamily:T.font,margin:"4px 0 12px"}}>{r.desc}</div>
             <Btn variant="outline" size="sm">{r.action}</Btn>
@@ -814,7 +824,7 @@ const SupportTab = ({toast}) => {
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12}}>
             <Input label="Assunto" value={ticket.subject} onChange={e=>setTicket(t=>({...t,subject:e.target.value}))} placeholder="Descreva o problema brevemente"/>
-            <Sel label="Prioridade" value={ticket.priority} onChange={e=>setTicket(t=>({...t,priority:e.target.value}))} options={[{value:"low",label:"🟢 Baixa"},{value:"normal",label:"🟡 Normal"},{value:"high",label:"🔴 Alta"}]}/>
+            <Sel label="Prioridade" value={ticket.priority} onChange={e=>setTicket(t=>({...t,priority:e.target.value}))} options={[{value:"low",label:"Baixa"},{value:"normal",label:"Normal"},{value:"high",label:"Alta"}]}/>
           </div>
           <div>
             <FL>Descrição</FL>
@@ -823,7 +833,7 @@ const SupportTab = ({toast}) => {
               onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
           <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <Btn onClick={async()=>{if(!ticket.subject||!ticket.body)return toast("Preencha assunto e descrição","error");setSubmitting(true);await new Promise(r=>setTimeout(r,900));setTicket({subject:"",body:"",priority:"normal"});setSubmitting(false);toast("Ticket enviado! Resposta em até 24h.","success");}} disabled={submitting} size="md" icon={submitting?"⏳":"📨"}>{submitting?"Enviando...":"Enviar Ticket"}</Btn>
+            <Btn onClick={async()=>{if(!ticket.subject||!ticket.body)return toast("Preencha assunto e descrição","error");setSubmitting(true);await new Promise(r=>setTimeout(r,900));setTicket({subject:"",body:"",priority:"normal"});setSubmitting(false);toast("Ticket enviado! Resposta em até 24h.","success");}} disabled={submitting} size="md" icon={submitting?<Loader2 size={12}/>:<Send size={12}/>}>{submitting?"Enviando...":"Enviar Ticket"}</Btn>
           </div>
         </div>
       </Card>
@@ -928,7 +938,7 @@ export default function VantariSettingsAdmin() {
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:60}}>
           <div style={{display:"flex",alignItems:"center",gap:16}}>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{width:32,height:32,borderRadius:8,background:T.gradient,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16}}>⚙️</div>
+              <div style={{width:32,height:32,borderRadius:8,background:T.gradient,display:"flex",alignItems:"center",justifyContent:"center"}}><Settings size={16} color="#fff"/></div>
               <div>
                 <div style={{fontSize:14,fontWeight:800,color:T.ink,letterSpacing:"-0.02em",fontFamily:T.head}}>Configurações</div>
                 <div style={{fontSize:10,color:T.muted,fontWeight:500,fontFamily:T.font}}>Vantari Platform</div>
@@ -939,14 +949,14 @@ export default function VantariSettingsAdmin() {
               {TABS.map(t=>(
                 <button key={t.id} onClick={()=>setActiveTab(t.id)}
                   style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?T.teal:T.muted,fontFamily:T.font,borderBottom:activeTab===t.id?`2px solid ${T.teal}`:"2px solid transparent",transition:"all 0.15s"}}>
-                  <span>{t.icon}</span>{t.label}
+                  <t.Icon size={14}/>{t.label}
                 </button>
               ))}
             </div>
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <Badge color={T.green} bg="#ecfdf5">● Online</Badge>
-            <Btn variant="secondary" size="sm" icon="❓">Ajuda</Btn>
+            <Btn variant="secondary" size="sm" icon={<HelpCircle size={12}/>}>Ajuda</Btn>
           </div>
         </div>
       </div>

@@ -1122,11 +1122,11 @@ const SendModal = ({ campaign, onClose, onDone }) => {
                   {[
                     ["Assunto",   campaign.subject || "—"],
                     ["Remetente", campaign.fromEmail || campaign.sender || "—"],
-                    ["Conteúdo",  campaign.htmlContent ? "HTML salvo" : "⚠ Nenhum HTML"],
+                    ["Conteúdo",  campaign.htmlContent ? "HTML salvo" : "! Nenhum HTML"],
                   ].map(([k,v])=>(
                     <div key={k}>
                       <div style={{fontFamily:T.head,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:2}}>{k}</div>
-                      <div style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:v.startsWith("⚠")?T.amber:T.ink}}>{v}</div>
+                      <div style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:v.startsWith("!")?T.amber:T.ink}}>{v}</div>
                     </div>
                   ))}
                 </div>

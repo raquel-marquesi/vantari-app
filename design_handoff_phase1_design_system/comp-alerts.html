@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,sans-serif;background:white;padding:20px;display:grid;gap:12px}
+.al{background:white;border-radius:12px;padding:14px 18px;display:grid;grid-template-columns:40px 1fr;gap:14px;position:relative;border:1px solid #e8eef3;overflow:hidden}
+.al::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c)}
+.ic{width:40px;height:40px;background:var(--cb);color:var(--c);border-radius:10px;display:grid;place-items:center}
+.ic svg{width:18px;height:18px}
+.tt{font-size:14px;font-weight:700;color:#0e1a24;font-family:Sora;margin-bottom:4px}
+.co{font-size:11.5px;color:#5a6b7a}
+.co code{font-family:'JetBrains Mono';background:var(--cb);color:var(--c);padding:1px 6px;border-radius:4px;font-weight:600;font-size:11px}
+.mt{margin-top:6px;font-size:11px;color:var(--c);font-family:'JetBrains Mono';font-weight:600}
+.pl{position:absolute;right:14px;top:14px;display:inline-flex;align-items:center;gap:5px;font-size:10px;color:var(--c);font-family:'JetBrains Mono';font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.pl i{width:7px;height:7px;border-radius:50%;background:var(--c);animation:p 1.5s infinite}
+@keyframes p{0%,100%{box-shadow:0 0 0 0 rgba(255,107,94,.6)}50%{box-shadow:0 0 0 6px rgba(255,107,94,0)}}
+</style></head><body>
+
+<div class="al" style="--c:#ff6b5e;--cb:#ff6b5e14">
+  <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+  <div><div class="tt">Lead SQL detectado</div><div class="co">Condição: <code>score &gt;= 85</code></div><div class="mt">Último disparo · 5min · 47 ocorrências</div></div>
+  <span class="pl"><i></i>Crítico</span>
+</div>
+
+<div class="al" style="--c:#f59e0b;--cb:#f59e0b14">
+  <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+  <div><div class="tt">Campanha · baixa abertura</div><div class="co">Condição: <code>abertura &lt; 15%</code></div><div class="mt">Último disparo · 2h · 8 ocorrências</div></div>
+  <span class="pl"><i></i>Atenção</span>
+</div>
+
+<div class="al" style="--c:#06b6d4;--cb:#06b6d414">
+  <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>
+  <div><div class="tt">Lead inativo há 30 dias</div><div class="co">Condição: <code>last_interaction &gt; 30d</code></div><div class="mt">Último disparo · 1d · 124 ocorrências</div></div>
+  <span class="pl"><i></i>Info</span>
+</div>
+
+</body></html>

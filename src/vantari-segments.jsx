@@ -92,25 +92,48 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
 
 /* ─── filter fields and operators ─── */
 const FIELDS = [
-  { value: "score",        label: "Score",       type: "number"  },
-  { value: "stage",        label: "Estágio",     type: "enum",   opts: ["visitor","lead","mql","sql","opportunity","customer"] },
-  { value: "source",       label: "Fonte",       type: "text"    },
-  { value: "email",        label: "Email",       type: "text"    },
-  { value: "company",      label: "Empresa",     type: "text"    },
-  { value: "tags",         label: "Tags",        type: "text"    },
-  { value: "unsubscribed", label: "Descadastrado", type: "bool"  },
+  { value: "score",        label: "Score",         type: "number" },
+  { value: "stage",        label: "Estágio",       type: "enum",   opts: ["visitor","lead","mql","sql","opportunity","customer"] },
+  { value: "source",       label: "Fonte",         type: "text"   },
+  { value: "email",        label: "Email",         type: "text"   },
+  { value: "company",      label: "Empresa",       type: "text"   },
+  { value: "tags",         label: "Tags",          type: "text"   },
+  { value: "unsubscribed", label: "Descadastrado", type: "bool"   },
+  { value: "visited_page", label: "Visitou página",type: "page"   },  // ← novo (Lead Tracking)
 ];
 const OPS = {
   number: [{ v: "gt", l: ">" }, { v: "gte", l: "≥" }, { v: "lt", l: "<" }, { v: "lte", l: "≤" }, { v: "eq", l: "=" }],
   text:   [{ v: "eq", l: "=" }, { v: "ilike_c", l: "contém" }, { v: "neq", l: "≠" }],
   enum:   [{ v: "eq", l: "=" }, { v: "neq", l: "≠" }],
   bool:   [{ v: "eq", l: "=" }],
+  page:   [{ v: "visited", l: "visitou" }, { v: "not_visited", l: "não visitou" }],
 };
+
+/* ─── resolve lead IDs from "visited_page" filters (pre-query) ─── */
+async function resolveVisitedLeadIds(filters) {
+  const pageFilters = filters.filter(r => r.field === "visited_page" && r.value);
+  if (pageFilters.length === 0) return { mode: "none", ids: null };
+
+  // Recupera os lead_ids que tiveram page_visits para cada página
+  const include = [];   // visited
+  const exclude = [];   // not_visited
+  for (const r of pageFilters) {
+    const { data } = await supabase
+      .from("page_visits")
+      .select("lead_id")
+      .eq("tracked_page_id", r.value)
+      .not("lead_id", "is", null);
+    const ids = Array.from(new Set((data || []).map(x => x.lead_id)));
+    if (r.op === "not_visited") exclude.push(...ids); else include.push(...ids);
+  }
+  return { mode: "ids", include: include.length ? Array.from(new Set(include)) : null, exclude: Array.from(new Set(exclude)) };
+}
 
 /* ─── apply filters to a Supabase query ─── */
 function applyFilters(query, filters) {
   for (const rule of filters) {
     if (!rule.field || !rule.op || rule.value === "") continue;
+    if (rule.field === "visited_page") continue; // tratado em resolveVisitedLeadIds
     const field = FIELDS.find(f => f.value === rule.field);
     if (!field) continue;
     const val = field.type === "number" ? Number(rule.value)
@@ -132,10 +155,13 @@ async function computeLeads(filters) {
   if (!filters || filters.length === 0) {
     return await supabase.from("leads").select("id, name, email, score, stage").limit(200);
   }
-  return await applyFilters(
-    supabase.from("leads").select("id, name, email, score, stage"),
-    filters
-  ).limit(200);
+  const { mode, include, exclude } = await resolveVisitedLeadIds(filters);
+  let q = applyFilters(supabase.from("leads").select("id, name, email, score, stage"), filters);
+  if (mode === "ids") {
+    if (include) q = q.in("id", include.length ? include : ["00000000-0000-0000-0000-000000000000"]);
+    if (exclude && exclude.length) q = q.not("id", "in", `(${exclude.join(",")})`);
+  }
+  return await q.limit(200);
 }
 
 /* ─── score badge ─── */
@@ -174,13 +200,20 @@ function RuleRow({ rule, onChange, onRemove }) {
   const field = FIELDS.find(f => f.value === rule.field) || FIELDS[0];
   const ops   = OPS[field.type] || OPS.text;
   const inp = { fontFamily: T.font, fontSize: 13, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 10px", outline: "none", background: "#fff", color: T.text };
+  const [pages, setPages] = useState([]);
+
+  useEffect(() => {
+    if (field.type !== "page") return;
+    supabase.from("tracked_pages").select("id, title, url").eq("active", true).order("title", { ascending: true })
+      .then(({ data }) => setPages(data || []));
+  }, [field.type]);
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-      <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value, op: OPS[(FIELDS.find(f=>f.value===e.target.value)||FIELDS[0]).type][0].v, value: "" })} style={{ ...inp, flex: "0 0 130px" }}>
+      <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value, op: OPS[(FIELDS.find(f=>f.value===e.target.value)||FIELDS[0]).type][0].v, value: "" })} style={{ ...inp, flex: "0 0 150px" }}>
         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select>
-      <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ ...inp, flex: "0 0 90px" }}>
+      <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ ...inp, flex: "0 0 110px" }}>
         {ops.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
       </select>
       {field.type === "enum" ? (
@@ -192,6 +225,11 @@ function RuleRow({ rule, onChange, onRemove }) {
         <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ ...inp, flex: 1 }}>
           <option value="false">Não</option>
           <option value="true">Sim</option>
+        </select>
+      ) : field.type === "page" ? (
+        <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ ...inp, flex: 1 }}>
+          <option value="">— selecionar página —</option>
+          {pages.map(p => <option key={p.id} value={p.id}>{p.title || p.url}</option>)}
         </select>
       ) : (
         <input value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder={field.type === "number" ? "0" : "valor..."} style={{ ...inp, flex: 1 }} type={field.type === "number" ? "number" : "text"} />

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Vantari Next — Proposta de Redesign</title>
+<meta name="viewport" content="width=1440">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="proposal.css">
+</head>
+<body>
+
+<!-- ─────────── COVER ─────────── -->
+<section class="cover">
+  <div class="cover-bg">
+    <div class="cover-blob blob-1"></div>
+    <div class="cover-blob blob-2"></div>
+    <svg class="cover-grid" viewBox="0 0 1440 900" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <pattern id="dot" width="40" height="40" patternUnits="userSpaceOnUse">
+          <circle cx="2" cy="2" r="1" fill="#0d749120"></circle>
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#dot)"></rect>
+    </svg>
+  </div>
+
+  <header class="cover-head">
+    <img src="assets/logo-horizontal.png" alt="vantari" class="cover-logo">
+    <span class="pill pill-light">proposta de redesign · maio 2026</span>
+  </header>
+
+  <div class="cover-body">
+    <p class="kicker">Vantari Next · Análise &amp; Direção Visual</p>
+    <h1 class="display">
+      De interface funcional<br>
+      <span class="grad-text">a ambiente vivo.</span>
+    </h1>
+    <p class="lede">
+      O Next entrega os dados. Falta entregar a <em>sensação</em> de que algo
+      está acontecendo — calor, ritmo e personalidade. Esta proposta reorganiza
+      o sistema visual ao redor da marca atual (V em gradiente teal&nbsp;→&nbsp;verde),
+      expande a paleta de dados, introduz interação real nos gráficos e dá
+      a cada seção um caráter próprio.
+    </p>
+
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <span class="cs-num">4</span>
+        <span class="cs-lbl">direções de melhoria</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cs-num grad-text">12</span>
+        <span class="cs-lbl">tokens novos</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cs-num">7</span>
+        <span class="cs-lbl">componentes redesenhados</span>
+      </div>
+      <div class="cover-stat">
+        <span class="cs-num grad-text">∞</span>
+        <span class="cs-lbl">microinterações</span>
+      </div>
+    </div>
+
+    <nav class="cover-toc" aria-label="Índice">
+      <a href="#diagnostico"><span>01</span>Diagnóstico</a>
+      <a href="#sistema"><span>02</span>Sistema Visual</a>
+      <a href="#dashboard"><span>03</span>Novo Dashboard</a>
+      <a href="#componentes"><span>04</span>Componentes</a>
+      <a href="#aplicacao"><span>05</span>Plano</a>
+    </nav>
+  </div>
+
+  <div class="cover-mark" aria-hidden="true">
+    <img src="assets/icone.png" alt="">
+  </div>
+</section>
+
+<!-- ─────────── DIAGNÓSTICO ─────────── -->
+<section id="diagnostico" class="section">
+  <header class="section-head">
+    <span class="sec-num">01 — Diagnóstico</span>
+    <h2>O que está deixando o ambiente <em>monótono</em>.</h2>
+    <p>
+      Análise da tela atual de <strong>Analytics &gt; Overview</strong>.
+      O problema não é layout — é <strong>ritmo cromático</strong> e
+      <strong>densidade informacional plana</strong>.
+    </p>
+  </header>
+
+  <div class="diag-grid">
+    <figure class="diag-screen">
+      <img src="shot-next-overview.png" alt="Estado atual: Analytics Overview">
+      <figcaption>Tela atual · /dashboard</figcaption>
+
+      <!-- Annotation pins -->
+      <button class="pin" style="top:18%;left:32%;" data-pin="1"><span>1</span></button>
+      <button class="pin" style="top:52%;left:46%;" data-pin="2"><span>2</span></button>
+      <button class="pin" style="top:74%;left:14%;" data-pin="3"><span>3</span></button>
+      <button class="pin" style="top:30%;left:88%;" data-pin="4"><span>4</span></button>
+    </figure>
+
+    <ol class="diag-notes">
+      <li data-note="1">
+        <span class="note-tag">01</span>
+        <h4>KPIs cromaticamente idênticos</h4>
+        <p>
+          Os quatro cartões usam tons quase iguais (azul, laranja claro,
+          verde claro, lilás claro) em ícones pequenos. A leitura é toda
+          <em>cinza-escura</em>. Sem hierarquia, o olho não sabe onde pousar.
+        </p>
+      </li>
+      <li data-note="2">
+        <span class="note-tag">02</span>
+        <h4>Gráfico de linha estático</h4>
+        <p>
+          Linha azul fina sobre grade pontilhada cinza. Sem áreas, sem
+          comparação com mês anterior, sem meta, sem crosshair, sem tooltip
+          rico. É um chart de placeholder.
+        </p>
+      </li>
+      <li data-note="3">
+        <span class="note-tag">03</span>
+        <h4>Alertas sem severidade visual</h4>
+        <p>
+          Três alertas com ícones triangulares praticamente do mesmo peso.
+          Não há borda lateral colorida, pulsação ou prioridade visível —
+          o que é <em>crítico</em> se confunde com o que é informativo.
+        </p>
+      </li>
+      <li data-note="4">
+        <span class="note-tag">04</span>
+        <h4>Faixa lateral "Campanhas Ativas" subutilizada</h4>
+        <p>
+          Quatro linhas com números grandes em sequência idêntica. Daria
+          para ser um <strong>ring de meta</strong>, um <strong>velocímetro</strong>
+          ou cartões com microsparklines — qualquer coisa que <em>mexa</em>.
+        </p>
+      </li>
+    </ol>
+  </div>
+
+  <aside class="callout">
+    <div class="callout-icon" aria-hidden="true">
+      <img src="assets/icone.png" alt="">
+    </div>
+    <div class="callout-body">
+      <h4>Hipótese da proposta</h4>
+      <p>
+        A marca já possui um gradiente <strong>teal → verde</strong> e um
+        chevron com personalidade. O Next ainda não usa <em>nenhum dos dois</em>
+        como linguagem viva — só pinta o sidebar de azul. A proposta resolve
+        isso amarrando todo o sistema visual ao V e ao gradiente.
+      </p>
+    </div>
+  </aside>
+</section>
+
+<!-- ─────────── SISTEMA VISUAL ─────────── -->
+<section id="sistema" class="section section-tinted">
+  <header class="section-head">
+    <span class="sec-num">02 — Sistema Visual</span>
+    <h2>Paleta, tipografia e <em>motif</em> derivados da marca.</h2>
+    <p>
+      Em vez de criar uma nova identidade, levantamos a que já existe nos
+      logos oficiais. Mais saturação onde importa, mais neutros refinados
+      no resto.
+    </p>
+  </header>
+
+  <div class="sys-row">
+    <h3 class="sys-title">Gradiente da marca</h3>
+    <div class="brand-grad">
+      <div class="bg-swatch">
+        <div class="bg-color" style="background:#0d7491"></div>
+        <div class="bg-meta"><strong>Brand · Teal</strong><code>#0D7491</code></div>
+      </div>
+      <div class="bg-bar"></div>
+      <div class="bg-swatch end">
+        <div class="bg-color" style="background:#14a273"></div>
+        <div class="bg-meta"><strong>Brand · Green</strong><code>#14A273</code></div>
+      </div>
+    </div>
+    <p class="sys-note">
+      É o DNA do logo. Usar em: logotipo do sidebar, headline numérica do
+      KPI principal, hero do dashboard, badges de meta atingida, botão CTA
+      principal. Nunca em texto corrido (acessibilidade) e nunca em fundo
+      cheio acima de 25% da tela (cansa).
+    </p>
+  </div>
+
+  <div class="sys-row two-col">
+    <div>
+      <h3 class="sys-title">Neutros — Ink scale</h3>
+      <div class="ink-scale">
+        <div class="ink-step" style="background:#0e1a24"><span>900</span></div>
+        <div class="ink-step" style="background:#2e3d4b"><span>700</span></div>
+        <div class="ink-step" style="background:#5a6b7a"><span>500</span></div>
+        <div class="ink-step" style="background:#8696a5"><span>400</span></div>
+        <div class="ink-step" style="background:#b3bfca"><span>300</span></div>
+        <div class="ink-step" style="background:#d8dfe6"><span>200</span></div>
+        <div class="ink-step" style="background:#eef2f6"><span>100</span></div>
+        <div class="ink-step" style="background:#f5f8fb;color:#5a6b7a"><span>50</span></div>
+      </div>
+      <p class="sys-note">
+        Escala azulada (não cinza pura). Combina com o teal do logo e
+        sustenta hierarquia em 8 passos.
+      </p>
+    </div>
+
+    <div>
+      <h3 class="sys-title">Acentos de dados</h3>
+      <div class="accent-grid">
+        <div class="ac"><i style="background:#0d7491"></i><strong>Teal</strong><code>#0D7491</code><span>brand · cold</span></div>
+        <div class="ac"><i style="background:#14a273"></i><strong>Green</strong><code>#14A273</code><span>brand · growth</span></div>
+        <div class="ac"><i style="background:#7c5cff"></i><strong>Violet</strong><code>#7C5CFF</code><span>SQL · qualified</span></div>
+        <div class="ac"><i style="background:#f59e0b"></i><strong>Amber</strong><code>#F59E0B</code><span>MQL · warm</span></div>
+        <div class="ac"><i style="background:#ff6b5e"></i><strong>Coral</strong><code>#FF6B5E</code><span>alerts</span></div>
+        <div class="ac"><i style="background:#06b6d4"></i><strong>Cyan</strong><code>#06B6D4</code><span>realtime</span></div>
+        <div class="ac"><i style="background:#ec4899"></i><strong>Rose</strong><code>#EC4899</code><span>engagement</span></div>
+        <div class="ac"><i style="background:#1f76bc"></i><strong>Blue</strong><code>#1F76BC</code><span>brand · solid</span></div>
+      </div>
+      <p class="sys-note">
+        Cada métrica recorrente recebe <strong>uma</strong> cor fixa em todo o
+        sistema. Leads = teal, MQL = amber, SQL = violet, Receita = green.
+        Memória cromática.
+      </p>
+    </div>
+  </div>
+
+  <div class="sys-row two-col">
+    <div>
+      <h3 class="sys-title">Tipografia</h3>
+      <div class="type-spec">
+        <div class="ts-card display">
+          <span class="ts-tag">Display · Sora 700</span>
+          <span class="ts-sample" style="font-family:Sora;font-weight:700">5.640</span>
+          <span class="ts-note">números KPI · letter-spacing -0.04em</span>
+        </div>
+        <div class="ts-card heading">
+          <span class="ts-tag">Heading · Sora 600</span>
+          <span class="ts-sample" style="font-family:Sora;font-weight:600;font-size:32px">Crescimento Mensal</span>
+          <span class="ts-note">títulos de seção</span>
+        </div>
+        <div class="ts-card body">
+          <span class="ts-tag">Body · Inter 500/600</span>
+          <span class="ts-sample" style="font-family:Inter;font-weight:500;font-size:16px">Taxa de conversão acima da meta nos últimos 14 dias.</span>
+          <span class="ts-note">leitura corrida e labels</span>
+        </div>
+        <div class="ts-card mono">
+          <span class="ts-tag">Mono · JetBrains 500</span>
+          <span class="ts-sample" style="font-family:'JetBrains Mono',monospace;font-weight:500;font-size:18px">score &gt;= 85</span>
+          <span class="ts-note">condições, código, IDs</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <h3 class="sys-title">Motif · O V vivo</h3>
+      <div class="motif">
+        <svg viewBox="0 0 220 160" class="motif-svg" aria-hidden="true">
+          <defs>
+            <linearGradient id="gradV" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#0d7491"/>
+              <stop offset="1" stop-color="#14a273"/>
+            </linearGradient>
+          </defs>
+          <!-- 3 chevrons stacked -->
+          <path d="M30 30 L110 120 L190 30" stroke="url(#gradV)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".15"/>
+          <path d="M30 50 L110 130 L190 50" stroke="url(#gradV)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+          <path d="M30 70 L110 140 L190 70" stroke="url(#gradV)" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="1"/>
+        </svg>
+        <ul class="motif-uses">
+          <li><b>Divisor</b> entre seções largas (linha 1px no gradiente)</li>
+          <li><b>Empty states</b> com o V solitário de baixa opacidade</li>
+          <li><b>Loading</b> com o V animado em pulsação</li>
+          <li><b>Decoração</b> de cards-hero em ângulo, sangrando</li>
+          <li><b>Marca d'água</b> nos relatórios PDF exportados</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sys-row">
+    <h3 class="sys-title">Backgrounds tonais por contexto</h3>
+    <p class="sys-note" style="margin-top:0">
+      Cada área do produto ganha um leve viés cromático. Sutil — uma faixa
+      de <strong>2&nbsp;a&nbsp;4% de saturação</strong> — apenas o suficiente para que o
+      olho perceba que mudou de contexto, sem cansar.
+    </p>
+    <div class="ctx-grid">
+      <div class="ctx" style="background:linear-gradient(135deg,#f0f9fc 0%,#ebf7f3 100%);">
+        <span class="ctx-name">Analytics</span>
+        <span class="ctx-tone">teal frio</span>
+      </div>
+      <div class="ctx" style="background:linear-gradient(135deg,#fef9ef 0%,#fff4e8 100%);">
+        <span class="ctx-name">Leads</span>
+        <span class="ctx-tone">amber tépido</span>
+      </div>
+      <div class="ctx" style="background:linear-gradient(135deg,#f7f4ff 0%,#f0eaff 100%);">
+        <span class="ctx-name">Scoring</span>
+        <span class="ctx-tone">violet</span>
+      </div>
+      <div class="ctx" style="background:linear-gradient(135deg,#fff4f2 0%,#ffece8 100%);">
+        <span class="ctx-name">Email</span>
+        <span class="ctx-tone">coral</span>
+      </div>
+      <div class="ctx" style="background:linear-gradient(135deg,#eefcf7 0%,#e6faf0 100%);">
+        <span class="ctx-name">Landing</span>
+        <span class="ctx-tone">green</span>
+      </div>
+      <div class="ctx" style="background:linear-gradient(135deg,#eef9fc 0%,#e6f5fb 100%);">
+        <span class="ctx-name">IA &amp; Automação</span>
+        <span class="ctx-tone">cyan</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── DASHBOARD MOCKUP ─────────── -->
+<section id="dashboard" class="section">
+  <header class="section-head">
+    <span class="sec-num">03 — Novo Dashboard</span>
+    <h2>O Overview, agora com <em>pulso</em>.</h2>
+    <p>
+      Mesma estrutura, mesma informação. Mudou o ritmo: KPIs cromáticos
+      com sparkline, hero chart interativo, anel de meta no lugar da lista,
+      funil clicável, atividade ao vivo e alertas com severidade.
+    </p>
+  </header>
+
+  <div class="browser">
+    <div class="browser-bar">
+      <span class="bb-dot red"></span>
+      <span class="bb-dot yellow"></span>
+      <span class="bb-dot green"></span>
+      <span class="bb-url">vantari-app.vercel.app/dashboard</span>
+    </div>
+    <iframe src="dashboard-new.html" class="browser-frame" title="Dashboard redesenhado"></iframe>
+  </div>
+
+  <div class="dash-callouts">
+    <div class="dc">
+      <span class="dc-num">A</span>
+      <h4>Sidebar com identidade</h4>
+      <p>
+        Gradiente vertical teal → deep navy. Logo Vantari oficial em
+        cima. Item ativo com pílula branca translúcida e marca lateral
+        em verde. Microcounter de "novos" ao lado de Leads.
+      </p>
+    </div>
+    <div class="dc">
+      <span class="dc-num">B</span>
+      <h4>KPIs com sparkline</h4>
+      <p>
+        4 cards, cada um com sua cor de métrica e um sparkline de 14d ao
+        fundo. Trend chip à direita, sub-métrica clicável (Taxa MQL,
+        receita acumulada) abaixo do número.
+      </p>
+    </div>
+    <div class="dc">
+      <span class="dc-num">C</span>
+      <h4>Hero chart interativo</h4>
+      <p>
+        Multi-série com toggle visível, linha de meta tracejada, faixa
+        de mês anterior em cinza, crosshair com tooltip ao hover. Botão
+        "comparar com" abre a sobreposição de períodos.
+      </p>
+    </div>
+    <div class="dc">
+      <span class="dc-num">D</span>
+      <h4>Anel de campanhas</h4>
+      <p>
+        Substitui a lista vertical. Anel quádruplo (abertura, CTR,
+        conversões, ativas) com pequenos números no centro e legenda
+        clicável.
+      </p>
+    </div>
+    <div class="dc">
+      <span class="dc-num">E</span>
+      <h4>Atividade ao vivo</h4>
+      <p>
+        Stream vertical com bolinha pulsante cyan, eventos coloridos
+        por tipo, timestamp relativo. O usuário vê o produto
+        respirando.
+      </p>
+    </div>
+    <div class="dc">
+      <span class="dc-num">F</span>
+      <h4>Alertas com severidade</h4>
+      <p>
+        Barra lateral colorida (coral · amber · cyan), badge de status
+        à direita, ícone com cor consistente. Crítico se distingue
+        de informativo em 100ms.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────── COMPONENTES ─────────── -->
+<section id="componentes" class="section section-dark">
+  <header class="section-head light">
+    <span class="sec-num">04 — Componentes</span>
+    <h2>Peças isoladas para <em>copiar &amp; aplicar</em>.</h2>
+    <p>
+      Cada peça aqui pode ser portada para os outros módulos
+      (Leads, Email, Scoring) reaproveitando a mesma linguagem.
+    </p>
+  </header>
+
+  <div class="comp-grid">
+
+    <!-- KPI card variations -->
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">KPI · variação cromática</span>
+        <span class="cc-id">KPI-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-kpis.html" title="KPIs" class="cc-iframe" style="height:230px"></iframe>
+      </div>
+    </article>
+
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">Funil interativo</span>
+        <span class="cc-id">FUN-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-funnel.html" title="Funil" class="cc-iframe" style="height:300px"></iframe>
+      </div>
+    </article>
+
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">Anel de campanhas</span>
+        <span class="cc-id">RING-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-ring.html" title="Anel" class="cc-iframe" style="height:300px"></iframe>
+      </div>
+    </article>
+
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">Atividade ao vivo</span>
+        <span class="cc-id">LIVE-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-live.html" title="Atividade" class="cc-iframe" style="height:300px"></iframe>
+      </div>
+    </article>
+
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">Alertas com severidade</span>
+        <span class="cc-id">ALT-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-alerts.html" title="Alertas" class="cc-iframe" style="height:300px"></iframe>
+      </div>
+    </article>
+
+    <article class="comp-card">
+      <header class="cc-head">
+        <span class="cc-tag">Hero chart</span>
+        <span class="cc-id">CHT-01</span>
+      </header>
+      <div class="cc-body">
+        <iframe src="comp-chart.html" title="Hero chart" class="cc-iframe" style="height:300px"></iframe>
+      </div>
+    </article>
+
+  </div>
+</section>
+
+<!-- ─────────── PLANO ─────────── -->
+<section id="aplicacao" class="section">
+  <header class="section-head">
+    <span class="sec-num">05 — Plano de aplicação</span>
+    <h2>Como rodar isso sem virar o produto do avesso.</h2>
+    <p>
+      A proposta é incremental. Cada fase é independente, mensurável e
+      pode ser revertida.
+    </p>
+  </header>
+
+  <ol class="phase-list">
+    <li>
+      <span class="ph-num">Fase 1</span>
+      <h4>Atualização do design system</h4>
+      <p>
+        Substitui tokens no <code>vantari-analytics-dashboard.jsx</code>: nova
+        paleta de dados, sidebar com gradiente, tipografia Sora &amp; Inter,
+        background tonal por contexto. <strong>Sem mudar layout.</strong>
+      </p>
+      <span class="ph-time">2 dias</span>
+    </li>
+    <li>
+      <span class="ph-num">Fase 2</span>
+      <h4>Hero KPIs com sparkline + Hero chart interativo</h4>
+      <p>
+        Reescreve os 4 cards (com mini gráficos, cores fixas por métrica)
+        e o gráfico principal (multi-série, crosshair, meta, comparativo).
+      </p>
+      <span class="ph-time">3 dias</span>
+    </li>
+    <li>
+      <span class="ph-num">Fase 3</span>
+      <h4>Anel de campanhas + Atividade ao vivo</h4>
+      <p>
+        Substitui a coluna direita inteira. Anel quádruplo radial e
+        stream vertical com WebSocket / polling Supabase.
+      </p>
+      <span class="ph-time">3 dias</span>
+    </li>
+    <li>
+      <span class="ph-num">Fase 4</span>
+      <h4>Alertas com severidade + Funil interativo</h4>
+      <p>
+        Componente de alerta repaginado e funil clicável (hover revela
+        breakdown da etapa, click navega para o filtro de Leads correspondente).
+      </p>
+      <span class="ph-time">2 dias</span>
+    </li>
+    <li>
+      <span class="ph-num">Fase 5</span>
+      <h4>Replicação aos outros módulos</h4>
+      <p>
+        Aplica o mesmo kit em Leads, Scoring, Email Marketing, Landing
+        Pages, IA &amp; Automação, Integrações — mantendo o background
+        tonal de cada contexto.
+      </p>
+      <span class="ph-time">1 semana</span>
+    </li>
+  </ol>
+
+  <footer class="end">
+    <img src="assets/icone.png" alt="" class="end-icon">
+    <p>
+      <strong>Próximo passo:</strong> aprovar a direção visual e definir
+      qual fase entra primeiro. A Fase&nbsp;1 sozinha já resolve 60% da
+      sensação de "monotonia" relatada.
+    </p>
+  </footer>
+</section>
+
+<script src="proposal.js"></script>
+</body>
+</html>

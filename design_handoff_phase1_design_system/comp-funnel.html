@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,sans-serif;background:white;padding:24px}
+.fn{display:flex;flex-direction:column;gap:4px}
+.s{display:grid;grid-template-columns:110px 1fr 90px;gap:14px;align-items:center;padding:10px 0;position:relative;cursor:pointer}
+.s:hover .bar{filter:brightness(1.05)}
+.n{font-family:Sora;font-weight:600;font-size:13px;color:#0e1a24;display:flex;flex-direction:column;gap:1px}
+.n span{font-size:10.5px;color:#8696a5;font-family:'JetBrains Mono';font-weight:500}
+.bw{height:32px;background:#f5f8fb;border-radius:9px;overflow:hidden;position:relative}
+.bar{height:100%;background:var(--c);border-radius:9px;display:flex;align-items:center;padding:0 12px;color:white;font-weight:700;font-family:'JetBrains Mono';font-size:12px;position:relative;transition:filter .15s}
+.bar::after{content:'';position:absolute;inset:0;background:linear-gradient(90deg,transparent 60%,rgba(255,255,255,.18))}
+.m{font-size:11px;color:#5a6b7a;text-align:right}
+.m b{color:#0e1a24;font-family:'JetBrains Mono';font-weight:700}
+.cv{position:absolute;right:100px;top:-6px;background:white;border:1px solid #e8eef3;border-radius:99px;padding:1px 7px;font-size:10px;font-family:'JetBrains Mono';font-weight:700;color:#14a273}
+</style></head><body>
+
+<div class="fn">
+  <div class="s"><div class="n">Visitantes <span>topo do funil</span></div><div class="bw"><div class="bar" style="width:100%;background:#0d7491">14.305</div></div><div class="m"><b>100%</b><br>0d</div></div>
+  <div class="s"><span class="cv">↘ 39.4%</span><div class="n">Leads <span>cadastro</span></div><div class="bw"><div class="bar" style="width:78%;background:#1f76bc">5.640</div></div><div class="m"><b>39.4%</b><br>2.3d</div></div>
+  <div class="s"><span class="cv">↘ 4.2%</span><div class="n">MQLs <span>marketing</span></div><div class="bw"><div class="bar" style="width:38%;background:#f59e0b">236</div></div><div class="m"><b>1.6%</b><br>7.1d</div></div>
+  <div class="s"><span class="cv">↗ 42.8%</span><div class="n">SQLs <span>vendas</span></div><div class="bw"><div class="bar" style="width:22%;background:#7c5cff">101</div></div><div class="m"><b>0.7%</b><br>4.2d</div></div>
+  <div class="s"><span class="cv">↗ 22.7%</span><div class="n">Clientes <span>conversão final</span></div><div class="bw"><div class="bar" style="width:12%;background:#14a273">23</div></div><div class="m"><b>0.16%</b><br>R$ 5.9k</div></div>
+</div>
+
+</body></html>

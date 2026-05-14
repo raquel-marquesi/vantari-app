@@ -5,7 +5,8 @@ import {
   Users, Plus, Search, Filter, ChevronDown, X, Edit2, Trash2,
   Mail, Phone, Building2, Tag, TrendingUp, Star, AlertCircle,
   CheckCircle, Clock, BarChart2, Home, Settings, Zap, Globe,
-  Layout, MessageSquare, LogOut, Loader2, Bot, LayoutTemplate, Plug
+  Layout, MessageSquare, LogOut, Loader2, Bot, LayoutTemplate, Plug,
+  Activity, ExternalLink, MousePointer
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS ───── */
@@ -348,6 +349,35 @@ function LeadModal({ lead, onClose, onSave }) {
 function LeadPanel({ lead, onClose, onEdit, onDelete }) {
   const score = scoreBadge(lead.score || 0);
   const stage = stageBadge(lead.stage);
+  const [visits, setVisits]       = useState([]);
+  const [visitsLoading, setVL]    = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    setVL(true);
+    supabase
+      .from("page_visits")
+      .select("id, url, path, referrer, created_at, tracked_pages(title, funnel)")
+      .eq("lead_id", lead.id)
+      .order("created_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => {
+        if (!alive) return;
+        setVisits(data || []);
+        setVL(false);
+      });
+    return () => { alive = false; };
+  }, [lead.id]);
+
+  const funnelColor = (f) => ({ topo:"#06B6D4", meio:"#F59E0B", fundo:"#14A273", institucional:"#7C5CFF" }[f] || T.muted);
+  const fmtDate = (d) => {
+    const dt = new Date(d);
+    const today = new Date();
+    const diff = (today - dt) / 36e5;
+    if (diff < 1)  return Math.round(diff*60) + "min";
+    if (diff < 24) return Math.round(diff) + "h";
+    return dt.toLocaleDateString("pt-BR", { day:"2-digit", month:"short" });
+  };
 
   return (
     <div style={{
@@ -426,6 +456,41 @@ function LeadPanel({ lead, onClose, onEdit, onDelete }) {
             Criado: {new Date(lead.created_at).toLocaleDateString("pt-BR")}<br />
             Atualizado: {new Date(lead.updated_at).toLocaleDateString("pt-BR")}
           </div>
+        </div>
+
+        {/* Últimas visitas (Lead Tracking) */}
+        <div style={{ marginTop: 18 }}>
+          <div style={{ fontSize: 11, color: T.muted, marginBottom: 8, display: "flex", alignItems: "center", gap: 4, fontFamily: T.font }}>
+            <Activity size={11} /> Últimas visitas
+            {visits.length > 0 && <span style={{ marginLeft: "auto", fontSize: 10, color: T.faint3 }}>{visits.length} {visits.length === 1 ? "visita" : "visitas"}</span>}
+          </div>
+          {visitsLoading && (
+            <div style={{ fontSize: 12, color: T.muted, padding: 10, textAlign: "center", fontFamily: T.font }}>Carregando...</div>
+          )}
+          {!visitsLoading && visits.length === 0 && (
+            <div style={{ fontSize: 12, color: T.muted, padding: "10px 12px", background: T.bg, borderRadius: 8, fontFamily: T.font }}>
+              Nenhuma visita registrada ainda. Instale o tracker.js no site.
+            </div>
+          )}
+          {!visitsLoading && visits.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+              {visits.map(v => {
+                const c = funnelColor(v.tracked_pages?.funnel);
+                return (
+                  <div key={v.id} style={{ padding: "8px 10px", background: T.bg, borderRadius: 8, borderLeft: `3px solid ${c}` }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <MousePointer size={10} color={c} />
+                      <span style={{ fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.font, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {v.tracked_pages?.title || v.path || v.url}
+                      </span>
+                      <span style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, whiteSpace: "nowrap" }}>{fmtDate(v.created_at)}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: T.muted, fontFamily: T.mono, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.url}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Custom fields */}

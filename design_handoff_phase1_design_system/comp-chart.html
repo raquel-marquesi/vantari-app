@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,sans-serif;background:white;padding:18px;display:flex;flex-direction:column;gap:8px}
+.hd{display:flex;justify-content:space-between;align-items:center}
+.tit{font-family:Sora;font-weight:700;font-size:15px;color:#0e1a24}
+.sub{font-size:11px;color:#8696a5}
+.pi{display:flex;gap:5px}
+.pl{padding:4px 9px;border-radius:7px;border:1px solid #e8eef3;background:transparent;font-size:11px;font-weight:600;color:#5a6b7a;cursor:pointer;display:inline-flex;align-items:center;gap:5px;font-family:Inter}
+.pl i{width:6px;height:6px;border-radius:50%;background:var(--c)}
+.pl.on{border-color:var(--c);background:var(--cb);color:var(--c)}
+.ch{position:relative;height:200px}
+.tt{position:absolute;background:white;border:1px solid #d8dfe6;border-radius:9px;padding:8px 12px;box-shadow:0 8px 24px -8px rgba(14,26,36,.15);font-size:11.5px;pointer-events:none;display:none;min-width:140px;z-index:5}
+.tt.on{display:block}
+.td{font-weight:700;color:#0e1a24;margin-bottom:4px;font-family:Sora;font-size:12px}
+.tr{display:flex;align-items:center;gap:6px;margin:1px 0}
+.td2{width:7px;height:7px;border-radius:50%}
+.tl{color:#5a6b7a;flex:1}
+.tv{font-family:'JetBrains Mono';font-weight:700;color:#0e1a24}
+</style></head><body>
+
+<div class="hd">
+  <div><div class="tit">Crescimento Mensal</div><div class="sub">2026 · meta anual 8.000 leads</div></div>
+  <div class="pi">
+    <button class="pl on" style="--c:#0d7491;--cb:#0d749114"><i></i>Leads</button>
+    <button class="pl" style="--c:#f59e0b;--cb:#f59e0b14"><i></i>MQLs</button>
+    <button class="pl" style="--c:#7c5cff;--cb:#7c5cff14"><i></i>SQLs</button>
+    <button class="pl" style="--c:#14a273;--cb:#14a27314"><i></i>R$</button>
+  </div>
+</div>
+
+<div class="ch" id="ch">
+  <svg id="sv" viewBox="0 0 600 200" preserveAspectRatio="none" style="width:100%;height:100%;cursor:crosshair"></svg>
+  <div class="tt" id="tt">
+    <div class="td" id="td">Jun · Leads</div>
+    <div class="tr"><span class="td2" style="background:#0d7491"></span><span class="tl">2026</span><span class="tv" id="v1">520</span></div>
+    <div class="tr"><span class="td2" style="background:#b3bfca"></span><span class="tl">Anterior</span><span class="tv" id="v2">410</span></div>
+    <div class="tr"><span class="td2" style="background:#14a273"></span><span class="tl">Meta</span><span class="tv" id="v3">540</span></div>
+  </div>
+</div>
+
+<script>
+const D=[320,365,395,460,540,610,720];
+const P=[220,280,310,350,400,460,560];
+const G=[350,410,470,520,560,600,640];
+const M=['Jan','Fev','Mar','Abr','Mai','Jun','Jul'];
+const W=600,H=200,pX=28,pY=18,iW=W-pX*2,iH=H-pY*2;
+const c='#0d7491';
+function r(){
+  const max=Math.max(...D,...P,...G)*1.1;
+  const xA=i=>pX+(i/(D.length-1))*iW;
+  const yA=v=>pY+iH-(v/max)*iH;
+  const pf=a=>a.map((v,i)=>`${i?'L':'M'}${xA(i).toFixed(1)},${yA(v).toFixed(1)}`).join(' ');
+  const af=a=>`${pf(a)} L${xA(a.length-1)},${pY+iH} L${pX},${pY+iH}Z`;
+  const grid=[0,1,2,3,4].map(i=>{const y=pY+iH*i/4;return `<line x1="${pX}" y1="${y}" x2="${W-pX/2}" y2="${y}" stroke="#eef2f6" stroke-dasharray="${i===4?'0':'3 4'}"/>`}).join('');
+  const xl=M.map((m,i)=>`<text x="${xA(i)}" y="${H-4}" font-family="JetBrains Mono" font-size="9" fill="#8696a5" text-anchor="middle">${m}</text>`).join('');
+  document.getElementById('sv').innerHTML=`
+    <defs><linearGradient id="ag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".3"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient></defs>
+    ${grid}
+    <path d="${pf(P)}" stroke="#b3bfca" stroke-width="1.5" fill="none" stroke-dasharray="2 3" opacity=".7"/>
+    <path d="${pf(G)}" stroke="#14a273" stroke-width="1.5" fill="none" stroke-dasharray="6 4" opacity=".6"/>
+    <path d="${af(D)}" fill="url(#ag)"/>
+    <path d="${pf(D)}" stroke="${c}" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    ${D.map((v,i)=>`<circle cx="${xA(i)}" cy="${yA(v)}" r="3" fill="white" stroke="${c}" stroke-width="2"/>`).join('')}
+    ${xl}
+    <line id="hg" x1="0" y1="${pY}" x2="0" y2="${pY+iH}" stroke="${c}" stroke-width="1" opacity="0"/>
+    <circle id="hd" cx="0" cy="0" r="6" fill="${c}" stroke="white" stroke-width="3" opacity="0"/>
+  `;
+  const sv=document.getElementById('sv');
+  const tt=document.getElementById('tt');
+  sv.onmousemove=(e)=>{
+    const r=sv.getBoundingClientRect();
+    const xR=(e.clientX-r.left)/r.width*W;
+    const i=Math.max(0,Math.min(D.length-1,Math.round((xR-pX)/iW*(D.length-1))));
+    const x=xA(i),y=yA(D[i]);
+    sv.querySelector('#hg').setAttribute('x1',x);
+    sv.querySelector('#hg').setAttribute('x2',x);
+    sv.querySelector('#hg').setAttribute('opacity','.4');
+    sv.querySelector('#hd').setAttribute('cx',x);
+    sv.querySelector('#hd').setAttribute('cy',y);
+    sv.querySelector('#hd').setAttribute('opacity','1');
+    tt.classList.add('on');
+    tt.style.left=Math.min(r.width-160,(x/W)*r.width+12)+'px';
+    tt.style.top=((y/H)*r.height-10)+'px';
+    document.getElementById('td').textContent=M[i]+' · Leads';
+    document.getElementById('v1').textContent=D[i];
+    document.getElementById('v2').textContent=P[i];
+    document.getElementById('v3').textContent=G[i];
+  };
+  sv.onmouseleave=()=>{tt.classList.remove('on');sv.querySelector('#hg').setAttribute('opacity','0');sv.querySelector('#hd').setAttribute('opacity','0');};
+}
+r();window.addEventListener('resize',r);
+</script>
+</body></html>

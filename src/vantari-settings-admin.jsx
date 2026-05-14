@@ -7,6 +7,8 @@ import {
   Save, Send, Key, Package, RefreshCw, Download, FileText, Plus,
   FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
   Loader2, AlertTriangle, ArrowUp,
+  Database, Edit3, Trash2, Search, X, Copy as CopyIcon,
+  Activity, Globe,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
@@ -153,14 +155,59 @@ const MOCK_WEBHOOKS = [];
 const MOCK_INVOICES = [];
 
 const TABS = [
-  { id:"workspace", Icon:Building2,     label:"Workspace"  },
-  { id:"team",      Icon:Users,         label:"Equipe"      },
-  { id:"email",     Icon:Mail,          label:"Email"       },
-  { id:"billing",   Icon:CreditCard,    label:"Billing"     },
-  { id:"advanced",  Icon:Settings,      label:"Avançado"   },
-  { id:"audit",     Icon:ClipboardList, label:"Audit Log"   },
-  { id:"support",   Icon:Headphones,    label:"Suporte"     },
+  { id:"workspace",    Icon:Building2,     label:"Workspace"             },
+  { id:"team",         Icon:Users,         label:"Equipe"                },
+  { id:"customfields", Icon:Database,      label:"Campos Personalizados" },
+  { id:"tracking",     Icon:Activity,      label:"Lead Tracking"         },
+  { id:"email",        Icon:Mail,          label:"Email"                 },
+  { id:"billing",      Icon:CreditCard,    label:"Billing"               },
+  { id:"advanced",     Icon:Settings,      label:"Avançado"              },
+  { id:"audit",        Icon:ClipboardList, label:"Audit Log"             },
+  { id:"support",      Icon:Headphones,    label:"Suporte"               },
 ];
+
+const FUNNEL_OPTIONS = [
+  { value:"topo",          label:"Topo de Funil",   color:"#06B6D4" },
+  { value:"meio",          label:"Meio de Funil",   color:"#F59E0B" },
+  { value:"fundo",         label:"Fundo de Funil",  color:"#14A273" },
+  { value:"institucional", label:"Institucional",   color:"#7C5CFF" },
+  { value:"outro",         label:"Outro",           color:"#8696A5" },
+];
+
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTES — Campos Personalizados
+═══════════════════════════════════════════════════════════ */
+const FIELD_TYPES = [
+  { value:"text",        label:"Texto"          },
+  { value:"textarea",    label:"Texto longo"    },
+  { value:"email",       label:"Email"          },
+  { value:"phone",       label:"Telefone"       },
+  { value:"url",         label:"URL"            },
+  { value:"number",      label:"Número"         },
+  { value:"date",        label:"Data"           },
+  { value:"datetime",    label:"Data e hora"    },
+  { value:"select",      label:"Lista (1 opção)"},
+  { value:"multiselect", label:"Lista múltipla" },
+  { value:"radio",       label:"Radio"          },
+  { value:"checkbox",    label:"Checkbox"       },
+];
+
+const FIELD_SOURCES = [
+  { value:"manual",     label:"Manual",          color:"#0D7491" },
+  { value:"crm_sync",   label:"Sync CRM",        color:"#7C5CFF" },
+  { value:"fb_forms",   label:"Meta Lead Ads",   color:"#1F76BC" },
+  { value:"google_ads", label:"Google Ads",      color:"#F59E0B" },
+  { value:"imported",   label:"Importação",      color:"#06B6D4" },
+  { value:"system",     label:"Sistema",         color:"#8696A5" },
+];
+
+const slugifyApiId = (label) =>
+  "cf_" + (label||"")
+    .normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g,"_")
+    .replace(/^_+|_+$/g,"")
+    .slice(0, 60);
 
 const PERMISSIONS = { campaigns:"Campanhas", leads:"Leads", integrations:"Integrações", analytics:"Analytics", billing:"Billing", settings:"Configurações" };
 const ROLE_DEFAULTS = {
@@ -853,6 +900,523 @@ const SupportTab = ({toast}) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   CUSTOM FIELDS TAB — gerenciador de campos personalizados
+   Substitui o módulo "Campos Personalizados" do RD Station.
+   Dados em Supabase: custom_fields + lead_custom_values
+═══════════════════════════════════════════════════════════ */
+const CustomFieldsTab = ({ toast }) => {
+  const [fields, setFields]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [search, setSearch]   = useState("");
+  const [filterSource, setFilterSource] = useState("all");
+  const [editing, setEditing] = useState(null); // null | "new" | {field}
+  const [draft, setDraft]     = useState({ label:"", api_id:"", type:"text", source:"manual", options:"", description:"", required:false });
+  const [saving, setSaving]   = useState(false);
+
+  const fetchFields = useCallback(async () => {
+    setLoading(true); setError(null);
+    const { data, error } = await supabase
+      .from("custom_fields")
+      .select("*")
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true });
+    if (error) { setError(error.message); setLoading(false); return; }
+    setFields(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchFields(); }, [fetchFields]);
+
+  const filtered = fields.filter(f => {
+    const matchesSearch = !search ||
+      f.label?.toLowerCase().includes(search.toLowerCase()) ||
+      f.api_id?.toLowerCase().includes(search.toLowerCase());
+    const matchesSource = filterSource === "all" || f.source === filterSource;
+    return matchesSearch && matchesSource;
+  });
+
+  const countBy = (src) => fields.filter(f => f.source === src).length;
+
+  const openNew = () => {
+    setDraft({ label:"", api_id:"", type:"text", source:"manual", options:"", description:"", required:false });
+    setEditing("new");
+  };
+
+  const openEdit = (f) => {
+    setDraft({
+      label: f.label || "",
+      api_id: f.api_id || "",
+      type: f.type || "text",
+      source: f.source || "manual",
+      options: Array.isArray(f.options) ? f.options.join("\n") : "",
+      description: f.description || "",
+      required: !!f.required,
+    });
+    setEditing(f);
+  };
+
+  const closeEditor = () => { setEditing(null); };
+
+  const save = async () => {
+    if (!draft.label.trim()) return toast("Informe um nome para o campo", "error");
+    setSaving(true);
+    const apiId = draft.api_id?.trim() || slugifyApiId(draft.label);
+    const optionsArr = ["select","multiselect","radio","checkbox"].includes(draft.type)
+      ? draft.options.split("\n").map(s=>s.trim()).filter(Boolean)
+      : [];
+    const payload = {
+      label: draft.label.trim(),
+      api_id: apiId,
+      type: draft.type,
+      source: draft.source,
+      options: optionsArr,
+      description: draft.description?.trim() || null,
+      required: !!draft.required,
+    };
+    let res;
+    if (editing === "new") {
+      res = await supabase.from("custom_fields").insert(payload).select().single();
+    } else {
+      res = await supabase.from("custom_fields").update(payload).eq("id", editing.id).select().single();
+    }
+    setSaving(false);
+    if (res.error) { toast(`Erro: ${res.error.message}`, "error"); return; }
+    toast(editing === "new" ? "Campo criado!" : "Campo atualizado!", "success");
+    closeEditor();
+    fetchFields();
+  };
+
+  const remove = async (f) => {
+    if (!confirm(`Excluir o campo "${f.label}"?\nIsso vai remover os valores associados em todos os leads.`)) return;
+    const { error } = await supabase.from("custom_fields").delete().eq("id", f.id);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    toast("Campo removido", "success");
+    fetchFields();
+  };
+
+  const copyApiId = (apiId) => {
+    navigator.clipboard?.writeText(apiId);
+    toast(`${apiId} copiado`, "success");
+  };
+
+  const srcMeta = (src) => FIELD_SOURCES.find(s => s.value === src) || FIELD_SOURCES[0];
+  const typeLabel = (t) => FIELD_TYPES.find(x => x.value === t)?.label || t;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Resumo */}
+      <Card>
+        <SectionTitle sub={`${fields.length} campos cadastrados — replicam os campos cf_* do RD Station`}>Campos Personalizados</SectionTitle>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(6, 1fr)",gap:10,marginBottom:8}}>
+          {FIELD_SOURCES.map(s => (
+            <div key={s.value} style={{padding:"10px 12px",borderRadius:10,border:`1px solid ${T.border}`,background:T.faint}}>
+              <div style={{fontSize:11,fontWeight:700,color:s.color,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head}}>{s.label}</div>
+              <div style={{fontSize:20,fontWeight:800,color:T.ink,fontFamily:T.head,marginTop:2}}>{countBy(s.value)}</div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Toolbar */}
+      <Card>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{position:"relative",flex:"1 1 240px",minWidth:200}}>
+            <Search size={14} color={T.muted} style={{position:"absolute",left:10,top:11}}/>
+            <input
+              type="text" value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Buscar por nome ou api_id..."
+              style={{width:"100%",padding:"9px 12px 9px 32px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,outline:"none",fontFamily:T.font,boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </div>
+          <select value={filterSource} onChange={e=>setFilterSource(e.target.value)}
+            style={{padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,background:"#fff",outline:"none",fontFamily:T.font,cursor:"pointer"}}>
+            <option value="all">Todas as origens</option>
+            {FIELD_SOURCES.map(s=><option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+          <div style={{flex:1}}/>
+          <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={fetchFields}>Recarregar</Btn>
+          <Btn size="sm" icon={<Plus size={12}/>} onClick={openNew}>Novo campo</Btn>
+        </div>
+      </Card>
+
+      {/* Estados */}
+      {loading && (
+        <Card style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:30}}>
+          <Loader2 size={18} color={T.teal} style={{animation:"spin 1s linear infinite"}}/>
+          <span style={{fontSize:13,color:T.muted,fontFamily:T.font}}>Carregando campos...</span>
+        </Card>
+      )}
+
+      {error && (
+        <Card style={{borderLeft:`4px solid ${T.coral}`,background:"#fff5f4"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <AlertTriangle size={18} color={T.coral} style={{flexShrink:0,marginTop:2}}/>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:T.coral,fontFamily:T.head}}>Erro ao carregar custom_fields</div>
+              <div style={{fontSize:12,color:T.muted,fontFamily:T.mono,marginTop:4}}>{error}</div>
+              <div style={{fontSize:12,color:T.muted,fontFamily:T.font,marginTop:6}}>Verifique se a migration 001_custom_fields.sql foi executada no Supabase.</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Tabela */}
+      {!loading && !error && (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflow:"auto",maxHeight:560}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontFamily:T.font}}>
+              <thead style={{position:"sticky",top:0,background:T.faint,zIndex:1}}>
+                <tr>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Nome</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>API ID</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Tipo</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Origem</th>
+                  <th style={{padding:"10px 14px",textAlign:"right",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr><td colSpan={5} style={{padding:30,textAlign:"center",fontSize:13,color:T.muted,fontFamily:T.font}}>Nenhum campo encontrado.</td></tr>
+                )}
+                {filtered.map(f => {
+                  const sm = srcMeta(f.source);
+                  return (
+                    <tr key={f.id} style={{borderBottom:`1px solid ${T.border}`}}>
+                      <td style={{padding:"10px 14px",fontSize:13,color:T.ink,fontFamily:T.font}}>
+                        <div style={{fontWeight:600}}>{f.label}</div>
+                        {f.description && <div style={{fontSize:11,color:T.muted,marginTop:2}}>{f.description}</div>}
+                      </td>
+                      <td style={{padding:"10px 14px",fontSize:12,color:T.text,fontFamily:T.mono}}>
+                        <span style={{display:"inline-flex",alignItems:"center",gap:6,background:T.faint,padding:"3px 8px",borderRadius:6,cursor:"pointer"}} onClick={()=>copyApiId(f.api_id)} title="Copiar">
+                          {f.api_id}<CopyIcon size={11} color={T.muted}/>
+                        </span>
+                      </td>
+                      <td style={{padding:"10px 14px",fontSize:12,color:T.text,fontFamily:T.font}}>{typeLabel(f.type)}{f.required && <span style={{color:T.coral,marginLeft:4}}>*</span>}</td>
+                      <td style={{padding:"10px 14px"}}>
+                        <Badge color={sm.color}>{sm.label}</Badge>
+                      </td>
+                      <td style={{padding:"10px 14px",textAlign:"right",whiteSpace:"nowrap"}}>
+                        <Btn variant="ghost" size="xs" icon={<Edit3 size={11}/>} onClick={()=>openEdit(f)}>Editar</Btn>
+                        <Btn variant="ghost" size="xs" icon={<Trash2 size={11}/>} onClick={()=>remove(f)} style={{color:T.coral}}>Excluir</Btn>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Modal de edição */}
+      {editing && (
+        <div onClick={closeEditor}
+          style={{position:"fixed",inset:0,background:"rgba(14,26,36,0.5)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:T.surface,borderRadius:16,width:"100%",maxWidth:600,maxHeight:"90vh",overflow:"auto",boxShadow:"0 25px 80px -20px rgba(14,26,36,0.4)"}}>
+            <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <Database size={18} color={T.teal}/>
+                <span style={{fontSize:15,fontWeight:700,color:T.ink,fontFamily:T.head}}>{editing==="new" ? "Novo campo personalizado" : "Editar campo"}</span>
+              </div>
+              <button onClick={closeEditor} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:T.muted}}><X size={18}/></button>
+            </div>
+            <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+              <Input label="Nome do Campo *" value={draft.label}
+                onChange={e=>setDraft(d=>({...d,label:e.target.value,api_id: d.api_id || slugifyApiId(e.target.value)}))}
+                placeholder="Ex: Urgência e Necessidade"/>
+              <Input label="API ID (identificador único)" value={draft.api_id}
+                onChange={e=>setDraft(d=>({...d,api_id:e.target.value}))}
+                disabled={editing!=="new"}
+                hint={editing==="new" ? "Gerado automático do nome. Use prefixo cf_." : "API ID não pode ser alterado depois de criado."}
+                placeholder="cf_meu_campo"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                <Sel label="Tipo" value={draft.type}
+                  onChange={e=>setDraft(d=>({...d,type:e.target.value}))}
+                  options={FIELD_TYPES}/>
+                <Sel label="Origem" value={draft.source}
+                  onChange={e=>setDraft(d=>({...d,source:e.target.value}))}
+                  options={FIELD_SOURCES.map(s=>({value:s.value,label:s.label}))}/>
+              </div>
+              {["select","multiselect","radio","checkbox"].includes(draft.type) && (
+                <div>
+                  <FL>Opções (uma por linha)</FL>
+                  <textarea value={draft.options}
+                    onChange={e=>setDraft(d=>({...d,options:e.target.value}))}
+                    rows={4} placeholder={"Privada\nPública"}
+                    style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,fontFamily:T.font,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+                </div>
+              )}
+              <div>
+                <FL>Descrição (opcional)</FL>
+                <textarea value={draft.description}
+                  onChange={e=>setDraft(d=>({...d,description:e.target.value}))}
+                  rows={2} placeholder="Como esse campo é usado..."
+                  style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,fontFamily:T.font,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+              </div>
+              <Toggle checked={draft.required} onChange={v=>setDraft(d=>({...d,required:v}))} label="Campo obrigatório em formulários"/>
+            </div>
+            <div style={{padding:"14px 22px",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"flex-end",gap:8,background:T.faint}}>
+              <Btn variant="outline" size="sm" onClick={closeEditor}>Cancelar</Btn>
+              <Btn size="sm" onClick={save} disabled={saving} icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
+   LEAD TRACKING TAB — gerenciador de páginas rastreadas
+   Substitui o módulo Lead Tracking do RD Station.
+═══════════════════════════════════════════════════════════ */
+const TrackingTab = ({ toast }) => {
+  const [pages, setPages]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [search, setSearch]   = useState("");
+  const [filterFunnel, setFilterFunnel] = useState("all");
+  const [editing, setEditing] = useState(null);
+  const [draft, setDraft]     = useState({ url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true });
+  const [saving, setSaving]   = useState(false);
+  const [showSnippet, setShowSnippet] = useState(false);
+
+  const fetchPages = useCallback(async () => {
+    setLoading(true); setError(null);
+    const { data, error } = await supabase
+      .from("tracked_pages")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) { setError(error.message); setLoading(false); return; }
+    setPages(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchPages(); }, [fetchPages]);
+
+  const filtered = pages.filter(p => {
+    const m1 = !search || p.url?.toLowerCase().includes(search.toLowerCase()) || p.title?.toLowerCase().includes(search.toLowerCase());
+    const m2 = filterFunnel === "all" || p.funnel === filterFunnel;
+    return m1 && m2;
+  });
+
+  const countBy = (f) => pages.filter(p => p.funnel === f).length;
+
+  const openNew = () => {
+    setDraft({ url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true });
+    setEditing("new");
+  };
+  const openEdit = (p) => {
+    setDraft({ url:p.url, title:p.title||"", funnel:p.funnel||"outro", score_delta:p.score_delta??5, category:p.category||"", active:!!p.active });
+    setEditing(p);
+  };
+  const closeEditor = () => setEditing(null);
+
+  const save = async () => {
+    if (!draft.url.trim()) return toast("URL é obrigatória", "error");
+    setSaving(true);
+    const payload = {
+      url: draft.url.trim().replace(/^https?:\/\//,"").replace(/\?.*$/,""),
+      title: draft.title?.trim() || null,
+      funnel: draft.funnel,
+      score_delta: Number(draft.score_delta) || 0,
+      category: draft.category?.trim() || null,
+      active: !!draft.active,
+    };
+    let res;
+    if (editing === "new") {
+      res = await supabase.from("tracked_pages").insert(payload).select().single();
+    } else {
+      res = await supabase.from("tracked_pages").update(payload).eq("id", editing.id).select().single();
+    }
+    setSaving(false);
+    if (res.error) { toast(`Erro: ${res.error.message}`, "error"); return; }
+    toast(editing === "new" ? "Página adicionada!" : "Página atualizada!", "success");
+    closeEditor();
+    fetchPages();
+  };
+
+  const remove = async (p) => {
+    if (!confirm(`Remover rastreamento de "${p.url}"?`)) return;
+    const { error } = await supabase.from("tracked_pages").delete().eq("id", p.id);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    toast("Página removida", "success");
+    fetchPages();
+  };
+
+  const toggleActive = async (p) => {
+    const { error } = await supabase.from("tracked_pages").update({ active: !p.active }).eq("id", p.id);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    fetchPages();
+  };
+
+  const funnelMeta = (f) => FUNNEL_OPTIONS.find(x => x.value === f) || FUNNEL_OPTIONS[4];
+
+  const supabaseUrl = (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_URL) || "https://[PROJECT].supabase.co";
+  const snippet = `<!-- Vantari Lead Tracker — colar antes do </body> -->
+<script async
+  src="https://app.vantari.com.br/tracker.js"
+  data-endpoint="${supabaseUrl}/functions/v1/track"></script>`;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      {/* Header + Snippet */}
+      <Card style={{borderLeft:`4px solid ${T.teal}`}}>
+        <SectionTitle sub={`${pages.length} páginas rastreadas — substitui o Lead Tracking do RD Station`}>Lead Tracking</SectionTitle>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5, 1fr)",gap:10,marginBottom:16}}>
+          {FUNNEL_OPTIONS.map(f => (
+            <div key={f.value} style={{padding:"10px 12px",borderRadius:10,border:`1px solid ${T.border}`,background:T.faint}}>
+              <div style={{fontSize:11,fontWeight:700,color:f.color,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head}}>{f.label}</div>
+              <div style={{fontSize:20,fontWeight:800,color:T.ink,fontFamily:T.head,marginTop:2}}>{countBy(f.value)}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <Btn variant="secondary" size="sm" icon={<FileText size={12}/>} onClick={()=>setShowSnippet(s=>!s)}>{showSnippet?"Ocultar":"Ver"} snippet de instalação</Btn>
+          <span style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Cole esse script no &lt;/body&gt; de vantari.com.br pra começar a rastrear.</span>
+        </div>
+        {showSnippet && (
+          <div style={{marginTop:12,padding:14,background:"#0E1A24",borderRadius:10,position:"relative"}}>
+            <pre style={{margin:0,fontFamily:T.mono,fontSize:12,color:"#E2EAF0",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{snippet}</pre>
+            <button onClick={()=>{navigator.clipboard?.writeText(snippet);toast("Snippet copiado!","success");}}
+              style={{position:"absolute",top:10,right:10,background:"rgba(255,255,255,0.1)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontFamily:T.font,fontWeight:600,cursor:"pointer"}}>Copiar</button>
+          </div>
+        )}
+      </Card>
+
+      {/* Toolbar */}
+      <Card>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+          <div style={{position:"relative",flex:"1 1 240px",minWidth:200}}>
+            <Search size={14} color={T.muted} style={{position:"absolute",left:10,top:11}}/>
+            <input type="text" value={search} onChange={e=>setSearch(e.target.value)}
+              placeholder="Buscar por URL ou título..."
+              style={{width:"100%",padding:"9px 12px 9px 32px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,outline:"none",fontFamily:T.font,boxSizing:"border-box"}}
+              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
+          </div>
+          <select value={filterFunnel} onChange={e=>setFilterFunnel(e.target.value)}
+            style={{padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,background:"#fff",outline:"none",fontFamily:T.font,cursor:"pointer"}}>
+            <option value="all">Todos os funis</option>
+            {FUNNEL_OPTIONS.map(f=><option key={f.value} value={f.value}>{f.label}</option>)}
+          </select>
+          <div style={{flex:1}}/>
+          <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={fetchPages}>Recarregar</Btn>
+          <Btn size="sm" icon={<Plus size={12}/>} onClick={openNew}>Nova página</Btn>
+        </div>
+      </Card>
+
+      {loading && (
+        <Card style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:30}}>
+          <Loader2 size={18} color={T.teal} style={{animation:"spin 1s linear infinite"}}/>
+          <span style={{fontSize:13,color:T.muted,fontFamily:T.font}}>Carregando páginas...</span>
+        </Card>
+      )}
+
+      {error && (
+        <Card style={{borderLeft:`4px solid ${T.coral}`,background:"#fff5f4"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <AlertTriangle size={18} color={T.coral} style={{flexShrink:0,marginTop:2}}/>
+            <div>
+              <div style={{fontSize:13,fontWeight:700,color:T.coral,fontFamily:T.head}}>Erro ao carregar tracked_pages</div>
+              <div style={{fontSize:12,color:T.muted,fontFamily:T.mono,marginTop:4}}>{error}</div>
+              <div style={{fontSize:12,color:T.muted,fontFamily:T.font,marginTop:6}}>Verifique se a migration 003_lead_tracking.sql foi executada no Supabase.</div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {!loading && !error && (
+        <Card style={{padding:0,overflow:"hidden"}}>
+          <div style={{overflow:"auto",maxHeight:560}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontFamily:T.font}}>
+              <thead style={{position:"sticky",top:0,background:T.faint,zIndex:1}}>
+                <tr>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Página</th>
+                  <th style={{padding:"10px 14px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Funil</th>
+                  <th style={{padding:"10px 14px",textAlign:"right",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Pts</th>
+                  <th style={{padding:"10px 14px",textAlign:"center",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Ativo</th>
+                  <th style={{padding:"10px 14px",textAlign:"right",fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head,borderBottom:`1px solid ${T.border}`}}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.length === 0 && (
+                  <tr><td colSpan={5} style={{padding:30,textAlign:"center",fontSize:13,color:T.muted,fontFamily:T.font}}>Nenhuma página encontrada.</td></tr>
+                )}
+                {filtered.map(p => {
+                  const fm = funnelMeta(p.funnel);
+                  return (
+                    <tr key={p.id} style={{borderBottom:`1px solid ${T.border}`,opacity:p.active?1:0.5}}>
+                      <td style={{padding:"10px 14px",fontSize:13,color:T.ink,fontFamily:T.font}}>
+                        <div style={{fontWeight:600}}>{p.title || "(sem título)"}</div>
+                        <div style={{fontSize:11,color:T.muted,fontFamily:T.mono,marginTop:2}}>{p.url}</div>
+                      </td>
+                      <td style={{padding:"10px 14px"}}><Badge color={fm.color}>{fm.label}</Badge></td>
+                      <td style={{padding:"10px 14px",textAlign:"right",fontSize:13,fontFamily:T.mono,color:T.text,fontWeight:600}}>+{p.score_delta}</td>
+                      <td style={{padding:"10px 14px",textAlign:"center"}}>
+                        <div style={{display:"flex",justifyContent:"center"}}>
+                          <Toggle checked={p.active} onChange={()=>toggleActive(p)}/>
+                        </div>
+                      </td>
+                      <td style={{padding:"10px 14px",textAlign:"right",whiteSpace:"nowrap"}}>
+                        <Btn variant="ghost" size="xs" icon={<Edit3 size={11}/>} onClick={()=>openEdit(p)}>Editar</Btn>
+                        <Btn variant="ghost" size="xs" icon={<Trash2 size={11}/>} onClick={()=>remove(p)} style={{color:T.coral}}>Excluir</Btn>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {editing && (
+        <div onClick={closeEditor}
+          style={{position:"fixed",inset:0,background:"rgba(14,26,36,0.5)",backdropFilter:"blur(4px)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9000,padding:20}}>
+          <div onClick={e=>e.stopPropagation()}
+            style={{background:T.surface,borderRadius:16,width:"100%",maxWidth:560,maxHeight:"90vh",overflow:"auto",boxShadow:"0 25px 80px -20px rgba(14,26,36,0.4)"}}>
+            <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <Activity size={18} color={T.teal}/>
+                <span style={{fontSize:15,fontWeight:700,color:T.ink,fontFamily:T.head}}>{editing==="new" ? "Nova página rastreada" : "Editar página"}</span>
+              </div>
+              <button onClick={closeEditor} style={{background:"none",border:"none",cursor:"pointer",padding:4,color:T.muted}}><X size={18}/></button>
+            </div>
+            <div style={{padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+              <Input label="URL *" value={draft.url}
+                onChange={e=>setDraft(d=>({...d,url:e.target.value}))}
+                placeholder="vantari.com.br/blog/meu-post"
+                hint="Sem https:// — domínio + path"/>
+              <Input label="Título" value={draft.title}
+                onChange={e=>setDraft(d=>({...d,title:e.target.value}))}
+                placeholder="Ex: Como calcular verbas rescisórias"/>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                <Sel label="Funil" value={draft.funnel}
+                  onChange={e=>setDraft(d=>({...d,funnel:e.target.value}))}
+                  options={FUNNEL_OPTIONS.map(f=>({value:f.value,label:f.label}))}/>
+                <Input label="Pontos no Scoring" type="number" value={draft.score_delta}
+                  onChange={e=>setDraft(d=>({...d,score_delta:e.target.value}))}
+                  hint="Quantos pts somar quando lead visita"/>
+              </div>
+              <Input label="Categoria" value={draft.category}
+                onChange={e=>setDraft(d=>({...d,category:e.target.value}))}
+                placeholder="blog, lp, produto"/>
+              <Toggle checked={draft.active} onChange={v=>setDraft(d=>({...d,active:v}))} label="Ativo (rastreando visitas)"/>
+            </div>
+            <div style={{padding:"14px 22px",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"flex-end",gap:8,background:T.faint}}>
+              <Btn variant="outline" size="sm" onClick={closeEditor}>Cancelar</Btn>
+              <Btn size="sm" onClick={save} disabled={saving} icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar"}</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    ROOT — topbar idêntico ao vantari-analytics-dashboard
 ═══════════════════════════════════════════════════════════ */
 const NavSection = ({ label }) => (
@@ -962,13 +1526,15 @@ export default function VantariSettingsAdmin() {
       </div>
 
       <div style={{flex:1,overflowY:"auto",background:T.bg}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
-        {activeTab==="workspace"&&<WorkspaceTab toast={toast}/>}
-        {activeTab==="team"     &&<TeamTab      toast={toast}/>}
-        {activeTab==="email"    &&<EmailTab     toast={toast}/>}
-        {activeTab==="billing"  &&<BillingTab   toast={toast}/>}
-        {activeTab==="advanced" &&<AdvancedTab  toast={toast}/>}
-        {activeTab==="audit"    &&<AuditTab/>}
-        {activeTab==="support"  &&<SupportTab   toast={toast}/>}
+        {activeTab==="workspace"   &&<WorkspaceTab    toast={toast}/>}
+        {activeTab==="team"        &&<TeamTab         toast={toast}/>}
+        {activeTab==="customfields"&&<CustomFieldsTab toast={toast}/>}
+        {activeTab==="tracking"    &&<TrackingTab     toast={toast}/>}
+        {activeTab==="email"       &&<EmailTab        toast={toast}/>}
+        {activeTab==="billing"     &&<BillingTab      toast={toast}/>}
+        {activeTab==="advanced"    &&<AdvancedTab     toast={toast}/>}
+        {activeTab==="audit"       &&<AuditTab/>}
+        {activeTab==="support"     &&<SupportTab      toast={toast}/>}
       </div></div>
 
       <Toasts toasts={toasts}/>

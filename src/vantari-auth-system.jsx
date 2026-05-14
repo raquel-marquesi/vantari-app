@@ -281,7 +281,7 @@ const LoginScreen = () => {
 
         {/* Logo */}
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <img src="iconrs.png" alt="Vantari" style={{height:40,width:"auto"}}/>
+          <img src="/icone.png" alt="Vantari" style={{height:40,width:"auto"}}/>
           <span style={{fontFamily:HEAD,fontWeight:700,fontSize:22,letterSpacing:"0.04em",color:"#fff"}}>vantari</span>
         </div>
 
@@ -375,7 +375,7 @@ const Sidebar = ({ active, setActive, collapsed, setCollapsed, user }) => {
       {/* Logo */}
       <div style={{padding:collapsed?"18px 0":"14px 16px",display:"flex",alignItems:"center",justifyContent:collapsed?"center":"space-between",borderBottom:"1px solid rgba(255,255,255,0.12)",minHeight:60,position:"relative"}}>
         {collapsed
-          ?<img src="iconrs.png" alt="Vantari" style={{height:24,width:"auto"}}/>
+          ?<img src="/icone.png" alt="Vantari" style={{height:24,width:"auto"}}/>
           :<div style={{display:"flex",alignItems:"center",gap:8}}>
             <div style={{width:28,height:28,background:"white",borderRadius:7,display:"grid",placeItems:"center",flexShrink:0}}>
               <img src="/icone.png" alt="" style={{width:20,height:20}}/>
@@ -659,7 +659,7 @@ const AppContent = () => {
 
   if(loading) return (
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.faint,flexDirection:"column",gap:16}}>
-      <img src="iconrs.png" alt="Vantari" style={{height:44,width:"auto",animation:"pulse 1.5s ease infinite"}}/>
+      <img src="/icone.png" alt="Vantari" style={{height:44,width:"auto",animation:"pulse 1.5s ease infinite"}}/>
       <span style={{fontFamily:FONT,fontWeight:600,color:T.muted,fontSize:14}}>Carregando...</span>
     </div>
   );

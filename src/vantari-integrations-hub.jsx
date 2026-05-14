@@ -70,34 +70,15 @@ const fmtDate = (iso) => {
 
 const DB = {
   integrations: [
-    { id:"int_meta",   provider:"meta",    name:"Meta Ads / Facebook",    status:"connected",    last_sync:ago(1.2),config:{account_id:"act_123456789",pixel_id:"8734521098",business_id:"987654321",form_ids:["form_abc","form_xyz"]}},
-    { id:"int_google", provider:"google",  name:"Google Ads",             status:"connected",    last_sync:ago(0.5),config:{customer_id:"123-456-7890",conversion_actions:["purchase","lead_form"]}},
-    { id:"int_wa",     provider:"whatsapp",name:"WhatsApp Business API",  status:"disconnected", last_sync:null,    config:{phone_id:"",waba_id:"",templates:[]}},
-    { id:"int_wh",     provider:"webhook", name:"Webhooks Personalizados",status:"partial",      last_sync:ago(3.1),config:{endpoints:[{id:"wh_1",name:"CRM Interno",url:"https://api.empresa.com/leads",active:true,events:["new_lead","score_change"]}]}},
+    { id:"int_meta",   provider:"meta",    name:"Meta Ads / Facebook",    status:"disconnected", last_sync:null, config:{account_id:"",pixel_id:"",business_id:"",form_ids:[]}},
+    { id:"int_google", provider:"google",  name:"Google Ads",             status:"disconnected", last_sync:null, config:{customer_id:"",conversion_actions:[]}},
+    { id:"int_wa",     provider:"whatsapp",name:"WhatsApp Business API",  status:"disconnected", last_sync:null, config:{phone_id:"",waba_id:"",templates:[]}},
+    { id:"int_wh",     provider:"webhook", name:"Webhooks Personalizados",status:"disconnected", last_sync:null, config:{endpoints:[]}},
   ],
-  integration_logs: Array.from({length:35},(_,i)=>{
-    const providers=["meta","google","webhook"];
-    const actions={meta:["lead_sync","audience_push","pixel_fire","form_pull"],google:["conversion_import","audience_sync","keyword_track"],webhook:["lead_dispatch","score_dispatch","retry_attempt"]};
-    const p=providers[i%3];const acts=actions[p];
-    const statuses=i%7===0?"error":i%5===0?"warning":"success";
-    const details={success:["3 leads importados com sucesso","Audiência atualizada: 1.240 contatos","Evento de conversão registrado","Pixel disparado na landing page /demo"],warning:["Timeout na requisição — retentando","1 lead com email duplicado ignorado","Rate limit atingido, aguardando"],error:["Credencial expirada — reautorização necessária","Payload inválido rejeitado pela API","Falha de rede após 3 tentativas"]};
-    return{id:`log_${i}`,integration_id:`int_${p}`,provider:p,action:acts[i%acts.length],status:statuses,details:details[statuses][i%details[statuses].length],records_affected:statuses==="error"?0:Math.floor(Math.random()*15+1),timestamp:ago(i*0.7+Math.random()*0.5)};
-  }),
-  external_leads: Array.from({length:18},(_,i)=>{
-    const sources=["meta_form","meta_form","google_ads","google_ads","webhook"];
-    const names=["Carlos Mendes","Ana Beatriz","Roberto Lima","Fernanda Costa","Diego Alves","Patrícia Rocha","Juliana Ferreira","Marcos Oliveira","Beatriz Nunes","Lucas Pereira","Camila Souza","André Machado","Vanessa Cruz","Felipe Gomes","Larissa Martins","Bruno Carvalho","Priscila Rodrigues","Thiago Almeida"];
-    const src=sources[i%5];
-    return{id:`ext_${i}`,source:src,external_id:`ext_id_${Math.floor(Math.random()*9999999)}`,raw_data:{full_name:names[i],email:`${names[i].split(" ")[0].toLowerCase()}${i}@test.com`,phone:`(11) 9${8000000+i}`,campaign:["Black Friday","Demo Q4","eBook Grátis"][i%3],keyword:src==="google_ads"?["crm marketing","automação leads","software crm"][i%3]:null},mapped_data:{name:names[i],email:`${names[i].split(" ")[0].toLowerCase()}${i}@test.com`,phone:`(11) 9${8000000+i}`},processed:i<14,imported_at:ago(i*2.1)};
-  }),
-  wa_templates: [
-    {id:"tpl_1",name:"boas_vindas",     status:"approved",category:"UTILITY",   language:"pt_BR",body:"Olá {{1}}! Obrigado pelo seu interesse. Nossa equipe entrará em contato em breve."},
-    {id:"tpl_2",name:"follow_up_24h",   status:"approved",category:"MARKETING", language:"pt_BR",body:"Oi {{1}}, aqui é da {{2}}! Vimos que você se cadastrou ontem. Posso te ajudar com alguma dúvida?"},
-    {id:"tpl_3",name:"proposta_comercial",status:"pending",category:"MARKETING", language:"pt_BR",body:"Olá {{1}}! Sua proposta personalizada está pronta. Acesse aqui: {{2}}"},
-  ],
-  field_mappings: {
-    meta:  [{id:"fm_1",external_field:"full_name",   internal_field:"name",   transform:"none",         required:true},{id:"fm_2",external_field:"email",       internal_field:"email",  transform:"lowercase",    required:true},{id:"fm_3",external_field:"phone_number",internal_field:"phone",  transform:"format_phone",required:false},{id:"fm_4",external_field:"campaign_name",internal_field:"source", transform:"none",         required:false}],
-    google:[{id:"fm_5",external_field:"gclid",       internal_field:"utm_gclid",transform:"none",        required:true},{id:"fm_6",external_field:"keyword",     internal_field:"utm_term", transform:"lowercase",   required:false},{id:"fm_7",external_field:"campaign_id",internal_field:"utm_campaign",transform:"none",  required:false}],
-  },
+  integration_logs: [],
+  external_leads:   [],
+  wa_templates:     [],
+  field_mappings:   { meta:[], google:[] },
 };
 
 /* ═══════════════════════════════════════════════════════════

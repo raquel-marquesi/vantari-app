@@ -93,18 +93,11 @@ const TEMPLATES = {
 const rand = (min,max) => Math.floor(Math.random()*(max-min+1))+min;
 const uid  = () => Math.random().toString(36).slice(2,8);
 
-const seedPages = () => [
-  { id:"pg_1",name:"Webinar: Marketing com IA",   url_slug:"webinar-marketing-ia",    status:"published",template:"webinar",   sections:TEMPLATES.webinar.sections.map((s,i)=>({...s,id:`s${i}`})),   seo:{title:"Webinar Gratuito — Marketing com IA | Vantari",   description:"Aprenda a escalar seu marketing com inteligência artificial.",keywords:"marketing digital, IA, webinar"},og:{title:"Webinar: Marketing com IA",   description:"Inscreva-se gratuitamente",image:""},pixels:{fbPixel:"1234567890",ga4:"G-XXXXXXX",gtm:""},abTest:{enabled:true, variantName:"B — Headline Alternativa",variantSections:null,variantTraffic:50},metrics:{visitors:3840,leads:892, convRate:23.2,avgTime:"2m 14s"},created_at:new Date(Date.now()-25*864e5).toISOString() },
-  { id:"pg_2",name:"eBook: Guia de Lead Generation",url_slug:"ebook-lead-generation",  status:"published",template:"ebook",    sections:TEMPLATES.ebook.sections.map((s,i)=>({...s,id:`s${i}`})),    seo:{title:"eBook Grátis: Lead Generation 2025 | Vantari", description:"Guia completo com 15 estratégias.",keywords:"lead generation, ebook"},og:{title:"eBook Grátis: Lead Generation",description:"Baixe agora",             image:""},pixels:{fbPixel:"",        ga4:"G-XXXXXXX",gtm:"GTM-XXXXX"},abTest:{enabled:false,variantName:"",              variantSections:null,variantTraffic:50},metrics:{visitors:6120,leads:2143,convRate:35.0,avgTime:"3m 42s"},created_at:new Date(Date.now()-45*864e5).toISOString() },
-  { id:"pg_3",name:"Trial Gratuito 14 Dias",       url_slug:"trial-14-dias",           status:"published",template:"trial",    sections:TEMPLATES.trial.sections.map((s,i)=>({...s,id:`s${i}`})),    seo:{title:"Teste Grátis 14 Dias — Plataforma de Marketing | Vantari",description:"Automatize seu marketing.",keywords:"plataforma marketing, automação"},og:{title:"Teste Grátis: Vantari",   description:"14 dias sem cartão",      image:""},pixels:{fbPixel:"9876543210",ga4:"G-XXXXXXX",gtm:"GTM-XXXXX"},abTest:{enabled:false,variantName:"",              variantSections:null,variantTraffic:50},metrics:{visitors:9810,leads:1547,convRate:15.8,avgTime:"4m 20s"},created_at:new Date(Date.now()-60*864e5).toISOString() },
-  { id:"pg_4",name:"Newsletter Semanal",            url_slug:"newsletter",              status:"draft",    template:"newsletter",sections:TEMPLATES.newsletter.sections.map((s,i)=>({...s,id:`s${i}`})),seo:{title:"Newsletter de Marketing Digital | Vantari",      description:"Receba dicas semanais.",    keywords:"newsletter, marketing"},  og:{title:"Newsletter Vantari",     description:"Insights toda semana",    image:""},pixels:{fbPixel:"",        ga4:"",           gtm:""},      abTest:{enabled:false,variantName:"",              variantSections:null,variantTraffic:50},metrics:{visitors:0,    leads:0,   convRate:0,   avgTime:"—"},    created_at:new Date(Date.now()-2*864e5).toISOString()  },
-];
+const seedVisits  = () => [];
+const seedSources = () => [];
+const seedDevices = () => [];
 
-const seedVisits  = (pageId) => Array.from({length:14},(_,i)=>{ const d=new Date();d.setDate(d.getDate()-(13-i));return{date:d.toLocaleDateString("pt-BR",{day:"2-digit",month:"2-digit"}),visitors:rand(80,600),leads:rand(10,150)};});
-const seedSources = () => [{source:"Google Ads",visitors:4820,pct:38},{source:"Orgânico",visitors:2900,pct:23},{source:"Meta Ads",visitors:2560,pct:20},{source:"Email",visitors:1530,pct:12},{source:"Direto",visitors:760,pct:6},{source:"Social",visitors:180,pct:1}];
-const seedDevices = () => [{device:"Mobile",pct:62,color:T.blue},{device:"Desktop",pct:30,color:T.teal},{device:"Tablet",pct:8,color:T.green}];
-
-const DB = { pages:seedPages(), visits:{}, sources:seedSources(), devices:seedDevices() };
+const DB = { pages:[], visits:{}, sources:seedSources(), devices:seedDevices() };
 
 /* ═══════════════════════════════════════════════════════════════════════
    ICON SYSTEM (custom SVG paths — no emoji)

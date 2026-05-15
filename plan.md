@@ -15,16 +15,16 @@
 |---|---|---|---|
 | Auth / Login | vantari-auth-system.jsx | ✅ Supabase Auth | ✅ Fase 1 |
 | Dashboard Analytics | vantari-analytics-dashboard.jsx | ✅ KPIs reais (leads, MQL, SQL, campanhas) | ✅ Fases 1–4 |
-| Lead Management | vantari-leads-module.jsx | ✅ Supabase (CRUD completo) | ✅ Fases 1+5 |
+| Lead Management | vantari-leads-module.jsx | ✅ 4 abas + Atividades 8 cat | ✅ Fases 1+5+6 |
 | Lead Scoring | vantari-scoring-system.jsx | ⚠️ leads carregados, sem lead_events | ✅ Fases 1+5 |
 | Email Marketing | vantari-email-marketing.jsx | ⚠️ campaigns/sends parcial | ✅ Fases 1+5 |
 | Landing Pages | vantari-landing-pages.jsx | ⚠️ form_submissions (sparklines), páginas mockadas | ✅ Fases 1+5 |
 | AI Marketing | vantari-ai-marketing.jsx | ✅ leads reais via Supabase | ✅ Fase 1 |
 | Integrações | vantari-integrations-hub.jsx | — configuração, sem dados | ✅ Fase 1 |
-| Settings | vantari-settings-admin.jsx | ✅ team_members via Supabase | ✅ Fase 1 |
+| Settings | vantari-settings-admin.jsx | ✅ 8 abas (+ Custom Fields + Lead Tracking) | ✅ Fase 1 |
 | Onboarding Wizard | vantari-onboarding-wizard.jsx | localStorage | ✅ Fase 1 |
 | Workflow Builder | vantari-workflow-builder.jsx | — aguarda dados | ✅ Fase 1 |
-| Segmentos | vantari-segments.jsx | ⚠️ sparklines de leads, sem dados de segmentos | ✅ Fases 1+5 |
+| Segmentos | vantari-segments.jsx | ✅ filtro "visitou página" funcional | ✅ Fases 1+5 |
 
 ---
 
@@ -59,32 +59,66 @@
 
 ---
 
+## Plano de Migração do RD Station (em andamento)
+
+Substituição 100% do RD Station Marketing em 11 etapas. Baseado na auditoria técnica de 14/05/2026 (`auditoria rd/*.docx`): 12.154 leads, 49 campos personalizados, 149 segmentos, 72 emails, 28 templates, 78 páginas rastreadas, 3 LPs, 3 formulários, integrações Meta Ads + Google Ads + GA4 + CRM RD.
+
+| Etapa | Status | Entrega |
+|---|---|---|
+| **0** Campos Personalizados | ✅ 2026-05-14 | Migration 001 (49 cf_* seedados) + aba CRUD em `/settings` |
+| **1** Lead Scoring 2D (Perfil A-D + Interesse) | ⏭️ pulada | Pendente |
+| **2** Lead Tracking | ✅ 2026-05-14 | Migration 003 (10 URLs seed) + Edge Function `/track` + `public/tracker.js` + UI gestão + timeline no perfil + filtro segments |
+| **3** Meta Lead Ads (OAuth + Webhook) | ⏭️ pulada | Requer Meta Developer App |
+| **4** Atrair (Social/SEO/Link Bio) | ⏳ | |
+| **5** Conversão (Forms/Pop-ups/Web Push) | ⏳ | |
+| **6** Leads ampliado | ✅ 2026-05-14 | Migration 004 + 4 abas (Leads/Empresas/Importações/Exportações) + Atividades 8 cat |
+| **7** Analisar (Canais/UTM/Atribuição/Dashboards) | ⏳ | |
+| **8** GA4 + Google Ads | ⏳ | |
+| **9** Relacionar (WhatsApp Cloud API + SMS + Chatbot) | ⏳ | |
+| **10** Validador Email + Lista Inteligente | ⏳ | |
+| **11** Polimento + cutover do RD | ⏳ | Migrar leads, segments, emails, templates |
+
+### Decisões já tomadas
+- **Objetivo:** substituir 100% o RD
+- **Estratégia:** construir estrutura agora, migrar dados na Etapa 11 via CSV (aba Importações)
+- **Scoring:** adotar modelo RD 2D (Perfil A-D + Interesse por pontos) — mostrar separadamente
+- **Integrações:** reais (não mock) — Meta Ads, GA4, etc desde o início
+- **WhatsApp:** Meta Cloud API oficial (não Z-API)
+- **Lead Tracking:** script real (Edge Function + cookie + heartbeat)
+
 ## Próximos passos (ordem de prioridade)
 
 ### Dados reais (backend)
-1. **Importar leads reais** via CSV → tabela `leads`
+1. **Importar leads reais** via CSV → usar aba `/leads → Importações` (suporta 49 cf_*)
 2. **Email Marketing** → adicionar colunas `html_content`, `from_name`, `from_email` em `campaigns`; deploy da Edge Function `send-campaign`
-3. **Scoring** → conectar `lead_events` para histórico real de score
+3. **Scoring** → conectar `lead_events` para histórico real de score (já está vindo via `page_visits`)
 4. **Landing Pages** → conectar `landing_pages` + `form_submissions` (substituir dados mockados)
 5. **Segments** → conectar tabela `segments` (atualmente mostra contagem de leads, não de segmentos)
 6. **Workflow Builder** → conectar `automation_flows` + `flow_runs`
 
 ### Próximas fases de design (Fase 6+)
-6. **Fase 6 — Replicação Fase 3+4** → feed ao vivo + alertas de severidade nos módulos `/leads`, `/email`, `/scoring`
-7. **Fase 7 — Módulos restantes** → HeroKpiCard para `/ai-marketing`, `/workflow`, `/integrations`
-8. **Fase 8 — Realtime** → substituir polling 5s por Supabase Realtime subscriptions
-9. **Fase 9 — Mobile** → sidebar colapsa, grid de KPIs quebra em 2 col abaixo de 1024px
+- **Fase 6 — Replicação Fase 3+4** → feed ao vivo + alertas de severidade nos módulos `/leads`, `/email`, `/scoring`
+- **Fase 7 — Módulos restantes** → HeroKpiCard para `/ai-marketing`, `/workflow`, `/integrations`
+- **Fase 8 — Realtime** → substituir polling 5s por Supabase Realtime subscriptions
+- **Fase 9 — Mobile** → sidebar colapsa, grid de KPIs quebra em 2 col abaixo de 1024px
 
 ### Produção
-10. **RLS com `auth.uid()`** → antes de go-live com dados sensíveis
+- **RLS com `auth.uid()`** → antes de go-live com dados sensíveis
+- **Deploy Edge Function `/track`** → `supabase functions deploy track --no-verify-jwt`
+- **Snippet tracker.js** instalado em `vantari.com.br` (WordPress via WPCode) ✅
 
 ---
 
 ## Schema Supabase (implementado)
 
+### Migrações versionadas em `supabase/migrations/`
+- **001_custom_fields.sql** — `custom_fields` (49 cf_* seedados) + `lead_custom_values` (JSONB) + ENUMs `custom_field_type` / `custom_field_source`
+- **002_leads_core.sql** — `leads` (21 colunas + UTMs + unsubscribed + owner) + `lead_events` (event_type + score_delta) + ENUM `lead_stage` + trigger `apply_lead_event_score`
+- **003_lead_tracking.sql** — `tracked_pages` (10 URLs seed) + `page_visits` (anônimas ou identificadas) + ENUM `page_funnel` + trigger `page_visit_to_lead_event`
+- **004_companies_imports.sql** — `companies` + `lead_imports` (com `field_mapping` JSONB) + `lead_exports` + FK `leads.company_id` + ENUM `import_status`
+
+### Tabelas pré-existentes (legado pré-migration)
 ```
-leads              — contatos com score, stage, tags, unsubscribed
-lead_events        — comportamento; trigger atualiza leads.score
 campaigns          — campanhas de email
 campaign_sends     — métricas por lead/campanha
 automation_flows   — definição dos fluxos
@@ -96,9 +130,14 @@ team_members       — equipe (nome, email, role, status)
 dashboard_alerts   — alertas configurados para o dashboard
 ```
 
-Triggers ativos:
-- `trg_update_lead_score` — score automático ao inserir `lead_events`
-- `trg_leads_updated_at`, `trg_campaigns_updated_at`, `trg_flows_updated_at`
+### Triggers ativos
+- `apply_lead_event_score` — atualiza `leads.score` ao inserir `lead_events`
+- `page_visit_to_lead_event` — gera `lead_event` quando visita em página rastreada
+- `set_updated_at` — em todas as tabelas com `updated_at`
+
+### Edge Functions
+- `track` — recebe pings do tracker.js (em `supabase/functions/track/index.ts`)
+- `send-campaign` — criada, ainda não deployada
 
 ---
 

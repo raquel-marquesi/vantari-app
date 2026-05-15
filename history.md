@@ -2,6 +2,61 @@
 
 ---
 
+## 2026-05-14 — Auditoria RD + Plano de Migração em 11 Etapas
+
+### Leitura da auditoria
+- Documentos lidos: `auditoria rd/Auditoria_RDStation_Vantari.docx` + `Auditoria_RDStation_Vantari_Complemento.docx`
+- Inventário identificado: 12.154 leads, 49 campos personalizados (cf_*), 149 segmentos, 72 emails, 28 templates, 78 páginas rastreadas, 3 LPs, 3 formulários, 2 pop-ups (rascunho)
+- Integrações ativas no RD: Meta Ads, Google Ads, GA4, RD Station CRM, reCAPTCHA
+- Lead Scoring 2D: 8 critérios de Perfil (Urgência 20%, Estado 20%, Valor 18%, Conhecimento 12%, Faixa etária 10%, Tempo 8%, Profissão 8%, Responsividade 3%) + 5 grupos de Interesse
+
+### Decisões tomadas com a usuária
+- **Objetivo:** substituir 100% o RD Station (não coexistir)
+- **Migração de dados:** só estrutura agora; leads vêm depois via CSV
+- **Scoring:** adotar modelo 2D do RD, mostrar Perfil e Interesse separados
+- **Integrações:** reais desde o início (Meta, GA4)
+- **WhatsApp:** Meta Cloud API oficial (não Z-API)
+- **Lead Tracking:** script real (Edge Function + cookie + heartbeat)
+
+### Plano gerado (11 etapas)
+0. Campos Personalizados • 1. Lead Scoring 2D • 2. Lead Tracking • 3. Meta Lead Ads • 4. Atrair (Social/SEO/Bio) • 5. Conversão (Forms/Pop-ups/Push) • 6. Leads ampliado • 7. Analisar • 8. GA4 + Google Ads • 9. Relacionar (WhatsApp/SMS/Chatbot) • 10. Validador + Smart Lists • 11. Polimento + cutover
+
+---
+
+## 2026-05-14 — Etapa 0 + 2 + 6 entregues
+
+### Etapa 0 — Campos Personalizados
+- `supabase/migrations/001_custom_fields.sql` — tabelas `custom_fields` + `lead_custom_values` + 2 ENUMs + seed dos 49 campos `cf_*` (16 manuais, 7 do CRM `cf_plug_*`, 13 do Meta Lead Ads `cf_fb_forms_*`)
+- `supabase/migrations/002_leads_core.sql` — tabelas `leads` (21 colunas) + `lead_events` + trigger `apply_lead_event_score` que recalcula `leads.score` ao inserir evento + ativa FK `lead_custom_values.lead_id`
+- `vantari-settings-admin.jsx` — nova aba **Campos Personalizados**: CRUD com busca, filtro por origem, auto-slug do api_id, copiar com clique, 6 cards de contagem por origem
+- Modal de edição com 12 tipos de campo (text/email/phone/url/number/date/select/radio/checkbox/etc) + opções configuráveis pra select/radio
+
+### Etapa 2 — Lead Tracking real
+- `supabase/migrations/003_lead_tracking.sql` — `tracked_pages` (10 URLs seed da auditoria com funnel + score_delta) + `page_visits` (anônimas ou identificadas) + ENUM `page_funnel` + trigger `page_visit_to_lead_event` que gera `lead_event` automaticamente
+- `supabase/functions/track/index.ts` — Edge Function Deno que recebe POST do tracker.js, resolve lead por email/cookie, faz match com tracked_pages e insere page_visit (com CORS aberto pra `*`)
+- `public/tracker.js` — snippet ~150 linhas com: cookie `_vantari_vid` (2 anos), identificação via `Vantari.identify()`, `sendBeacon` quando disponível, heartbeat 30s, suporte a SPA (patch history pushState/replaceState), captura de UTMs
+- `vantari-settings-admin.jsx` — aba **Lead Tracking**: 5 cards por funil + tabela de páginas (toggle ativo/inativo, score_delta editável) + snippet de instalação copiável + modal CRUD
+- `vantari-leads-module.jsx` (panel) — timeline das 30 últimas visitas com cor por funil + tempo relativo
+- `vantari-segments.jsx` — filtro "Visitou página" / "Não visitou" com select de páginas ativas (pre-query em `page_visits` antes do `.in()`)
+
+### Etapa 6 — Leads ampliado
+- `supabase/migrations/004_companies_imports.sql` — `companies` (CNPJ, setor, tamanho, etc) + `lead_imports` (com `field_mapping` JSONB + status) + `lead_exports` + FK `leads.company_id` + ENUM `import_status`
+- `vantari-leads-module.jsx` reestruturado em 4 abas:
+  - **Leads** (existente) — KPIs + tabela
+  - **Empresas** — CRUD completo (nome, website, CNPJ, setor, tamanho, localização)
+  - **Importações** — Upload CSV com detecção automática de separador (`,` ou `;` do RD), parser sem deps externas, auto-mapeamento heurístico (Nome→name, Email→email, etc), mapeamento manual pros 49 cf_*, insert em lotes de 50 com barra de progresso, upsert por email
+  - **Exportações** — Botão "Exportar CSV" + histórico
+- `ActivitiesPanel` no painel do lead — 8 categorias filtráveis (Ecommerce, Conversões, Visitas, Emails, Fluxos, Social, Propriedades, LGPD) com auto-categorização de `event_type` + combinação de `page_visits` + `lead_events` em timeline única
+
+### Etapas puladas
+- **Etapa 1** (Lead Scoring 2D) — adiada
+- **Etapa 3** (Meta Lead Ads) — requer Meta Developer App; usuária optou por pular agora
+
+### Validações de build
+- Vite build OK em todas as 3 etapas (vantari-leads-module.jsx cresceu de ~25KB para ~55KB)
+
+---
+
 ## 2026-05-12 — Deploy inicial e correções
 
 ### Primeiro deploy (preview)

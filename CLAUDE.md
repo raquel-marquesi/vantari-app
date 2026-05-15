@@ -33,17 +33,29 @@ src/
   index.css / App.css              # Estilos globais
   vantari-auth-system.jsx          # /login         ← Supabase Auth
   vantari-analytics-dashboard.jsx  # /dashboard     ← KPIs reais via Supabase + design Fases 2-4
-  vantari-leads-module.jsx         # /leads         ← Supabase (CRUD completo) + HeroKpiCard
+  vantari-leads-module.jsx         # /leads         ← 4 abas: Leads / Empresas / Importações / Exportações
   vantari-scoring-system.jsx       # /scoring       ← HeroKpiCard + sparklines
   vantari-email-marketing.jsx      # /email         ← HeroKpiCard + sparklines (campaigns/sends)
   vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions)
   vantari-ai-marketing.jsx         # /ai-marketing  ← leads reais via Supabase
   vantari-integrations-hub.jsx     # /integrations
-  vantari-settings-admin.jsx       # /settings      ← team_members via Supabase
+  vantari-settings-admin.jsx       # /settings      ← 8 abas: Workspace / Equipe / Campos Personalizados / Lead Tracking / Email / Billing / Avançado / Audit / Suporte
   vantari-onboarding-wizard.jsx    # /onboarding    ← localStorage
   vantari-workflow-builder.jsx     # /workflow
-  vantari-segments.jsx             # /segments      ← HeroKpiCard + sparklines
+  vantari-segments.jsx             # /segments      ← HeroKpiCard + sparklines + filtro "visitou página"
   assets/                          # hero.png, react.svg, vite.svg
+
+supabase/
+  migrations/
+    001_custom_fields.sql          # custom_fields + lead_custom_values + seed 49 cf_*
+    002_leads_core.sql             # leads + lead_events + trigger score
+    003_lead_tracking.sql          # tracked_pages + page_visits + trigger → lead_event
+    004_companies_imports.sql      # companies + lead_imports + lead_exports
+  functions/
+    track/index.ts                 # Edge Function que recebe pings do tracker.js
+
+public/
+  tracker.js                       # Snippet JS público (instalar em vantari.com.br)
 ```
 
 ## Rotas
@@ -167,8 +179,15 @@ Estes componentes estão definidos em cada arquivo que os usa (padrão do projet
 
 | Tabela | Uso |
 |---|---|
-| `leads` | CRUD principal de contatos |
-| `lead_events` | Histórico de comportamento + score (trigger automático) |
+| `leads` | CRUD principal de contatos (migration 002) |
+| `lead_events` | Histórico comportamental + score (trigger automático, migration 002) |
+| `custom_fields` | Definição dos 49 campos personalizados cf_* (migration 001) |
+| `lead_custom_values` | Valores dos campos personalizados por lead (migration 001) |
+| `tracked_pages` | Catálogo de URLs rastreadas (migration 003) |
+| `page_visits` | Visitas registradas pelo tracker.js — trigger gera `lead_event` (migration 003) |
+| `companies` | Empresas vinculadas aos leads via `leads.company_id` (migration 004) |
+| `lead_imports` | Histórico de importações CSV (migration 004) |
+| `lead_exports` | Histórico de exportações CSV (migration 004) |
 | `campaigns` | Campanhas de email |
 | `campaign_sends` | Métricas por lead/campanha |
 | `automation_flows` | Fluxos de automação |
@@ -178,6 +197,39 @@ Estes componentes estão definidos em cada arquivo que os usa (padrão do projet
 | `segments` | Listas estáticas e dinâmicas |
 | `team_members` | Membros da equipe (usado em /settings → Equipe) |
 | `dashboard_alerts` | Alertas configurados (usado em /dashboard → Overview) |
+
+### ENUMs criados
+- `custom_field_type`: text, textarea, email, phone, url, number, date, datetime, select, multiselect, radio, checkbox
+- `custom_field_source`: manual, crm_sync, fb_forms, google_ads, imported, system
+- `lead_stage`: Visitor, Lead, MQL, SQL, Opportunity, Customer
+- `page_funnel`: topo, meio, fundo, institucional, outro
+- `import_status`: pending, processing, done, failed, canceled
+
+### Convenção `api_id` dos custom_fields
+- `cf_*` — campos manuais
+- `cf_plug_*` — sincronizados com CRM externo (legado RD)
+- `cf_fb_forms_*` — preenchidos via Meta Lead Ads (13 campos: P1-P4 + 5 UTMs)
+
+## Migração do RD Station (em andamento)
+
+Plano em 11 etapas pra substituir 100% o RD Station Marketing.
+
+| Etapa | Status | Descrição |
+|---|---|---|
+| **0** — Campos Personalizados | ✅ | Migration 001 + aba `/settings` → Campos Personalizados (CRUD dos 49 cf_*) |
+| **1** — Lead Scoring 2D | ⏭️ pulada | Modelo RD (Perfil A-D + Interesse por pontos). Pendente |
+| **2** — Lead Tracking | ✅ | Migration 003 + Edge Function `/track` + `public/tracker.js` + UI em /settings + timeline no perfil + filtro em /segments |
+| **3** — Meta Lead Ads | ⏭️ pulada | Requer Meta Developer App. Pendente |
+| **4** — Atrair (Social/SEO/Link Bio) | ⏳ | |
+| **5** — Conversão (Forms/Pop-ups/Web Push) | ⏳ | |
+| **6** — Leads ampliado | ✅ | Migration 004 + 4 abas (Leads / Empresas / Importações / Exportações) + 8 categorias de Atividades no perfil |
+| **7** — Analisar (Canais/UTM/Atribuição) | ⏳ | |
+| **8** — GA4 + Google Ads | ⏳ | |
+| **9** — Relacionar (WhatsApp/SMS/Chatbot) | ⏳ | WhatsApp via Meta Cloud API (oficial) |
+| **10** — Validador Email + Lista Inteligente | ⏳ | |
+| **11** — Polimento + cutover | ⏳ | Migrar 12.154 leads, 149 segmentos, 72 emails, 28 templates |
+
+Auditoria do RD em `auditoria rd/Auditoria_RDStation_Vantari.docx` + `Auditoria_RDStation_Vantari_Complemento.docx`.
 
 ## Usuários de autenticação (Supabase Auth)
 
@@ -198,6 +250,25 @@ Senhas gerenciadas via Supabase Auth. Para redefinir: `UPDATE auth.users SET enc
 ## Estágios do funil
 
 Visitor → Lead → MQL → SQL → Opportunity → Customer
+
+## Lead Tracking — como funciona
+
+1. **Snippet `public/tracker.js`** instalado em `vantari.com.br` (via plugin WordPress WPCode)
+2. Cada visita dispara `POST` para a Edge Function `/track`
+3. Edge Function:
+   - Resolve `lead_id` por cookie `_vantari_vid` (anônimo) ou `email` (identificado)
+   - Procura match em `tracked_pages` (URL normalizada)
+   - Insere registro em `page_visits`
+4. Trigger SQL: se a `page_visits` é identificada **e** a página é rastreada, gera `lead_event` com `score_delta` configurado na página → recalcula `leads.score`
+5. UI:
+   - `/settings` → Lead Tracking: gerenciar páginas rastreadas (CRUD) + snippet copiável
+   - `/leads/:id` (panel): **Atividades** com 8 categorias filtráveis
+   - `/segments`: filtro "Visitou página X / Não visitou"
+
+API JS no site:
+- `Vantari.identify({ email, lead_id })` — vincula visitante anônimo a um lead
+- `Vantari.track("/path")` — disparo manual de visita
+- `Vantari.reset()` — limpa identificação (logout)
 
 ## Behavioral rules (aplicar em todos os módulos)
 

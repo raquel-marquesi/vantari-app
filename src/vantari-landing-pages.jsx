@@ -1117,6 +1117,315 @@ const NewPageModal = ({ onClose, onCreate }) => {
 /* ═══════════════════════════════════════════════════════════════════════
    MAIN MODULE
 ════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════
+   FORMS MANAGER — tab Formulários standalone (Etapa 5)
+════════════════════════════════════════════════════════════════════════ */
+const FIELD_TYPES = [
+  { v:"text",     l:"Texto" },
+  { v:"email",    l:"Email" },
+  { v:"cpf",      l:"CPF" },
+  { v:"phone",    l:"Telefone" },
+  { v:"number",   l:"Número" },
+  { v:"date",     l:"Data" },
+  { v:"textarea", l:"Texto longo" },
+  { v:"select",   l:"Seleção" },
+  { v:"checkbox", l:"Checkbox" },
+];
+
+const slugify = (s) => (s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,60);
+
+const FormsManager = () => {
+  const [forms, setForms] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null);     // form em edição (modal full)
+  const [embedFor, setEmbedFor] = useState(null);   // form pra mostrar embed code
+
+  const fetchForms = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("forms").select("*").order("created_at", { ascending: false });
+    setForms(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchForms(); }, [fetchForms]);
+
+  const newForm = () => {
+    setEditing({
+      name: "Novo formulário",
+      slug: "",
+      description: "",
+      fields: [
+        { id: "cpf",   type: "cpf",   label: "CPF",   required: true,  placeholder: "000.000.000-00" },
+        { id: "name",  type: "text",  label: "Nome",  required: true,  placeholder: "Seu nome" },
+        { id: "email", type: "email", label: "Email", required: false, placeholder: "seu@email.com" },
+      ],
+      success_msg: "Obrigado! Seus dados foram registrados.",
+      source_label: "",
+      tags: [],
+      active: true,
+    });
+  };
+
+  const saveForm = async () => {
+    const payload = {
+      name:         editing.name,
+      slug:         editing.slug || slugify(editing.name),
+      description:  editing.description,
+      fields:       editing.fields,
+      success_msg:  editing.success_msg,
+      source_label: editing.source_label,
+      tags:         editing.tags || [],
+      active:       editing.active,
+    };
+    let err;
+    if (editing.id) {
+      ({ error: err } = await supabase.from("forms").update(payload).eq("id", editing.id));
+    } else {
+      ({ error: err } = await supabase.from("forms").insert(payload));
+    }
+    if (err) { alert("Erro: " + err.message); return; }
+    setEditing(null);
+    fetchForms();
+  };
+
+  const deleteForm = async (id) => {
+    if (!window.confirm("Excluir este formulário? Submissões serão preservadas.")) return;
+    await supabase.from("forms").delete().eq("id", id);
+    fetchForms();
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div>
+          <h2 style={{ fontFamily:T.head, fontSize:18, fontWeight:700, color:T.text, margin:0, letterSpacing:"-0.01em" }}>Formulários</h2>
+          <p style={{ fontSize:12, color:T.muted, margin:"4px 0 0", fontFamily:T.font, fontWeight:500 }}>
+            Formulários standalone para embedar em sites externos. Submissões viram leads.
+          </p>
+        </div>
+        <Btn variant="primary" icon={IC.plus} size="md" onClick={newForm}>Novo formulário</Btn>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:"center", padding:48, color:T.muted }}>Carregando…</div>
+      ) : forms.length === 0 ? (
+        <div style={{ textAlign:"center", padding:"56px 24px", color:T.muted }}>
+          <Ico d={IC.form} size={40} color={T.border}/>
+          <div style={{ fontSize:15, fontWeight:700, color:T.text, marginTop:14, fontFamily:T.head }}>Nenhum formulário ainda</div>
+          <div style={{ fontSize:12, fontWeight:600, color:T.muted, marginTop:6, fontFamily:T.font }}>Crie um formulário e cole o embed code no teu site.</div>
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(280px,1fr))", gap:14 }}>
+          {forms.map(f => (
+            <div key={f.id} style={{ background:T.surface, border:`0.5px solid ${T.border}`, borderRadius:12, padding:16, boxShadow:T.shadow }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontFamily:T.head, fontWeight:700, fontSize:14, color:T.text, marginBottom:2 }}>{f.name || "—"}</div>
+                  <div style={{ fontFamily:T.mono, fontSize:11, color:T.muted, fontWeight:600 }}>/f/{f.slug || "(sem slug)"}</div>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:4, background: f.active ? `${T.green}14` : "#EEF2F6", color: f.active ? T.green : T.muted, fontFamily:T.font }}>
+                  {f.active ? "ATIVO" : "INATIVO"}
+                </span>
+              </div>
+              {f.description && (
+                <p style={{ fontSize:11, color:T.muted, fontFamily:T.font, fontWeight:500, margin:"4px 0 10px", lineHeight:1.4 }}>{f.description}</p>
+              )}
+              <div style={{ display:"flex", gap:12, marginTop:10, fontSize:11, color:T.muted, fontFamily:T.font, fontWeight:600 }}>
+                <span><strong style={{ color:T.text }}>{(f.fields||[]).length}</strong> campos</span>
+                <span><strong style={{ color:T.text }}>{f.submission_count || 0}</strong> submissões</span>
+              </div>
+              <div style={{ display:"flex", gap:6, marginTop:14, borderTop:`0.5px solid ${T.border}`, paddingTop:12 }}>
+                <button onClick={() => setEditing(f)} style={{ flex:1, padding:"6px 10px", border:`1px solid ${T.border}`, borderRadius:7, background:"transparent", color:T.text, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>Editar</button>
+                <button onClick={() => setEmbedFor(f)} style={{ flex:1, padding:"6px 10px", border:`1px solid ${T.teal}`, borderRadius:7, background:`${T.teal}10`, color:T.teal, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>Embed</button>
+                <button onClick={() => deleteForm(f.id)} style={{ padding:"6px 10px", border:`1px solid ${T.red}40`, borderRadius:7, background:"transparent", color:T.red, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>Excluir</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {editing && <FormEditor draft={editing} onChange={setEditing} onSave={saveForm} onCancel={() => setEditing(null)} />}
+      {embedFor && <EmbedCodeModal form={embedFor} onClose={() => setEmbedFor(null)} />}
+    </div>
+  );
+};
+
+const FormEditor = ({ draft, onChange, onSave, onCancel }) => {
+  const updateField = (idx, patch) => {
+    const fields = [...draft.fields];
+    fields[idx] = { ...fields[idx], ...patch };
+    onChange({ ...draft, fields });
+  };
+  const removeField = (idx) => onChange({ ...draft, fields: draft.fields.filter((_,i) => i !== idx) });
+  const addField = () => onChange({
+    ...draft,
+    fields: [...draft.fields, { id: `f${Date.now()}`, type:"text", label:"Novo campo", required:false, placeholder:"" }]
+  });
+  const moveField = (idx, dir) => {
+    const fields = [...draft.fields];
+    const target = idx + dir;
+    if (target < 0 || target >= fields.length) return;
+    [fields[idx], fields[target]] = [fields[target], fields[idx]];
+    onChange({ ...draft, fields });
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:T.surface, borderRadius:14, width:720, maxWidth:"94vw", maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
+        <div style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontFamily:T.head, fontWeight:700, fontSize:16, color:T.text }}>{draft.id ? "Editar formulário" : "Novo formulário"}</span>
+          <button onClick={onCancel} style={{ background:"none", border:"none", cursor:"pointer", color:T.muted }}><Ico d={IC.close} size={18} color={T.muted}/></button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"20px 22px" }}>
+          {/* Configurações */}
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Nome</label>
+              <input value={draft.name||""} onChange={e => onChange({...draft, name:e.target.value, slug: draft.slug || slugify(e.target.value)})}
+                style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+            </div>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Slug (URL pública)</label>
+              <input value={draft.slug||""} onChange={e => onChange({...draft, slug:slugify(e.target.value)})}
+                style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.mono, outline:"none" }}/>
+            </div>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Descrição</label>
+            <textarea value={draft.description||""} onChange={e => onChange({...draft, description:e.target.value})} rows={2}
+              style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none", resize:"vertical" }}/>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:14 }}>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Source label (gravado em leads.source)</label>
+              <input value={draft.source_label||""} onChange={e => onChange({...draft, source_label:e.target.value})}
+                placeholder="Ex: Newsletter, Landing page X"
+                style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+            </div>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Tags (separadas por vírgula)</label>
+              <input value={(draft.tags||[]).join(", ")} onChange={e => onChange({...draft, tags: e.target.value.split(",").map(t => t.trim()).filter(Boolean)})}
+                placeholder="newsletter, lead-novo"
+                style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+            </div>
+          </div>
+
+          <div style={{ marginBottom:14 }}>
+            <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Mensagem de sucesso</label>
+            <input value={draft.success_msg||""} onChange={e => onChange({...draft, success_msg:e.target.value})}
+              style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+          </div>
+
+          {/* Campos */}
+          <div style={{ marginTop:18 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:T.text, fontFamily:T.head }}>Campos ({(draft.fields||[]).length})</span>
+              <Btn variant="ghost" size="sm" icon={IC.plus} onClick={addField}>Adicionar campo</Btn>
+            </div>
+            {(draft.fields||[]).map((f, idx) => (
+              <div key={idx} style={{ border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 12px", marginBottom:8, background:T.faint }}>
+                <div style={{ display:"grid", gridTemplateColumns:"100px 1fr 1fr 60px auto", gap:8, alignItems:"center" }}>
+                  <select value={f.type} onChange={e => updateField(idx, { type:e.target.value })}
+                    style={{ padding:"6px 8px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12, fontFamily:T.font, background:"#fff", outline:"none" }}>
+                    {FIELD_TYPES.map(t => <option key={t.v} value={t.v}>{t.l}</option>)}
+                  </select>
+                  <input value={f.label||""} onChange={e => updateField(idx, { label:e.target.value })} placeholder="Label"
+                    style={{ padding:"6px 10px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12, color:T.text, fontFamily:T.font, outline:"none" }}/>
+                  <input value={f.placeholder||""} onChange={e => updateField(idx, { placeholder:e.target.value })} placeholder="Placeholder"
+                    style={{ padding:"6px 10px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12, color:T.text, fontFamily:T.font, outline:"none" }}/>
+                  <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:T.muted, fontFamily:T.font, fontWeight:600 }}>
+                    <input type="checkbox" checked={!!f.required} onChange={e => updateField(idx, { required:e.target.checked })}/> Req.
+                  </label>
+                  <div style={{ display:"flex", gap:4 }}>
+                    <button onClick={() => moveField(idx, -1)} title="Subir" style={{ padding:4, background:"transparent", border:"none", cursor:"pointer", color:T.muted, fontSize:14 }}>↑</button>
+                    <button onClick={() => moveField(idx, 1)} title="Descer" style={{ padding:4, background:"transparent", border:"none", cursor:"pointer", color:T.muted, fontSize:14 }}>↓</button>
+                    <button onClick={() => removeField(idx)} title="Remover" style={{ padding:4, background:"transparent", border:"none", cursor:"pointer", color:T.red, fontSize:14 }}>×</button>
+                  </div>
+                </div>
+                {f.type === "select" && (
+                  <input value={(f.options||[]).join(", ")} onChange={e => updateField(idx, { options: e.target.value.split(",").map(o => o.trim()).filter(Boolean) })}
+                    placeholder="Opções separadas por vírgula"
+                    style={{ marginTop:6, width:"100%", padding:"6px 10px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12, color:T.text, fontFamily:T.font, outline:"none" }}/>
+                )}
+              </div>
+            ))}
+            {(draft.fields||[]).length === 0 && (
+              <div style={{ textAlign:"center", padding:"24px 12px", color:T.muted, fontSize:12, fontFamily:T.font }}>Nenhum campo. Clique "Adicionar campo".</div>
+            )}
+          </div>
+
+          <div style={{ marginTop:14 }}>
+            <label style={{ display:"flex", alignItems:"center", gap:6, fontSize:12, color:T.text, fontFamily:T.font, fontWeight:600 }}>
+              <input type="checkbox" checked={!!draft.active} onChange={e => onChange({...draft, active:e.target.checked})}/> Formulário ativo (visível no /f/:slug)
+            </label>
+          </div>
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}>
+          <Btn variant="ghost" onClick={onCancel}>Cancelar</Btn>
+          <Btn variant="primary" onClick={onSave}>Salvar formulário</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const EmbedCodeModal = ({ form, onClose }) => {
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://vantari-app.vercel.app";
+  const publicUrl = `${baseUrl}/f/${form.slug}`;
+  const iframeCode = `<iframe src="${publicUrl}" style="width:100%;max-width:520px;height:520px;border:0" loading="lazy"></iframe>`;
+  const linkCode = publicUrl;
+  const scriptCode = `<script async src="${baseUrl}/forms-embed.js" data-form="${form.slug}"></script>`;
+
+  const copy = (text) => { navigator.clipboard.writeText(text); };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:T.surface, borderRadius:14, width:600, maxWidth:"94vw", maxHeight:"90vh", display:"flex", flexDirection:"column" }}>
+        <div style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontFamily:T.head, fontWeight:700, fontSize:16, color:T.text }}>Embed: {form.name}</span>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:T.muted }}><Ico d={IC.close} size={18} color={T.muted}/></button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"18px 22px" }}>
+          <p style={{ fontSize:12, color:T.muted, marginTop:0, fontFamily:T.font }}>Cole no teu site externo. Submissões viram leads automaticamente.</p>
+
+          <div style={{ marginBottom:18 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase" }}>URL pública</span>
+              <button onClick={() => copy(linkCode)} style={{ fontSize:11, fontWeight:700, color:T.teal, background:"none", border:"none", cursor:"pointer" }}>Copiar</button>
+            </div>
+            <pre style={{ background:"#0f172a", color:"#7dd3fc", padding:"10px 14px", borderRadius:8, fontFamily:T.mono, fontSize:11, margin:0, overflow:"auto" }}>{linkCode}</pre>
+          </div>
+
+          <div style={{ marginBottom:18 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase" }}>Iframe (recomendado)</span>
+              <button onClick={() => copy(iframeCode)} style={{ fontSize:11, fontWeight:700, color:T.teal, background:"none", border:"none", cursor:"pointer" }}>Copiar</button>
+            </div>
+            <pre style={{ background:"#0f172a", color:"#7dd3fc", padding:"10px 14px", borderRadius:8, fontFamily:T.mono, fontSize:11, margin:0, overflow:"auto", whiteSpace:"pre-wrap" }}>{iframeCode}</pre>
+          </div>
+
+          <div>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+              <span style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase" }}>Script JS</span>
+              <button onClick={() => copy(scriptCode)} style={{ fontSize:11, fontWeight:700, color:T.teal, background:"none", border:"none", cursor:"pointer" }}>Copiar</button>
+            </div>
+            <pre style={{ background:"#0f172a", color:"#7dd3fc", padding:"10px 14px", borderRadius:8, fontFamily:T.mono, fontSize:11, margin:0, overflow:"auto", whiteSpace:"pre-wrap" }}>{scriptCode}</pre>
+          </div>
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end" }}>
+          <Btn variant="primary" onClick={onClose}>Fechar</Btn>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function VantariLandingPages() {
   const [pages,       setPages]   = useState(DB.pages);
   const [editingPage, setEditing] = useState(null);
@@ -1125,6 +1434,7 @@ export default function VantariLandingPages() {
   const [filterStatus,setFilter]  = useState("all");
   const [toast,       setToast]   = useState(null);
   const [landingSpark, setLandingSpark] = useState({ pages: [], visitors: [], leads: [], conv: [] });
+  const [viewMode, setViewMode] = useState("pages");  // "pages" | "forms"
 
   useEffect(() => {
     const loadSpark = async () => {
@@ -1231,12 +1541,36 @@ export default function VantariLandingPages() {
 
         {/* Topbar */}
         <div style={{height:52,background:T.surface,borderBottom:`0.5px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0}}>
-          <span style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.head,letterSpacing:"-0.01em"}}>Landing Pages</span>
-          <Btn variant="primary" icon={IC.plus} size="md" onClick={()=>setShowNew(true)}>Nova página</Btn>
+          <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+            <span style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.head,letterSpacing:"-0.01em"}}>
+              {viewMode === "pages" ? "Landing Pages" : "Formulários"}
+            </span>
+            <div style={{ display:"flex", gap:2, background:T.faint, padding:3, borderRadius:8, border:`0.5px solid ${T.border}` }}>
+              <button onClick={() => setViewMode("pages")}
+                style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:T.font,
+                         background: viewMode === "pages" ? T.surface : "transparent",
+                         color: viewMode === "pages" ? T.text : T.muted,
+                         boxShadow: viewMode === "pages" ? T.shadow : "none" }}>
+                Páginas
+              </button>
+              <button onClick={() => setViewMode("forms")}
+                style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:T.font,
+                         background: viewMode === "forms" ? T.surface : "transparent",
+                         color: viewMode === "forms" ? T.text : T.muted,
+                         boxShadow: viewMode === "forms" ? T.shadow : "none" }}>
+                Formulários
+              </button>
+            </div>
+          </div>
+          {viewMode === "pages" && (
+            <Btn variant="primary" icon={IC.plus} size="md" onClick={()=>setShowNew(true)}>Nova página</Btn>
+          )}
         </div>
 
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #EEFCF7 0%, #E6FAF0 100%)"}}>
+          {viewMode === "forms" && <FormsManager />}
+          {viewMode === "pages" && (<>
           {/* Hero KPI strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
             <HeroKpiCard
@@ -1311,8 +1645,8 @@ export default function VantariLandingPages() {
             <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
               {[
                 {table:"landing_pages",   cols:["id","name","content[]","url_slug","status","seo{}","og{}","pixels{}","ab_test{}","metrics{}","created_at"]},
-                {table:"page_visits",     cols:["id","page_id","visitor_id","session_id","referrer","utm_source","device","country","timestamp"]},
-                {table:"page_conversions",cols:["id","page_id","lead_id","form_data{}","variant","converted_at","source"]},
+                {table:"forms",           cols:["id","name","slug","fields[]","success_msg","tags[]","active","submission_count"]},
+                {table:"form_submissions",cols:["id","form_id","lead_id","payload{}","utm_source","created_at"]},
               ].map(({table,cols})=>(
                 <div key={table} style={{background:T.faint,borderRadius:8,padding:"10px 12px"}}>
                   <div style={{fontSize:12,fontWeight:700,color:T.blue,marginBottom:6,fontFamily:"monospace"}}>{table}</div>
@@ -1321,6 +1655,7 @@ export default function VantariLandingPages() {
               ))}
             </div>
           </div>
+          </>)}
         </div>
       </div>
 

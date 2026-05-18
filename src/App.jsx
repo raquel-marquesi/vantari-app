@@ -14,6 +14,7 @@ const Settings         = lazy(() => import("./vantari-settings-admin"));
 const Onboarding       = lazy(() => import("./vantari-onboarding-wizard"));
 const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
 const Segments         = lazy(() => import("./vantari-segments"));
+const PublicForm       = lazy(() => import("./vantari-public-form"));
 
 function PageLoader() {
   return (
@@ -76,6 +77,8 @@ export default function App() {
         <Routes>
           <Route path="/"               element={<Navigate to="/dashboard" replace />} />
           <Route path="/login"          element={<AuthSystem />} />
+          {/* Rota pública: form embedável /f/:slug */}
+          <Route path="/f/:slug"        element={<PublicForm />} />
           <Route path="/dashboard"      element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           <Route path="/leads"          element={<ProtectedRoute><Leads /></ProtectedRoute>} />
           <Route path="/scoring"        element={<ProtectedRoute><Scoring /></ProtectedRoute>} />

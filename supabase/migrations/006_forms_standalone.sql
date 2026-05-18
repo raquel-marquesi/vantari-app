@@ -15,33 +15,75 @@
 -- ════════════════════════════════════════════════════════════════
 
 -- ─── Tabela: forms ───
+-- Cria se não existir. Caso já exista (schema legado), adiciona as colunas faltantes.
 create table if not exists forms (
   id            uuid primary key default gen_random_uuid(),
-  name          text not null,                          -- "Newsletter 2026"
-  slug          text not null unique,                   -- "newsletter-2026" (usado em /f/:slug)
+  name          text,
+  slug          text,
   description   text,
-  fields        jsonb not null default '[]'::jsonb,     -- [{id,type,label,required,placeholder,options}]
-  style         jsonb default '{}'::jsonb,              -- { primary_color, button_text, layout }
-  redirect_url  text,                                   -- pra onde vai após submeter (thank you page)
+  fields        jsonb default '[]'::jsonb,
+  style         jsonb default '{}'::jsonb,
+  redirect_url  text,
   success_msg   text default 'Obrigado! Recebemos seus dados.',
-  tags          text[] default '{}',                    -- tags aplicadas ao lead criado
-  stage_on_submit lead_stage default 'Lead',            -- estágio que o lead vira ao submeter
-  source_label  text,                                   -- "Newsletter" → grava em leads.source
+  tags          text[] default '{}',
+  source_label  text,
   active        boolean default true,
-  submission_count int default 0,                       -- contador rápido
+  submission_count int default 0,
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
 
-create index if not exists idx_forms_slug   on forms(slug);
+-- Adiciona colunas que possam estar faltando no schema legado
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='slug')           then alter table forms add column slug text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='description')    then alter table forms add column description text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='fields')         then alter table forms add column fields jsonb default '[]'::jsonb; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='style')          then alter table forms add column style jsonb default '{}'::jsonb; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='redirect_url')   then alter table forms add column redirect_url text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='success_msg')    then alter table forms add column success_msg text default 'Obrigado! Recebemos seus dados.'; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='tags')           then alter table forms add column tags text[] default '{}'; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='source_label')   then alter table forms add column source_label text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='active')         then alter table forms add column active boolean default true; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='submission_count') then alter table forms add column submission_count int default 0; end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='created_at')     then alter table forms add column created_at timestamptz default now(); end if;
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='updated_at')     then alter table forms add column updated_at timestamptz default now(); end if;
+end $$;
+
+-- Adiciona stage_on_submit (depende do enum lead_stage existir)
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name='forms' and column_name='stage_on_submit') then
+    if exists (select 1 from pg_type where typname='lead_stage') then
+      alter table forms add column stage_on_submit lead_stage default 'Lead';
+    else
+      alter table forms add column stage_on_submit text default 'Lead';
+    end if;
+  end if;
+end $$;
+
+-- Relaxa NOT NULL em colunas legadas que possam atrapalhar inserts
+do $$
+declare col record;
+begin
+  for col in
+    select column_name from information_schema.columns
+     where table_schema='public' and table_name='forms'
+       and is_nullable='NO'
+       and column_name not in ('id','created_at','updated_at')
+  loop
+    execute format('alter table forms alter column %I drop not null', col.column_name);
+  end loop;
+end $$;
+
+-- Slug unique (parcial pra permitir NULL durante migração)
+create unique index if not exists forms_slug_unique on forms(slug) where slug is not null;
 create index if not exists idx_forms_active on forms(active);
 
 -- ─── Tabela: form_submissions ───
 create table if not exists form_submissions (
   id            uuid primary key default gen_random_uuid(),
-  form_id       uuid not null references forms(id) on delete cascade,
-  lead_id       uuid references leads(id) on delete set null,
-  payload       jsonb not null,                         -- { email, name, ...respostas }
+  form_id       uuid,
+  lead_id       uuid,
+  payload       jsonb default '{}'::jsonb,
   utm_source    text,
   utm_medium    text,
   utm_campaign  text,
@@ -52,6 +94,36 @@ create table if not exists form_submissions (
   ip            text,
   created_at    timestamptz default now()
 );
+
+-- Adiciona colunas faltantes (schema legado)
+do $$ begin
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='form_id')      then alter table form_submissions add column form_id uuid; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='lead_id')      then alter table form_submissions add column lead_id uuid; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='payload')      then alter table form_submissions add column payload jsonb default '{}'::jsonb; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='utm_source')   then alter table form_submissions add column utm_source text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='utm_medium')   then alter table form_submissions add column utm_medium text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='utm_campaign') then alter table form_submissions add column utm_campaign text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='utm_content')  then alter table form_submissions add column utm_content text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='utm_term')     then alter table form_submissions add column utm_term text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='user_agent')   then alter table form_submissions add column user_agent text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='referrer')     then alter table form_submissions add column referrer text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='ip')           then alter table form_submissions add column ip text; end if;
+  if not exists (select 1 from information_schema.columns where table_name='form_submissions' and column_name='created_at')   then alter table form_submissions add column created_at timestamptz default now(); end if;
+end $$;
+
+-- Relaxa NOT NULL legados
+do $$
+declare col record;
+begin
+  for col in
+    select column_name from information_schema.columns
+     where table_schema='public' and table_name='form_submissions'
+       and is_nullable='NO'
+       and column_name not in ('id','created_at')
+  loop
+    execute format('alter table form_submissions alter column %I drop not null', col.column_name);
+  end loop;
+end $$;
 
 create index if not exists idx_fs_form    on form_submissions(form_id);
 create index if not exists idx_fs_lead    on form_submissions(lead_id);

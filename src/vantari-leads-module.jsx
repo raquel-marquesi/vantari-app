@@ -816,9 +816,22 @@ function ImportsView() {
     const text = await f.text();
     const rows = parseCSVAuto(text);
     if (rows.length < 2) { alert("CSV vazio ou inválido"); return; }
-    const hdr = rows[0].map(s => (s||"").trim());
+
+    // Auto-skip de linhas de título/metadados:
+    // procura a primeira linha com >= 2 colunas e pelo menos uma coluna que pareça header conhecido.
+    let headerIdx = 0;
+    const looksLikeHeader = (row) => {
+      if (!row || row.length < 2) return false;
+      const joined = row.map(c => norm(c)).join(" ");
+      return /email|e-mail|nome|telefone|empresa|cidade|estado|tag/.test(joined);
+    };
+    for (let i = 0; i < Math.min(5, rows.length); i++) {
+      if (looksLikeHeader(rows[i])) { headerIdx = i; break; }
+    }
+
+    const hdr = rows[headerIdx].map(s => (s||"").trim());
     setHeaders(hdr);
-    setRawRows(rows.slice(1));
+    setRawRows(rows.slice(headerIdx + 1));
     setMapping(autoMapHeaders(hdr));
     setStage("mapping");
   };

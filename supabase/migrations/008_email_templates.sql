@@ -79,50 +79,21 @@ alter table email_templates enable row level security;
 drop policy if exists "et_dev_all" on email_templates;
 create policy "et_dev_all" on email_templates for all using (true) with check (true);
 
--- ─── Seed: 3 templates iniciais (matchando os atuais no código) ───
-insert into email_templates (name, slug, category, description, subject, blocks, source) values
-  (
-    'Newsletter Mensal',
-    'newsletter-mensal',
-    'newsletter',
-    'Layout editorial com destaque para artigos e conteúdo',
-    'Vantari Insights — Edição mensal',
-    '[
-      {"id":"b1","type":"header","content":{"logo":true,"headline":"Vantari Insights","subline":"Novembro 2024"}},
-      {"id":"b2","type":"text","content":{"text":"Olá, {{lead.name}}!\n\nBem-vindo à nossa newsletter mensal com as principais tendências de marketing digital.","align":"left"}},
-      {"id":"b3","type":"divider","content":{}},
-      {"id":"b4","type":"text","content":{"text":"Continue lendo para descobrir insights exclusivos do mercado.","align":"left"}},
-      {"id":"b5","type":"button","content":{"text":"Ler Artigo Completo","url":"#","align":"center","color":"#0D7491"}},
-      {"id":"b6","type":"footer","content":{"text":"© 2024 Vantari · Descadastrar"}}
-    ]'::jsonb,
-    'manual'
-  ),
-  (
-    'Oferta Promocional',
-    'oferta-promocional',
-    'promotional',
-    'Alta conversão com urgência e call-to-action em destaque',
-    'Oferta especial — por tempo limitado',
-    '[
-      {"id":"b1","type":"header","content":{"logo":true,"headline":"Oferta Especial","subline":"Por tempo limitado"}},
-      {"id":"b2","type":"text","content":{"text":"{{lead.name}}, temos uma oferta exclusiva para você.\n\nNão perca esta oportunidade única.","align":"center"}},
-      {"id":"b3","type":"button","content":{"text":"Aproveitar Agora","url":"#","align":"center","color":"#FF6B5E"}},
-      {"id":"b4","type":"footer","content":{"text":"© 2024 Vantari · Descadastrar"}}
-    ]'::jsonb,
-    'manual'
-  ),
-  (
-    'Follow-up de Vendas',
-    'follow-up-vendas',
-    'follow-up',
-    'Sequência de nurturing focada em conversão',
-    'Podemos conversar 15 minutos?',
-    '[
-      {"id":"b1","type":"header","content":{"logo":true,"headline":"","subline":""}},
-      {"id":"b2","type":"text","content":{"text":"Oi {{lead.name}},\n\nSoftwares e automação podem triplicar seus resultados. Que tal explorarmos isso juntos?\n\nAbraços,\nTime Vantari","align":"left"}},
-      {"id":"b3","type":"button","content":{"text":"Agendar uma Conversa","url":"#","align":"left","color":"#0D7491"}},
-      {"id":"b4","type":"footer","content":{"text":"© 2024 Vantari · Descadastrar"}}
-    ]'::jsonb,
-    'manual'
-  )
-on conflict (slug) do nothing;
+-- ─── Seed: 3 templates iniciais (idempotente sem ON CONFLICT) ───
+do $$
+declare
+  seed record;
+begin
+  for seed in
+    select * from (values
+      ('Newsletter Mensal',  'newsletter-mensal',  'newsletter',  'Layout editorial com destaque para artigos e conteúdo', 'Vantari Insights — Edição mensal'),
+      ('Oferta Promocional', 'oferta-promocional', 'promotional', 'Alta conversão com urgência e CTA em destaque',          'Oferta especial — por tempo limitado'),
+      ('Follow-up de Vendas','follow-up-vendas',   'follow-up',   'Sequência de nurturing focada em conversão',             'Podemos conversar 15 minutos?')
+    ) as t(name, slug, category, description, subject)
+  loop
+    if not exists (select 1 from email_templates where slug = seed.slug) then
+      insert into email_templates (name, slug, category, description, subject, blocks, source, active)
+      values (seed.name, seed.slug, seed.category, seed.description, seed.subject, '[]'::jsonb, 'manual', true);
+    end if;
+  end loop;
+end $$;

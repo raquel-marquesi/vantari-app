@@ -242,13 +242,24 @@ function LeadModal({ lead, onClose, onSave }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const cleanCpf = (raw) => {
+    if (!raw) return null;
+    const v = String(raw).replace(/\D/g, "");
+    if (v.length !== 11) return null;
+    if (/^(\d)\1{10}$/.test(v)) return null;
+    return v;
+  };
+
   const handleSave = async () => {
-    if (!form.email) { setError("E-mail obrigatório."); return; }
+    const cpfClean = cleanCpf(form.cpf);
+    if (!cpfClean && !form.email) { setError("Informe CPF ou Email."); return; }
+    if (form.cpf && !cpfClean) { setError("CPF inválido (11 dígitos)."); return; }
     setSaving(true); setError(null);
 
     const payload = {
+      cpf:     cpfClean,
       name:    form.name    || null,
-      email:   form.email.trim().toLowerCase(),
+      email:   form.email ? form.email.trim().toLowerCase() : null,
       phone:   form.phone   || null,
       company: form.company || null,
       source:  form.source  || null,
@@ -306,8 +317,9 @@ function LeadModal({ lead, onClose, onSave }) {
           </button>
         </div>
         <div style={{ padding: "20px 24px" }}>
+          {field("CPF (identificador único)", "cpf", "text", "000.000.000-00")}
           {field("Nome", "name", "text", "Nome completo")}
-          {field("E-mail *", "email", "email", "email@empresa.com")}
+          {field("E-mail", "email", "email", "email@empresa.com")}
           {field("Telefone", "phone", "text", "(11) 99999-9999")}
           {field("Empresa", "company", "text", "Nome da empresa")}
           {field("Fonte", "source", "text", "landing_page, google_ads...")}
@@ -399,6 +411,11 @@ function LeadPanel({ lead, onClose, onEdit, onDelete }) {
           <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, background: stage.bg, color: stage.color, fontFamily: T.font }}>
             {lead.stage || "Visitor"}
           </span>
+          {!lead.cpf && (
+            <span title="Lead sem CPF — necessário para identificação única" style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: `${T.danger}14`, color: T.danger, fontFamily: T.font, display:"inline-flex", alignItems:"center", gap:4 }}>
+              <AlertCircle size={11} /> CPF pendente
+            </span>
+          )}
         </div>
 
         {/* Painel 2D Perfil × Interesse */}
@@ -431,9 +448,10 @@ function LeadPanel({ lead, onClose, onEdit, onDelete }) {
 
         {/* Campos */}
         {[
-          { icon: Phone,    label: "Telefone",  val: lead.phone    },
-          { icon: Building2,label: "Empresa",   val: lead.company  },
-          { icon: Star,     label: "Fonte",     val: lead.source   },
+          { icon: ShieldCheck, label: "CPF",       val: lead.cpf ? lead.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4") : null },
+          { icon: Phone,       label: "Telefone",  val: lead.phone    },
+          { icon: Building2,   label: "Empresa",   val: lead.company  },
+          { icon: Star,        label: "Fonte",     val: lead.source   },
         ].map(({ icon: Icon, label, val }) => val && (
           <div key={label} style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12 }}>
             <Icon size={14} color={T.muted} />
@@ -730,8 +748,9 @@ function ImportsView() {
 
   // Campos padrão de lead disponíveis pra mapeamento
   const STD_FIELDS = [
+    { v:"cpf",          l:"CPF * (identificador)" },
     { v:"name",         l:"Nome"          },
-    { v:"email",        l:"Email *"       },
+    { v:"email",        l:"Email"         },
     { v:"phone",        l:"Telefone"      },
     { v:"company",      l:"Empresa"       },
     { v:"source",       l:"Fonte"         },
@@ -751,7 +770,9 @@ function ImportsView() {
 
   // Mapeamento RD Station → Vantari (colunas padrão do export RD)
   const RD_PRESETS = {
-    // Identificação
+    // Identificação principal — CPF (novo: identificador único)
+    "cpf": "cpf", "c.p.f.": "cpf", "documento": "cpf", "cpf do lead": "cpf", "cpf/cnpj": "cpf",
+    // Email (secundário)
     "email": "email", "e-mail": "email", "endereco de e-mail": "email", "endereço de e-mail": "email",
     "nome": "name", "primeiro nome": "name", "nome completo": "name", "first name": "name",
     "sobrenome": "name", "last name": "name",
@@ -859,8 +880,17 @@ function ImportsView() {
       (cfRows || []).forEach(r => cfIds[r.api_id] = r.id);
     }
 
+    // Helper: limpa e valida CPF (11 dígitos, rejeita sequências triviais)
+    const cleanCpf = (raw) => {
+      if (!raw) return null;
+      const v = String(raw).replace(/\D/g, "");
+      if (v.length !== 11) return null;
+      if (/^(\d)\1{10}$/.test(v)) return null;
+      return v;
+    };
+
     // Constrói payloads em memória ANTES de subir (rápido)
-    const allLeadPayloads = [];           // { idx, payload, cfValues }
+    const allLeadPayloads = [];           // { idx, payload, cfValues, conflictKey }
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
       const leadPayload = {};
@@ -872,65 +902,82 @@ function ImportsView() {
         if (!raw) continue;
         if (target === "tags") {
           leadPayload.tags = raw.split(/[|,;]/).map(t=>t.trim()).filter(Boolean);
+        } else if (target === "cpf") {
+          leadPayload.cpf = cleanCpf(raw);
         } else if (target.startsWith("cf_")) {
           cfValues[target] = raw;
         } else {
           leadPayload[target] = raw;
         }
       }
-      if (!leadPayload.email) {
+
+      // Determina chave de conflito: CPF se houver, senão email
+      let conflictKey = null;
+      if (leadPayload.cpf) {
+        conflictKey = "cpf";
+      } else if (leadPayload.email) {
+        leadPayload.email = leadPayload.email.toLowerCase();
+        conflictKey = "email";
+      } else {
         failed++;
-        if (errors.length < 50) errors.push({ row:i+2, err:"sem email" });
+        if (errors.length < 50) errors.push({ row:i+2, err:"sem CPF nem email" });
         continue;
       }
-      leadPayload.email = leadPayload.email.toLowerCase();
-      allLeadPayloads.push({ idx:i, payload:leadPayload, cfValues });
+
+      if (leadPayload.email) leadPayload.email = leadPayload.email.toLowerCase();
+      allLeadPayloads.push({ idx:i, payload:leadPayload, cfValues, conflictKey });
     }
 
-    // Bulk upsert de leads — 200 por vez
-    const BULK = 200;
-    for (let i = 0; i < allLeadPayloads.length; i += BULK) {
-      const slice = allLeadPayloads.slice(i, i + BULK);
-      const payloads = slice.map(s => s.payload);
+    // Separa por chave de conflito (cpf vs email) — bulk upsert por grupo
+    const byCpf   = allLeadPayloads.filter(p => p.conflictKey === "cpf");
+    const byEmail = allLeadPayloads.filter(p => p.conflictKey === "email");
 
-      const { data: upserted, error: uerr } = await supabase
-        .from("leads")
-        .upsert(payloads, { onConflict: "email" })
-        .select("id, email");
+    // Bulk upsert helper
+    const bulkUpsert = async (group, conflictCol) => {
+      const BULK = 200;
+      for (let i = 0; i < group.length; i += BULK) {
+        const slice = group.slice(i, i + BULK);
+        const payloads = slice.map(s => s.payload);
 
-      if (uerr) {
-        failed += slice.length;
-        if (errors.length < 50) errors.push({ batch:i, err:uerr.message });
-      } else {
-        imported += (upserted?.length || 0);
+        const { data: upserted, error: uerr } = await supabase
+          .from("leads")
+          .upsert(payloads, { onConflict: conflictCol })
+          .select(`id, ${conflictCol}`);
 
-        // Mapear email → lead_id
-        const byEmail = {};
-        (upserted || []).forEach(l => { byEmail[l.email] = l.id; });
+        if (uerr) {
+          failed += slice.length;
+          if (errors.length < 50) errors.push({ batch:i, err:uerr.message });
+        } else {
+          imported += (upserted?.length || 0);
 
-        // Coletar todos os cf_values do batch
-        const cfBatch = [];
-        slice.forEach(s => {
-          const lid = byEmail[s.payload.email];
-          if (!lid) return;
-          Object.entries(s.cfValues).forEach(([apiId, value]) => {
-            const cfId = cfIds[apiId];
-            if (!cfId) return;
-            cfBatch.push({ lead_id: lid, custom_field_id: cfId, value: JSON.stringify(value) });
+          const byKey = {};
+          (upserted || []).forEach(l => { byKey[l[conflictCol]] = l.id; });
+
+          const cfBatch = [];
+          slice.forEach(s => {
+            const lid = byKey[s.payload[conflictCol]];
+            if (!lid) return;
+            Object.entries(s.cfValues).forEach(([apiId, value]) => {
+              const cfId = cfIds[apiId];
+              if (!cfId) return;
+              cfBatch.push({ lead_id: lid, custom_field_id: cfId, value: JSON.stringify(value) });
+            });
           });
-        });
 
-        // Bulk upsert dos custom values (sublotes de 500)
-        for (let j = 0; j < cfBatch.length; j += 500) {
-          const cfSlice = cfBatch.slice(j, j + 500);
-          await supabase
-            .from("lead_custom_values")
-            .upsert(cfSlice, { onConflict: "lead_id,custom_field_id" });
+          for (let j = 0; j < cfBatch.length; j += 500) {
+            const cfSlice = cfBatch.slice(j, j + 500);
+            await supabase
+              .from("lead_custom_values")
+              .upsert(cfSlice, { onConflict: "lead_id,custom_field_id" });
+          }
         }
-      }
 
-      setProgress(p => ({ ...p, done: Math.min(p.done + slice.length, total), imported, failed }));
-    }
+        setProgress(p => ({ ...p, done: Math.min(p.done + slice.length, total), imported, failed }));
+      }
+    };
+
+    await bulkUpsert(byCpf, "cpf");
+    await bulkUpsert(byEmail, "email");
 
     await supabase.from("lead_imports").update({
       status:"done", imported, failed,
@@ -1029,7 +1076,7 @@ function ImportsView() {
           })()}
           <div style={{ marginTop:16, display:"flex", justifyContent:"flex-end", gap:8, alignItems:"center" }}>
             <span style={{ fontSize:12, color:T.muted, fontFamily:T.font, marginRight:"auto" }}>
-              {Object.values(mapping).filter(v => v && v !== "__skip__").length} colunas mapeadas. Email é obrigatório.
+              {Object.values(mapping).filter(v => v && v !== "__skip__").length} colunas mapeadas. CPF (recomendado) ou Email obrigatório.
             </span>
             <button onClick={applyRdPreset} title="Re-aplica detecção automática usando colunas conhecidas do RD Station + labels dos custom fields"
               style={{ padding:"8px 14px", border:`1px solid ${T.teal}`, borderRadius:10, background:`${T.teal}10`, color:T.teal, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font, display:"inline-flex", alignItems:"center", gap:6 }}>
@@ -1041,10 +1088,10 @@ function ImportsView() {
               const counts = {};
               vals.forEach(v => { if (v && v !== "__skip__") counts[v] = (counts[v]||0)+1; });
               const hasConflict = Object.values(counts).some(c => c > 1);
-              const hasEmail = vals.includes("email");
-              const blocked = !hasEmail || hasConflict;
+              const hasId = vals.includes("cpf") || vals.includes("email");
+              const blocked = !hasId || hasConflict;
               return (
-                <button onClick={doImport} disabled={blocked} title={!hasEmail ? "Mapeie a coluna de email" : hasConflict ? "Resolva conflitos de mapeamento" : ""}
+                <button onClick={doImport} disabled={blocked} title={!hasId ? "Mapeie a coluna de CPF ou Email" : hasConflict ? "Resolva conflitos de mapeamento" : ""}
                   style={{ padding:"8px 14px", border:"none", borderRadius:10, background:T.gradient, color:"#fff", fontSize:12, fontWeight:700, cursor: blocked ? "not-allowed" : "pointer", fontFamily:T.font, opacity: blocked ? 0.5 : 1 }}>
                   Importar {rawRows.length} leads
                 </button>
@@ -1325,6 +1372,7 @@ export default function LeadsModule() {
   const [search, setSearch]       = useState("");
   const [stageFilter, setStageFilter] = useState("Todos");
   const [profileFilter, setProfileFilter] = useState("Todos");
+  const [pendingOnly, setPendingOnly] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editLead, setEditLead]   = useState(null);
   const [selected, setSelected]   = useState(null);
@@ -1369,12 +1417,13 @@ export default function LeadsModule() {
     let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
     if (stageFilter !== "Todos") query = query.eq("stage", stageFilter);
     if (profileFilter !== "Todos") query = query.eq("profile", profileFilter);
-    if (search.trim()) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`);
+    if (pendingOnly) query = query.is("cpf", null);
+    if (search.trim()) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%,cpf.ilike.%${search.replace(/\D/g,"")}%`);
     const { data, error: err } = await query;
     setLoading(false);
     if (err) { setError(err.message); return; }
     setLeads(data || []);
-  }, [search, stageFilter, profileFilter]);
+  }, [search, stageFilter, profileFilter, pendingOnly]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -1536,6 +1585,16 @@ export default function LeadsModule() {
               </select>
               <ChevronDown size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.muted, pointerEvents: "none" }} />
             </div>
+            <button
+              onClick={() => setPendingOnly(p => !p)}
+              title="Mostrar apenas leads sem CPF (pendentes)"
+              style={{
+                padding: "9px 14px", border: `1px solid ${pendingOnly ? T.danger : T.border}`, borderRadius: 10,
+                fontSize: 12, fontWeight: 700, color: pendingOnly ? T.danger : T.muted, background: pendingOnly ? `${T.danger}10` : T.surface, cursor: "pointer", fontFamily: T.font,
+                display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+              <AlertCircle size={13} /> Pendentes
+            </button>
           </div>
 
           {/* Erro */}
@@ -1555,7 +1614,7 @@ export default function LeadsModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: T.faint }}>
-                  {["Lead", "Empresa", "Estágio", "Perfil", "Score", "Tags", "Fonte", ""].map(h => (
+                  {["Lead", "CPF", "Empresa", "Estágio", "Perfil", "Score", "Tags", "Fonte", ""].map(h => (
                     <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: T.head, textTransform: "uppercase", letterSpacing: .5 }}>
                       {h}
                     </th>
@@ -1571,7 +1630,7 @@ export default function LeadsModule() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
+                    <td colSpan={9} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
                       Nenhum lead encontrado.
                     </td>
                   </tr>
@@ -1602,6 +1661,17 @@ export default function LeadsModule() {
                               <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font }}>{lead.email}</div>
                             </div>
                           </div>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          {lead.cpf ? (
+                            <span style={{ fontFamily: T.mono, fontSize: 12, color: T.text, fontWeight: 600 }}>
+                              {lead.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4")}
+                            </span>
+                          ) : (
+                            <span title="Lead sem CPF — precisa completar" style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: `${T.danger}14`, color: T.danger, fontFamily: T.font, letterSpacing: "0.04em" }}>
+                              PENDENTE
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: "12px 16px", fontSize: 13, color: T.text, fontFamily: T.font }}>{lead.company || "—"}</td>
                         <td style={{ padding: "12px 16px" }}>

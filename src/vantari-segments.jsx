@@ -92,14 +92,16 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
 
 /* ─── filter fields and operators ─── */
 const FIELDS = [
-  { value: "score",        label: "Score",         type: "number" },
-  { value: "stage",        label: "Estágio",       type: "enum",   opts: ["visitor","lead","mql","sql","opportunity","customer"] },
-  { value: "source",       label: "Fonte",         type: "text"   },
-  { value: "email",        label: "Email",         type: "text"   },
-  { value: "company",      label: "Empresa",       type: "text"   },
-  { value: "tags",         label: "Tags",          type: "text"   },
-  { value: "unsubscribed", label: "Descadastrado", type: "bool"   },
-  { value: "visited_page", label: "Visitou página",type: "page"   },  // ← novo (Lead Tracking)
+  { value: "score",          label: "Score (Interesse)",  type: "number" },
+  { value: "profile",        label: "Perfil (A-D)",       type: "enum",   opts: ["A","B","C","D"] },
+  { value: "profile_points", label: "Pontos de Perfil",   type: "number" },
+  { value: "stage",          label: "Estágio",            type: "enum",   opts: ["visitor","lead","mql","sql","opportunity","customer"] },
+  { value: "source",         label: "Fonte",              type: "text"   },
+  { value: "email",          label: "Email",              type: "text"   },
+  { value: "company",        label: "Empresa",            type: "text"   },
+  { value: "tags",           label: "Tags",               type: "text"   },
+  { value: "unsubscribed",   label: "Descadastrado",      type: "bool"   },
+  { value: "visited_page",   label: "Visitou página",     type: "page"   },  // Lead Tracking
 ];
 const OPS = {
   number: [{ v: "gt", l: ">" }, { v: "gte", l: "≥" }, { v: "lt", l: "<" }, { v: "lte", l: "≤" }, { v: "eq", l: "=" }],

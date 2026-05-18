@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Scale, Filter, Zap, Settings, Users, Mail,
@@ -6,7 +6,8 @@ import {
   Pencil, X, Plus, Save, CheckCircle2, AlertTriangle,
   AlertCircle, Info, Radio, ClipboardList, Monitor,
   MessageSquare, Calendar, Thermometer, Flame, ChevronRight,
-  Activity, Clock, Webhook, Loader2
+  Activity, Clock, Webhook, Loader2, Briefcase, Award, Building2,
+  Trash2, RefreshCw
 } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -107,6 +108,31 @@ const bandColors = {
   warm: { accent: T.amber,  label: "Warm", bg: "#FFF4E6", border: "#F5C78A" },
   hot:  { accent: T.green,  label: "Hot",  bg: "#F0FDF7", border: "#6EE7B7" },
   sql:  { accent: T.violet, label: "SQL",  bg: "#F3F0FF", border: "#C4B5FD" },
+};
+
+/* ─── Perfil A/B/C/D (modelo RD 2D) ─── */
+const profileColors = {
+  A: { accent: T.green,  label: "A", bg: "#F0FDF7", border: "#6EE7B7" },
+  B: { accent: T.teal,   label: "B", bg: "#E8F5FB", border: "#B3D9EA" },
+  C: { accent: T.amber,  label: "C", bg: "#FFF4E6", border: "#F5C78A" },
+  D: { accent: T.muted,  label: "D", bg: "#F1F4F8", border: "#D1DAE3" },
+};
+
+const profileOf = (points, t) => {
+  if (points >= (t?.threshold_a ?? 70)) return "A";
+  if (points >= (t?.threshold_b ?? 40)) return "B";
+  if (points >= (t?.threshold_c ?? 20)) return "C";
+  return "D";
+};
+
+const ProfilePill = ({ profile, points }) => {
+  const p = profileColors[profile] || profileColors.D;
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", gap:4, fontSize:10, fontWeight:700, background:p.bg, color:p.accent, border:`0.5px solid ${p.border}`, padding:"2px 7px", borderRadius:4, fontFamily:T.head, letterSpacing:"0.04em" }}>
+      <span style={{ width:14, height:14, borderRadius:"50%", background:p.accent, color:"#fff", display:"grid", placeItems:"center", fontSize:9, fontWeight:800 }}>{p.label}</span>
+      {points !== undefined && <span style={{ fontFamily:T.mono, fontSize:9, fontWeight:700 }}>{points}pt</span>}
+    </span>
+  );
 };
 
 const scoreBand = (s, t) => {
@@ -1089,11 +1115,403 @@ const AutomationLog = ({ leads, history, thresholds }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
+   TAB — PROFILE RULES (Perfil A-D, modelo RD 2D)
+════════════════════════════════════════════════════════════════════════ */
+const OPERATORS = [
+  { value:"equals",      label:"é igual a" },
+  { value:"contains",    label:"contém" },
+  { value:"in",          label:"está em (lista)" },
+  { value:"gte",         label:"≥ (maior ou igual)" },
+  { value:"lte",         label:"≤ (menor ou igual)" },
+  { value:"is_set",      label:"está preenchido" },
+  { value:"is_not_set",  label:"não está preenchido" },
+];
+
+const LEAD_COLUMNS = [
+  { value:"company",      label:"Empresa" },
+  { value:"source",       label:"Canal de origem" },
+  { value:"stage",        label:"Estágio do funil" },
+  { value:"city",         label:"Cidade" },
+  { value:"state",        label:"Estado/UF" },
+  { value:"utm_source",   label:"UTM Source" },
+  { value:"utm_medium",   label:"UTM Medium" },
+  { value:"utm_campaign", label:"UTM Campaign" },
+  { value:"email",        label:"Email (texto)" },
+  { value:"phone",        label:"Telefone" },
+];
+
+const ProfileRules = ({ rules, customFields, thresholds, onAddRule, onUpdateRule, onDeleteRule, onUpdateThresholds, onRecompute, leads }) => {
+  const [draft, setDraft] = useState({
+    label: "",
+    category: "manual",
+    field_source: "lead_column",
+    field_key: "company",
+    operator: "is_set",
+    value: "",
+    points: 10,
+  });
+  const [showForm, setShowForm] = useState(false);
+  const [recomputing, setRecomputing] = useState(false);
+
+  const fieldOptions = useMemo(() => {
+    if (draft.field_source === "lead_column") return LEAD_COLUMNS;
+    return (customFields || []).map(cf => ({ value: cf.api_id, label: `${cf.label} (${cf.api_id})` }));
+  }, [draft.field_source, customFields]);
+
+  const distrib = useMemo(() => {
+    const counts = { A:0, B:0, C:0, D:0 };
+    leads.forEach(l => { counts[l.profile || "D"] = (counts[l.profile || "D"] || 0) + 1; });
+    return counts;
+  }, [leads]);
+
+  const handleAdd = async () => {
+    if (!draft.label || !draft.field_key) return;
+    // Converte value para JSON apropriado
+    let parsed = null;
+    if (draft.operator === "in") {
+      parsed = draft.value.split(",").map(v => v.trim()).filter(Boolean);
+    } else if (draft.operator === "is_set" || draft.operator === "is_not_set") {
+      parsed = null;
+    } else if (draft.operator === "gte" || draft.operator === "lte") {
+      parsed = String(Number(draft.value) || 0);
+    } else {
+      parsed = draft.value;
+    }
+    await onAddRule({ ...draft, value: parsed, points: Number(draft.points) });
+    setDraft({ label:"", category:"manual", field_source:"lead_column", field_key:"company", operator:"is_set", value:"", points:10 });
+    setShowForm(false);
+  };
+
+  const handleRecompute = async () => {
+    setRecomputing(true);
+    await onRecompute();
+    setRecomputing(false);
+  };
+
+  const groupedRules = useMemo(() => {
+    const g = {};
+    rules.forEach(r => {
+      const c = r.category || "manual";
+      if (!g[c]) g[c] = [];
+      g[c].push(r);
+    });
+    return g;
+  }, [rules]);
+
+  const CATEGORY_LABELS = { cargo:"Cargo", segmento:"Segmento", porte:"Porte", manual:"Outros critérios" };
+  const CATEGORY_ICONS_P = { cargo:Briefcase, segmento:Building2, porte:Users, manual:Star };
+
+  return (
+    <div style={{ display:"grid", gridTemplateColumns:"1fr 340px", gap:20 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        {/* Header com CTA */}
+        <div style={{ background:T.surface, border:`0.5px solid ${T.border}`, borderRadius:12, overflow:"hidden", boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+          <div style={{ padding:"14px 18px", borderBottom:`0.5px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink }}>Regras de Perfil (A-D)</div>
+              <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginTop:2, fontWeight:600 }}>
+                {rules.filter(r=>r.active).length} de {rules.length} regras ativas — modelo RD Station 2D
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              <Btn onClick={handleRecompute} variant="ghost" size="sm" icon={recomputing ? Loader2 : RefreshCw} disabled={recomputing}>
+                {recomputing ? "Recalculando..." : "Recalcular todos"}
+              </Btn>
+              <Btn onClick={() => setShowForm(!showForm)} variant="primary" size="sm" icon={Plus}>Nova Regra</Btn>
+            </div>
+          </div>
+
+          {showForm && (
+            <div style={{ padding:"16px 18px", background:T.faint, borderBottom:`0.5px solid ${T.border}`, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              <div style={{ gridColumn:"1 / -1" }}>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Label da regra</div>
+                <Field value={draft.label} onChange={e => setDraft(d=>({...d,label:e.target.value}))} placeholder="Ex: Cargo C-Level" small />
+              </div>
+
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Categoria</div>
+                <select value={draft.category} onChange={e => setDraft(d=>({...d,category:e.target.value}))}
+                  style={{ fontFamily:T.font, fontSize:12, fontWeight:600, background:"#fff", border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 10px", color:T.text, width:"100%", outline:"none" }}>
+                  <option value="cargo">Cargo</option>
+                  <option value="segmento">Segmento</option>
+                  <option value="porte">Porte</option>
+                  <option value="manual">Outros critérios</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Origem do campo</div>
+                <select value={draft.field_source} onChange={e => setDraft(d=>({...d,field_source:e.target.value, field_key: e.target.value === "lead_column" ? "company" : (customFields?.[0]?.api_id || "")}))}
+                  style={{ fontFamily:T.font, fontSize:12, fontWeight:600, background:"#fff", border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 10px", color:T.text, width:"100%", outline:"none" }}>
+                  <option value="lead_column">Coluna do lead</option>
+                  <option value="custom_field">Campo personalizado</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Campo</div>
+                <select value={draft.field_key} onChange={e => setDraft(d=>({...d,field_key:e.target.value}))}
+                  style={{ fontFamily:T.font, fontSize:12, fontWeight:600, background:"#fff", border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 10px", color:T.text, width:"100%", outline:"none" }}>
+                  {fieldOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Operador</div>
+                <select value={draft.operator} onChange={e => setDraft(d=>({...d,operator:e.target.value}))}
+                  style={{ fontFamily:T.font, fontSize:12, fontWeight:600, background:"#fff", border:`1px solid ${T.border}`, borderRadius:8, padding:"7px 10px", color:T.text, width:"100%", outline:"none" }}>
+                  {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+
+              {!["is_set","is_not_set"].includes(draft.operator) && (
+                <div style={{ gridColumn:"1 / -1" }}>
+                  <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                    Valor {draft.operator === "in" && "(separar por vírgula)"}
+                  </div>
+                  <Field value={draft.value} onChange={e => setDraft(d=>({...d,value:e.target.value}))}
+                    placeholder={draft.operator === "in" ? "SaaS, Tecnologia, Software" : "Digite o valor..."} small />
+                </div>
+              )}
+
+              <div>
+                <div style={{ fontFamily:T.font, fontSize:10, color:T.muted, marginBottom:4, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em" }}>Pontos quando bater</div>
+                <Field value={draft.points} onChange={e => setDraft(d=>({...d,points:e.target.value}))} type="number" small mono />
+              </div>
+
+              <div style={{ display:"flex", alignItems:"flex-end", gap:6 }}>
+                <Btn onClick={handleAdd} variant="success" size="sm" disabled={!draft.label}>Adicionar</Btn>
+                <Btn onClick={() => setShowForm(false)} variant="ghost" size="sm">Cancelar</Btn>
+              </div>
+            </div>
+          )}
+
+          {/* Lista de regras agrupadas por categoria */}
+          <div style={{ padding:"8px 0" }}>
+            {Object.keys(CATEGORY_LABELS).map(cat => {
+              const list = groupedRules[cat] || [];
+              if (!list.length) return null;
+              const Icon = CATEGORY_ICONS_P[cat] || Star;
+              return (
+                <div key={cat} style={{ marginBottom:8 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 18px 4px", background:T.faint }}>
+                    <Icon size={13} color={T.teal} aria-hidden="true" />
+                    <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:"0.08em" }}>
+                      {CATEGORY_LABELS[cat]} · {list.length}
+                    </span>
+                  </div>
+                  {list.map(r => (
+                    <ProfileRuleRow key={r.id} rule={r} onUpdate={onUpdateRule} onDelete={onDeleteRule} customFields={customFields} />
+                  ))}
+                </div>
+              );
+            })}
+            {rules.length === 0 && (
+              <div style={{ textAlign:"center", padding:"32px 16px", color:T.muted, fontFamily:T.font, fontSize:13, fontWeight:600 }}>
+                Nenhuma regra de perfil ainda. Adicione regras para classificar leads em A/B/C/D.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Matriz 2D Perfil × Interesse */}
+        <Matrix2D leads={leads} />
+      </div>
+
+      {/* Right: thresholds A-D + distribuição */}
+      <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+        <div style={{ background:T.surface, border:`0.5px solid ${T.border}`, borderRadius:12, padding:"18px", boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+          <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink, marginBottom:4 }}>Faixas de Perfil</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginBottom:16, fontWeight:600 }}>Pontuação total para classificar em A/B/C/D</div>
+
+          {[
+            { key:"threshold_a", label:"Perfil A (ideal)", color:profileColors.A.accent },
+            { key:"threshold_b", label:"Perfil B (bom)",   color:profileColors.B.accent },
+            { key:"threshold_c", label:"Perfil C (médio)", color:profileColors.C.accent },
+          ].map(t => (
+            <div key={t.key} style={{ marginBottom:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <span style={{ fontFamily:T.font, fontSize:12, fontWeight:700, color:t.color }}>{t.label}</span>
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                  <span style={{ fontFamily:T.head, fontSize:14, color:t.color, fontWeight:700 }}>≥ {thresholds[t.key]}</span>
+                  <span style={{ fontFamily:T.font, fontSize:10, color:T.muted, fontWeight:600 }}>pts</span>
+                </div>
+              </div>
+              <input type="range" min="0" max="100" value={thresholds[t.key]}
+                onChange={e => onUpdateThresholds({ ...thresholds, [t.key]: Number(e.target.value) })}
+                style={{ width:"100%", accentColor:t.color }} />
+            </div>
+          ))}
+
+          <div style={{ marginTop:6, padding:"8px 10px", background:T.faint, borderRadius:8, fontFamily:T.font, fontSize:10.5, color:T.muted, fontWeight:600 }}>
+            Perfil D = pontuação abaixo de {thresholds.threshold_c}
+          </div>
+        </div>
+
+        {/* Distribuição A/B/C/D */}
+        <div style={{ background:T.surface, border:`0.5px solid ${T.border}`, borderRadius:12, padding:"18px", boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+          <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink, marginBottom:14 }}>Distribuição por Perfil</div>
+          {["A","B","C","D"].map(p => {
+            const pc = profileColors[p];
+            const count = distrib[p] || 0;
+            const pct = leads.length ? Math.round((count / leads.length) * 100) : 0;
+            return (
+              <div key={p} style={{ marginBottom:10 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ width:18, height:18, borderRadius:"50%", background:pc.accent, color:"#fff", display:"grid", placeItems:"center", fontSize:10, fontWeight:800, fontFamily:T.head }}>{p}</span>
+                    <span style={{ fontFamily:T.font, fontSize:12, fontWeight:600, color:T.text }}>Perfil {p}</span>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ fontFamily:T.head, fontSize:13, fontWeight:700, color:pc.accent }}>{count}</span>
+                    <span style={{ fontFamily:T.font, fontSize:10, color:T.muted, fontWeight:600 }}>{pct}%</span>
+                  </div>
+                </div>
+                <ScoreBar value={pct} color={pc.accent} height={5} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ProfileRuleRow = ({ rule, onUpdate, onDelete, customFields }) => {
+  const [hov, setHov] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [pts, setPts] = useState(rule.points);
+  const cf = (customFields || []).find(c => c.api_id === rule.field_key);
+  const fieldLabel = rule.field_source === "custom_field" ? (cf?.label || rule.field_key) : (LEAD_COLUMNS.find(c => c.value === rule.field_key)?.label || rule.field_key);
+  const opLabel = OPERATORS.find(o => o.value === rule.operator)?.label || rule.operator;
+  const valDisplay = (() => {
+    if (rule.operator === "is_set" || rule.operator === "is_not_set") return "";
+    if (Array.isArray(rule.value)) return rule.value.join(", ");
+    if (typeof rule.value === "object" && rule.value !== null) return JSON.stringify(rule.value);
+    return String(rule.value ?? "");
+  })();
+
+  return (
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      style={{ display:"flex", alignItems:"center", gap:10, padding:"10px 18px", background:hov?T.faint:"transparent", transition:"background 0.15s", borderBottom:`0.5px solid ${T.border}` }}>
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ fontFamily:T.font, fontSize:13, color:T.text, fontWeight:700, marginBottom:2 }}>{rule.label}</div>
+        <div style={{ fontFamily:T.mono, fontSize:10, color:T.muted, fontWeight:600 }}>
+          {fieldLabel} <span style={{ color:T.teal }}>{opLabel}</span> {valDisplay && `"${valDisplay}"`}
+        </div>
+      </div>
+      {editing ? (
+        <Field value={pts} onChange={e => setPts(e.target.value)} type="number" small mono style={{ width:60 }} />
+      ) : (
+        <div style={{ fontFamily:T.mono, fontSize:13, fontWeight:700, color:rule.points>=0?T.green:T.coral, minWidth:46, textAlign:"right" }}>
+          {rule.points>=0?"+":""}{rule.points}
+        </div>
+      )}
+      <Toggle checked={rule.active} onChange={v => onUpdate(rule.id, { active: v })} />
+      {hov && (
+        <div style={{ display:"flex", gap:4 }}>
+          {editing ? (
+            <Btn onClick={() => { onUpdate(rule.id, { points: Number(pts) }); setEditing(false); }} variant="success" size="xs" icon={CheckCircle2} />
+          ) : (
+            <Btn onClick={() => setEditing(true)} variant="ghost" size="xs" icon={Pencil} />
+          )}
+          <Btn onClick={() => onDelete(rule.id)} variant="danger" size="xs" icon={Trash2} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ─── Matriz 2D Perfil × Interesse ─── */
+const Matrix2D = ({ leads }) => {
+  const cells = useMemo(() => {
+    // bandas de interesse: Cold (<21), Warm (21-50), Hot (51-79), SQL (80+)
+    const grid = {};
+    ["A","B","C","D"].forEach(p => {
+      grid[p] = { cold:0, warm:0, hot:0, sql:0 };
+    });
+    leads.forEach(l => {
+      const p = l.profile || "D";
+      const s = l.score || 0;
+      let band = "cold";
+      if (s >= 80) band = "sql";
+      else if (s >= 51) band = "hot";
+      else if (s >= 21) band = "warm";
+      if (grid[p]) grid[p][band]++;
+    });
+    return grid;
+  }, [leads]);
+
+  const maxCell = useMemo(() => {
+    let m = 1;
+    Object.values(cells).forEach(row => Object.values(row).forEach(v => { if (v > m) m = v; }));
+    return m;
+  }, [cells]);
+
+  const BANDS = [
+    { key:"sql",  label:"SQL",  color:bandColors.sql.accent  },
+    { key:"hot",  label:"Hot",  color:bandColors.hot.accent  },
+    { key:"warm", label:"Warm", color:bandColors.warm.accent },
+    { key:"cold", label:"Cold", color:bandColors.cold.accent },
+  ];
+
+  return (
+    <div style={{ background:T.surface, border:`0.5px solid ${T.border}`, borderRadius:12, padding:"18px", boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+        <div>
+          <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink }}>Matriz 2D — Perfil × Interesse</div>
+          <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginTop:2, fontWeight:600 }}>MQL ideal = A/B com interesse Hot ou SQL</div>
+        </div>
+        <span style={{ fontFamily:T.mono, fontSize:10, color:T.muted, fontWeight:700 }}>{leads.length} leads total</span>
+      </div>
+
+      <div style={{ display:"grid", gridTemplateColumns:"60px repeat(4, 1fr)", gap:6 }}>
+        <div />
+        {["A","B","C","D"].map(p => (
+          <div key={p} style={{ textAlign:"center", padding:"6px 0" }}>
+            <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:24, height:24, borderRadius:"50%", background:profileColors[p].accent, color:"#fff", fontFamily:T.head, fontSize:12, fontWeight:800 }}>{p}</span>
+          </div>
+        ))}
+
+        {BANDS.map(b => (
+          <Fragment key={b.key}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"flex-end", paddingRight:8, fontFamily:T.font, fontSize:11, fontWeight:700, color:b.color }}>
+              {b.label}
+            </div>
+            {["A","B","C","D"].map(p => {
+              const v = cells[p][b.key];
+              const intensity = v / maxCell;
+              const isMql = (p === "A" || p === "B") && (b.key === "hot" || b.key === "sql");
+              return (
+                <div key={`${b.key}-${p}`} style={{
+                  height:48,
+                  background: isMql ? `${T.green}${Math.floor(20 + intensity*200).toString(16).padStart(2,"0")}` : `${profileColors[p].accent}${Math.floor(10 + intensity*150).toString(16).padStart(2,"0")}`,
+                  border:`0.5px solid ${isMql ? T.green : profileColors[p].border}`,
+                  borderRadius:8,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  position:"relative",
+                }}>
+                  <span style={{ fontFamily:T.head, fontSize:18, fontWeight:700, color: v > 0 ? T.ink : T.muted, fontVariantNumeric:"tabular-nums" }}>{v}</span>
+                  {isMql && v > 0 && (
+                    <span style={{ position:"absolute", top:2, right:4, fontFamily:T.font, fontSize:8, fontWeight:800, color:T.green, letterSpacing:"0.06em" }}>MQL</span>
+                  )}
+                </div>
+              );
+            })}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
    ROOT
 ════════════════════════════════════════════════════════════════════════ */
 const TABS = [
-  { id:"dashboard",  label:"Dashboard",      icon:BarChart2 },
-  { id:"rules",      label:"Regras de Score", icon:Scale     },
+  { id:"dashboard",  label:"Dashboard",       icon:BarChart2 },
+  { id:"profile",    label:"Perfil (A-D)",    icon:Award     },
+  { id:"rules",      label:"Interesse",       icon:Scale     },
   { id:"segments",   label:"Segmentação",     icon:Filter    },
   { id:"automation", label:"Automação & Log", icon:Zap       },
 ];
@@ -1104,6 +1522,9 @@ export default function VantariScoringSystem() {
   const [loading, setLoading]           = useState(true);
   const [error, setError]               = useState(null);
   const [rules, setRules]               = useState(DEFAULT_RULES);
+  const [profileRules, setProfileRules] = useState([]);
+  const [profileThresholds, setProfileThresholds] = useState({ threshold_a:70, threshold_b:40, threshold_c:20 });
+  const [customFields, setCustomFields] = useState([]);
   const [thresholds, setThresholds]     = useState({warm:21, hot:51, sql:80});
   const [tab, setTab]                   = useState("dashboard");
 
@@ -1111,31 +1532,44 @@ export default function VantariScoringSystem() {
     setLoading(true);
     setError(null);
     try {
-      const [{ data: leadsData, error: leadsErr }, { data: eventsData, error: eventsErr }] = await Promise.all([
+      const [
+        { data: leadsData,    error: leadsErr },
+        { data: eventsData,   error: eventsErr },
+        { data: scoringData },
+        { data: profileData },
+        { data: thresholdData },
+        { data: cfData },
+      ] = await Promise.all([
         supabase
           .from("leads")
-          .select("id, name, email, company, score, tags, source, updated_at")
+          .select("id, name, email, company, score, profile, profile_points, tags, source, updated_at")
           .order("score", { ascending: false }),
         supabase
           .from("lead_events")
           .select("id, lead_id, event_type, score_delta, created_at, leads(name, score)")
           .order("created_at", { ascending: false })
           .limit(200),
+        supabase.from("scoring_rules").select("*").order("category"),
+        supabase.from("profile_rules").select("*").order("category, position"),
+        supabase.from("profile_thresholds").select("*").eq("id", 1).maybeSingle(),
+        supabase.from("custom_fields").select("id, label, api_id, type, active").eq("active", true).order("position"),
       ]);
       if (leadsErr) throw leadsErr;
       if (eventsErr) throw eventsErr;
 
       setLeads((leadsData || []).map(l => ({
-        id:           l.id,
-        name:         l.name || l.email?.split("@")[0] || "—",
-        email:        l.email,
-        company:      l.company || "—",
-        score:        l.score ?? 0,
-        prevScore:    Math.max(0, (l.score ?? 0) - 5),
-        source:       l.source || "—",
-        tags:         Array.isArray(l.tags) ? l.tags : [],
-        lastActive:   l.updated_at,
-        interactions: 0,
+        id:             l.id,
+        name:           l.name || l.email?.split("@")[0] || "—",
+        email:          l.email,
+        company:        l.company || "—",
+        score:          l.score ?? 0,
+        profile:        l.profile || "D",
+        profile_points: l.profile_points ?? 0,
+        prevScore:      Math.max(0, (l.score ?? 0) - 5),
+        source:         l.source || "—",
+        tags:           Array.isArray(l.tags) ? l.tags : [],
+        lastActive:     l.updated_at,
+        interactions:   0,
       })));
 
       setHistory((eventsData || []).map(ev => {
@@ -1153,6 +1587,24 @@ export default function VantariScoringSystem() {
           webhook_sent: false,
         };
       }));
+
+      // scoring_rules (interesse) — persistido. Fallback para DEFAULT_RULES se DB vazio.
+      if (scoringData && scoringData.length) {
+        setRules(scoringData.map(r => ({
+          id: r.id, action: r.action, label: r.label,
+          category: r.category, points: r.points, active: r.active,
+        })));
+      }
+
+      setProfileRules(profileData || []);
+      if (thresholdData) {
+        setProfileThresholds({
+          threshold_a: thresholdData.threshold_a ?? 70,
+          threshold_b: thresholdData.threshold_b ?? 40,
+          threshold_c: thresholdData.threshold_c ?? 20,
+        });
+      }
+      setCustomFields(cfData || []);
     } catch (err) {
       setError(err.message || "Erro ao carregar dados.");
     } finally {
@@ -1161,6 +1613,63 @@ export default function VantariScoringSystem() {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  /* ─── Handlers para profile_rules ─── */
+  const handleAddProfileRule = async (rule) => {
+    const { data, error } = await supabase.from("profile_rules").insert({
+      label: rule.label,
+      category: rule.category,
+      field_source: rule.field_source,
+      field_key: rule.field_key,
+      operator: rule.operator,
+      value: rule.value,
+      points: rule.points,
+      active: true,
+    }).select().single();
+    if (!error && data) {
+      setProfileRules(prev => [...prev, data]);
+      await supabase.rpc("recompute_all_profiles");
+      fetchData();
+    } else if (error) {
+      alert("Erro ao adicionar regra: " + error.message);
+    }
+  };
+
+  const handleUpdateProfileRule = async (id, patch) => {
+    const { error } = await supabase.from("profile_rules").update(patch).eq("id", id);
+    if (!error) {
+      setProfileRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
+      await supabase.rpc("recompute_all_profiles");
+      fetchData();
+    }
+  };
+
+  const handleDeleteProfileRule = async (id) => {
+    if (!window.confirm("Excluir esta regra de perfil?")) return;
+    const { error } = await supabase.from("profile_rules").delete().eq("id", id);
+    if (!error) {
+      setProfileRules(prev => prev.filter(r => r.id !== id));
+      await supabase.rpc("recompute_all_profiles");
+      fetchData();
+    }
+  };
+
+  const handleUpdateThresholds = async (next) => {
+    setProfileThresholds(next);
+    await supabase.from("profile_thresholds").update({
+      threshold_a: next.threshold_a,
+      threshold_b: next.threshold_b,
+      threshold_c: next.threshold_c,
+      updated_at: new Date().toISOString(),
+    }).eq("id", 1);
+    await supabase.rpc("recompute_all_profiles");
+    fetchData();
+  };
+
+  const handleRecomputeAll = async () => {
+    await supabase.rpc("recompute_all_profiles");
+    fetchData();
+  };
 
   return (
     <div style={{ display:"flex", height:"100vh", background:T.bg, fontFamily:T.font, overflow:"hidden" }}>
@@ -1227,7 +1736,19 @@ export default function VantariScoringSystem() {
           <span style={{ fontSize:18, fontWeight:700, color:T.ink, fontFamily:T.head, letterSpacing:"-0.02em" }}>
             {TABS.find(t=>t.id===tab)?.label || "Scoring"}
           </span>
-          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+          <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap" }}>
+            <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.muted, marginRight:2 }}>PERFIL</span>
+            {["A","B","C"].map(p => {
+              const pc = profileColors[p];
+              const tkey = p === "A" ? "threshold_a" : p === "B" ? "threshold_b" : "threshold_c";
+              return (
+                <div key={p} style={{ fontFamily:T.font, fontSize:11, fontWeight:700, color:pc.accent, background:pc.bg, border:`0.5px solid ${pc.border}`, padding:"4px 9px", borderRadius:6 }}>
+                  {p} ≥{profileThresholds[tkey]}
+                </div>
+              );
+            })}
+            <span style={{ width:1, height:18, background:T.border, margin:"0 4px" }} />
+            <span style={{ fontFamily:T.font, fontSize:10, fontWeight:700, color:T.muted, marginRight:2 }}>INTERESSE</span>
             {[
               { k:"warm", color:bandColors.warm.accent, bg:bandColors.warm.bg, border:bandColors.warm.border },
               { k:"hot",  color:bandColors.hot.accent,  bg:bandColors.hot.bg,  border:bandColors.hot.border  },
@@ -1270,6 +1791,17 @@ export default function VantariScoringSystem() {
           ) : (
             <>
               {tab==="dashboard"  && <ScoringDashboard leads={leads} thresholds={thresholds} history={history} />}
+              {tab==="profile"    && <ProfileRules
+                                        rules={profileRules}
+                                        customFields={customFields}
+                                        thresholds={profileThresholds}
+                                        onAddRule={handleAddProfileRule}
+                                        onUpdateRule={handleUpdateProfileRule}
+                                        onDeleteRule={handleDeleteProfileRule}
+                                        onUpdateThresholds={handleUpdateThresholds}
+                                        onRecompute={handleRecomputeAll}
+                                        leads={leads}
+                                      />}
               {tab==="rules"      && <ScoringRules rules={rules} setRules={setRules} thresholds={thresholds} setThresholds={setThresholds} leads={leads} />}
               {tab==="segments"   && <SegmentBuilder leads={leads} thresholds={thresholds} />}
               {tab==="automation" && <AutomationLog leads={leads} history={history} thresholds={thresholds} />}
@@ -1280,7 +1812,7 @@ export default function VantariScoringSystem() {
         {/* DB schema footer */}
         <div style={{ borderTop:`1px solid ${T.border}`, padding:"10px 24px", display:"flex", gap:8, alignItems:"center", background:T.surface, flexShrink:0 }}>
           <span style={{ fontFamily:T.font, fontSize:10, color:T.muted, fontWeight:700 }}>Supabase tables:</span>
-          {["scoring_rules","segments","lead_score_history"].map(t => (
+          {["leads.profile","profile_rules","profile_thresholds","scoring_rules"].map(t => (
             <span key={t} style={{ fontFamily:T.mono, fontSize:10, background:"#EEF2F6", color:T.teal, padding:"2px 8px", borderRadius:4, border:`0.5px solid ${T.border}` }}>{t}</span>
           ))}
         </div>

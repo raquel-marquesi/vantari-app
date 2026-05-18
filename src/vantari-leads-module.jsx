@@ -63,6 +63,17 @@ const scoreBadge = (score) => {
   return               { label: "Cold",        color: "#8696A5", bg: "#EEF2F6" };
 };
 
+// ─── Profile badge (A/B/C/D — modelo RD 2D) ─────────────────────
+const profileBadge = (profile) => {
+  const map = {
+    A: { color: "#14A273", bg: "#F0FDF7", border: "#6EE7B7" },
+    B: { color: "#0D7491", bg: "#E8F5FB", border: "#B3D9EA" },
+    C: { color: "#F59E0B", bg: "#FFF4E6", border: "#F5C78A" },
+    D: { color: "#5A6B7A", bg: "#F1F4F8", border: "#D1DAE3" },
+  };
+  return map[profile] || map.D;
+};
+
 const stageBadge = (stage) => {
   const map = {
     Visitor:     { color: T.muted,    bg: "#EEF2F6"  },
@@ -349,8 +360,9 @@ function LeadModal({ lead, onClose, onSave }) {
 
 // ─── Painel lateral de detalhes ───────────────────────────────────
 function LeadPanel({ lead, onClose, onEdit, onDelete }) {
-  const score = scoreBadge(lead.score || 0);
-  const stage = stageBadge(lead.stage);
+  const score   = scoreBadge(lead.score || 0);
+  const stage   = stageBadge(lead.stage);
+  const profile = profileBadge(lead.profile || "D");
 
   return (
     <div style={{
@@ -379,14 +391,42 @@ function LeadPanel({ lead, onClose, onEdit, onDelete }) {
           </div>
         </div>
 
-        {/* Score + Stage */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        {/* Score + Stage + Profile */}
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap:"wrap" }}>
           <span style={{ fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 20, background: score.bg, color: score.color, fontFamily: T.font }}>
             {lead.score || 0} pts — {score.label}
           </span>
           <span style={{ fontSize: 12, fontWeight: 600, padding: "4px 10px", borderRadius: 20, background: stage.bg, color: stage.color, fontFamily: T.font }}>
             {lead.stage || "Visitor"}
           </span>
+        </div>
+
+        {/* Painel 2D Perfil × Interesse */}
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:20, padding:12, background:T.faint, borderRadius:10, border:`0.5px solid ${T.border}` }}>
+          <div>
+            <div style={{ fontSize:10, color:T.muted, fontFamily:T.font, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginBottom:6 }}>Perfil</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ width:32, height:32, borderRadius:"50%", background:profile.color, color:"#fff", display:"grid", placeItems:"center", fontFamily:T.head, fontWeight:800, fontSize:16 }}>
+                {lead.profile || "D"}
+              </span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:profile.color, fontFamily:T.head }}>Perfil {lead.profile || "D"}</div>
+                <div style={{ fontSize:10, color:T.muted, fontFamily:T.mono, fontWeight:600 }}>{lead.profile_points || 0} pts</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize:10, color:T.muted, fontFamily:T.font, fontWeight:700, textTransform:"uppercase", letterSpacing:.5, marginBottom:6 }}>Interesse</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ width:32, height:32, borderRadius:"50%", background:score.color, color:"#fff", display:"grid", placeItems:"center", fontFamily:T.head, fontWeight:800, fontSize:14 }}>
+                {lead.score || 0}
+              </span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:score.color, fontFamily:T.head }}>{score.label}</div>
+                <div style={{ fontSize:10, color:T.muted, fontFamily:T.mono, fontWeight:600 }}>comportamento</div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Campos */}
@@ -706,6 +746,59 @@ function ImportsView() {
     { v:"utm_term",     l:"UTM Term"      },
   ];
 
+  // Normaliza string (sem acento, lowercase, sem espaços duplos)
+  const norm = (s) => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+
+  // Mapeamento RD Station → Vantari (colunas padrão do export RD)
+  const RD_PRESETS = {
+    // Identificação
+    "email": "email", "e-mail": "email", "endereco de e-mail": "email", "endereço de e-mail": "email",
+    "nome": "name", "primeiro nome": "name", "nome completo": "name", "first name": "name",
+    "sobrenome": "name", "last name": "name",
+    "telefone": "phone", "telefone celular": "phone", "celular": "phone", "phone": "phone",
+    "empresa": "company", "company": "company", "organizacao": "company",
+    "cidade": "city", "city": "city",
+    "estado": "state", "uf": "state", "state": "state",
+    // Funil / Score
+    "estagio do funil": "stage", "estagio": "stage", "lifecycle stage": "stage", "stage": "stage",
+    "origem": "source", "source": "source", "canal de origem": "source",
+    "tags": "tags", "tag": "tags",
+    // UTMs
+    "utm source": "utm_source", "utm_source": "utm_source",
+    "utm medium": "utm_medium", "utm_medium": "utm_medium",
+    "utm campaign": "utm_campaign", "utm_campaign": "utm_campaign",
+    "utm content": "utm_content", "utm_content": "utm_content",
+    "utm term": "utm_term", "utm_term": "utm_term",
+  };
+
+  // Auto-mapeia headers contra: presets RD → campos padrão → labels de custom_fields
+  const autoMapHeaders = (hdr) => {
+    const cfByLabel = {};
+    (customFields || []).forEach(c => { cfByLabel[norm(c.label)] = c.api_id; });
+
+    const auto = {};
+    hdr.forEach((h, idx) => {
+      const n = norm(h);
+      // 1. Preset RD direto
+      if (RD_PRESETS[n]) { auto[idx] = RD_PRESETS[n]; return; }
+      // 2. Já vem com api_id explícito (cf_*, utm_*)
+      if (n.startsWith("utm_") || n.startsWith("cf_")) { auto[idx] = n; return; }
+      // 3. Match contra label de custom_field
+      if (cfByLabel[n]) { auto[idx] = cfByLabel[n]; return; }
+      // 4. Heurísticas residuais
+      if (n.includes("email") || n.includes("e-mail")) auto[idx] = "email";
+      else if (n.includes("nome") || n === "name") auto[idx] = "name";
+      else if (n.includes("telefone") || n.includes("celular") || n.includes("phone")) auto[idx] = "phone";
+      else if (n.includes("empresa") || n === "company") auto[idx] = "company";
+      else if (n.includes("cidade") || n === "city") auto[idx] = "city";
+      else if (n.includes("estado") || n === "state") auto[idx] = "state";
+      else if (n.includes("origem") || n.includes("source")) auto[idx] = "source";
+      else if (n.includes("estagio") || n.includes("stage")) auto[idx] = "stage";
+      else if (n.includes("tag")) auto[idx] = "tags";
+    });
+    return auto;
+  };
+
   const onFile = async (e) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -716,24 +809,12 @@ function ImportsView() {
     const hdr = rows[0].map(s => (s||"").trim());
     setHeaders(hdr);
     setRawRows(rows.slice(1));
-    // Auto-mapeamento heurístico
-    const auto = {};
-    hdr.forEach((h, idx) => {
-      const norm = h.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
-      if (norm.includes("email") || norm.includes("e-mail")) auto[idx] = "email";
-      else if (norm.includes("nome") || norm === "name") auto[idx] = "name";
-      else if (norm.includes("telefone") || norm.includes("celular") || norm.includes("phone")) auto[idx] = "phone";
-      else if (norm.includes("empresa") || norm === "company") auto[idx] = "company";
-      else if (norm.includes("cidade") || norm === "city") auto[idx] = "city";
-      else if (norm.includes("estado") || norm === "state") auto[idx] = "state";
-      else if (norm.includes("origem") || norm.includes("source")) auto[idx] = "source";
-      else if (norm.includes("estagio") || norm.includes("stage")) auto[idx] = "stage";
-      else if (norm.includes("tag")) auto[idx] = "tags";
-      else if (norm.startsWith("utm_") || norm.startsWith("cf_")) auto[idx] = norm;
-    });
-    setMapping(auto);
+    setMapping(autoMapHeaders(hdr));
     setStage("mapping");
   };
+
+  // Re-aplica auto-mapping (botão "RD Station preset")
+  const applyRdPreset = () => setMapping(autoMapHeaders(headers));
 
   const doImport = async () => {
     setStage("importing");
@@ -746,10 +827,8 @@ function ImportsView() {
       field_mapping: mapping, source:"manual_csv",
     }).select().single();
 
-    let imported=0, updated=0, failed=0, errors=[];
+    let imported=0, failed=0, errors=[];
 
-    // Mapa rápido cf_* → custom_field info
-    const cfMap = Object.fromEntries(customFields.map(c => [c.api_id, c]));
     // Buscar IDs de custom_fields num único select
     const cfIds = {};
     if (customFields.length) {
@@ -757,57 +836,81 @@ function ImportsView() {
       (cfRows || []).forEach(r => cfIds[r.api_id] = r.id);
     }
 
-    // Lote de 100 por vez
-    const batchSize = 50;
-    for (let i = 0; i < rawRows.length; i += batchSize) {
-      const batch = rawRows.slice(i, i + batchSize);
-      for (const row of batch) {
-        try {
-          const leadPayload = {};
-          const cfValues = {}; // api_id → value
-          for (let idx = 0; idx < headers.length; idx++) {
-            const target = mapping[idx];
-            if (!target || target === "__skip__") continue;
-            const raw = (row[idx] || "").trim();
-            if (!raw) continue;
-            if (target === "tags") {
-              leadPayload.tags = raw.split(/[|,;]/).map(t=>t.trim()).filter(Boolean);
-            } else if (target.startsWith("cf_")) {
-              cfValues[target] = raw;
-            } else {
-              leadPayload[target] = raw;
-            }
-          }
-          if (!leadPayload.email) { failed++; errors.push({ row:i+batch.indexOf(row)+2, err:"sem email" }); continue; }
-          leadPayload.email = leadPayload.email.toLowerCase();
-
-          // Upsert lead
-          const { data: lead, error: lerr } = await supabase
-            .from("leads")
-            .upsert(leadPayload, { onConflict: "email" })
-            .select("id")
-            .single();
-          if (lerr) { failed++; errors.push({ row:i+batch.indexOf(row)+2, err:lerr.message }); continue; }
-          imported++;
-
-          // Inserir custom field values
-          const cfPayloads = Object.entries(cfValues).map(([apiId, value]) => ({
-            lead_id: lead.id,
-            custom_field_id: cfIds[apiId],
-            value: JSON.stringify(value),
-          })).filter(p => p.custom_field_id);
-          if (cfPayloads.length) {
-            await supabase.from("lead_custom_values").upsert(cfPayloads, { onConflict: "lead_id,custom_field_id" });
-          }
-        } catch (e) {
-          failed++; errors.push({ err: String(e) });
+    // Constrói payloads em memória ANTES de subir (rápido)
+    const allLeadPayloads = [];           // { idx, payload, cfValues }
+    for (let i = 0; i < rawRows.length; i++) {
+      const row = rawRows[i];
+      const leadPayload = {};
+      const cfValues = {};
+      for (let idx = 0; idx < headers.length; idx++) {
+        const target = mapping[idx];
+        if (!target || target === "__skip__") continue;
+        const raw = (row[idx] || "").trim();
+        if (!raw) continue;
+        if (target === "tags") {
+          leadPayload.tags = raw.split(/[|,;]/).map(t=>t.trim()).filter(Boolean);
+        } else if (target.startsWith("cf_")) {
+          cfValues[target] = raw;
+        } else {
+          leadPayload[target] = raw;
         }
-        setProgress(p => ({ ...p, done: p.done+1, imported, failed }));
       }
+      if (!leadPayload.email) {
+        failed++;
+        if (errors.length < 50) errors.push({ row:i+2, err:"sem email" });
+        continue;
+      }
+      leadPayload.email = leadPayload.email.toLowerCase();
+      allLeadPayloads.push({ idx:i, payload:leadPayload, cfValues });
+    }
+
+    // Bulk upsert de leads — 200 por vez
+    const BULK = 200;
+    for (let i = 0; i < allLeadPayloads.length; i += BULK) {
+      const slice = allLeadPayloads.slice(i, i + BULK);
+      const payloads = slice.map(s => s.payload);
+
+      const { data: upserted, error: uerr } = await supabase
+        .from("leads")
+        .upsert(payloads, { onConflict: "email" })
+        .select("id, email");
+
+      if (uerr) {
+        failed += slice.length;
+        if (errors.length < 50) errors.push({ batch:i, err:uerr.message });
+      } else {
+        imported += (upserted?.length || 0);
+
+        // Mapear email → lead_id
+        const byEmail = {};
+        (upserted || []).forEach(l => { byEmail[l.email] = l.id; });
+
+        // Coletar todos os cf_values do batch
+        const cfBatch = [];
+        slice.forEach(s => {
+          const lid = byEmail[s.payload.email];
+          if (!lid) return;
+          Object.entries(s.cfValues).forEach(([apiId, value]) => {
+            const cfId = cfIds[apiId];
+            if (!cfId) return;
+            cfBatch.push({ lead_id: lid, custom_field_id: cfId, value: JSON.stringify(value) });
+          });
+        });
+
+        // Bulk upsert dos custom values (sublotes de 500)
+        for (let j = 0; j < cfBatch.length; j += 500) {
+          const cfSlice = cfBatch.slice(j, j + 500);
+          await supabase
+            .from("lead_custom_values")
+            .upsert(cfSlice, { onConflict: "lead_id,custom_field_id" });
+        }
+      }
+
+      setProgress(p => ({ ...p, done: Math.min(p.done + slice.length, total), imported, failed }));
     }
 
     await supabase.from("lead_imports").update({
-      status:"done", imported, updated, failed,
+      status:"done", imported, failed,
       errors: errors.slice(0, 50),
       finished_at: new Date().toISOString(),
     }).eq("id", imp.id);
@@ -879,6 +982,10 @@ function ImportsView() {
             <span style={{ fontSize:12, color:T.muted, fontFamily:T.font, marginRight:"auto" }}>
               {Object.values(mapping).filter(v => v && v !== "__skip__").length} colunas mapeadas. Email é obrigatório.
             </span>
+            <button onClick={applyRdPreset} title="Re-aplica detecção automática usando colunas conhecidas do RD Station + labels dos custom fields"
+              style={{ padding:"8px 14px", border:`1px solid ${T.teal}`, borderRadius:10, background:`${T.teal}10`, color:T.teal, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font, display:"inline-flex", alignItems:"center", gap:6 }}>
+              <Sparkles size={13} /> Preset RD Station
+            </button>
             <button onClick={reset} style={{ padding:"8px 14px", border:`1.5px solid ${T.border}`, borderRadius:10, background:"transparent", color:T.muted, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>Cancelar</button>
             <button onClick={doImport} disabled={!Object.values(mapping).includes("email")}
               style={{ padding:"8px 14px", border:"none", borderRadius:10, background:T.gradient, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font, opacity: Object.values(mapping).includes("email") ? 1 : 0.5 }}>
@@ -1158,6 +1265,7 @@ export default function LeadsModule() {
   const [loading, setLoading]     = useState(true);
   const [search, setSearch]       = useState("");
   const [stageFilter, setStageFilter] = useState("Todos");
+  const [profileFilter, setProfileFilter] = useState("Todos");
   const [showModal, setShowModal] = useState(false);
   const [editLead, setEditLead]   = useState(null);
   const [selected, setSelected]   = useState(null);
@@ -1201,12 +1309,13 @@ export default function LeadsModule() {
     setLoading(true); setError(null);
     let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
     if (stageFilter !== "Todos") query = query.eq("stage", stageFilter);
+    if (profileFilter !== "Todos") query = query.eq("profile", profileFilter);
     if (search.trim()) query = query.or(`name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`);
     const { data, error: err } = await query;
     setLoading(false);
     if (err) { setError(err.message); return; }
     setLeads(data || []);
-  }, [search, stageFilter]);
+  }, [search, stageFilter, profileFilter]);
 
   useEffect(() => { fetchLeads(); }, [fetchLeads]);
 
@@ -1350,6 +1459,24 @@ export default function LeadsModule() {
               </select>
               <ChevronDown size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.muted, pointerEvents: "none" }} />
             </div>
+            <div style={{ position: "relative" }}>
+              <select
+                value={profileFilter}
+                onChange={e => setProfileFilter(e.target.value)}
+                style={{
+                  padding: "9px 36px 9px 14px", border: `1px solid ${T.border}`, borderRadius: 10,
+                  fontSize: 13, color: T.text, background: T.surface, cursor: "pointer", appearance: "none",
+                  fontFamily: T.font,
+                }}
+              >
+                <option value="Todos">Todos os perfis</option>
+                <option value="A">Perfil A (ideal)</option>
+                <option value="B">Perfil B (bom)</option>
+                <option value="C">Perfil C (médio)</option>
+                <option value="D">Perfil D</option>
+              </select>
+              <ChevronDown size={14} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: T.muted, pointerEvents: "none" }} />
+            </div>
           </div>
 
           {/* Erro */}
@@ -1369,7 +1496,7 @@ export default function LeadsModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: T.faint }}>
-                  {["Lead", "Empresa", "Estágio", "Score", "Tags", "Fonte", ""].map(h => (
+                  {["Lead", "Empresa", "Estágio", "Perfil", "Score", "Tags", "Fonte", ""].map(h => (
                     <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: T.head, textTransform: "uppercase", letterSpacing: .5 }}>
                       {h}
                     </th>
@@ -1385,7 +1512,7 @@ export default function LeadsModule() {
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
+                    <td colSpan={8} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
                       Nenhum lead encontrado.
                     </td>
                   </tr>
@@ -1393,6 +1520,7 @@ export default function LeadsModule() {
                   filtered.map(lead => {
                     const sc = scoreBadge(lead.score || 0);
                     const st = stageBadge(lead.stage);
+                    const pf = profileBadge(lead.profile || "D");
                     const isSelected = selected?.id === lead.id;
                     return (
                       <tr key={lead.id}
@@ -1420,6 +1548,12 @@ export default function LeadsModule() {
                         <td style={{ padding: "12px 16px" }}>
                           <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: st.bg, color: st.color, fontFamily: T.font }}>
                             {lead.stage || "Visitor"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "12px 16px" }}>
+                          <span title={`${lead.profile_points || 0} pts de perfil`} style={{ display:"inline-flex", alignItems:"center", gap:5, fontSize: 11, fontWeight: 700, padding: "3px 9px 3px 4px", borderRadius: 20, background: pf.bg, color: pf.color, border:`0.5px solid ${pf.border}`, fontFamily: T.font }}>
+                            <span style={{ width:16, height:16, borderRadius:"50%", background:pf.color, color:"#fff", display:"grid", placeItems:"center", fontSize:9, fontWeight:800, fontFamily:T.head }}>{lead.profile || "D"}</span>
+                            <span style={{ fontFamily:T.mono, fontSize:10 }}>{lead.profile_points || 0}</span>
                           </span>
                         </td>
                         <td style={{ padding: "12px 16px" }}>

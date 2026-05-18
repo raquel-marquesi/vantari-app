@@ -9,7 +9,7 @@ import {
   Monitor, Tablet, Smartphone, Tag, Newspaper, FileText,
   CornerDownRight, Lightbulb, TrendingUp, MailOpen, Link2,
   AlertTriangle, XCircle, ArrowUp, ArrowDown, X,
-  Loader2, AlertCircle
+  Loader2, AlertCircle, Upload
 } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -1192,6 +1192,305 @@ const MODULE_TABS = [
   { id:"templates", Icon:LayoutTemplate, label:"Templates" },
 ];
 
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMPLATES VIEW — DB-backed + Import RD
+════════════════════════════════════════════════════════════════════════ */
+function TemplatesView({ onUseTemplate }) {
+  const [templates, setTemplates] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [importOpen, setImportOpen] = useState(false);
+  const [previewTpl, setPreviewTpl] = useState(null);
+  const [filterCat, setFilterCat] = useState("all");
+
+  const fetchTemplates = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("email_templates")
+      .select("*")
+      .eq("active", true)
+      .order("created_at", { ascending: false });
+    setTemplates(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchTemplates(); }, []);
+
+  const categories = useMemo(() => {
+    const set = new Set(["all"]);
+    templates.forEach(t => set.add(t.category || "general"));
+    return Array.from(set);
+  }, [templates]);
+
+  const filtered = filterCat === "all" ? templates : templates.filter(t => t.category === filterCat);
+
+  const useTemplate = async (tpl) => {
+    await supabase.from("email_templates").update({ use_count: (tpl.use_count || 0) + 1 }).eq("id", tpl.id);
+    onUseTemplate(tpl.blocks || []);
+  };
+
+  const deleteTpl = async (id) => {
+    if (!window.confirm("Excluir template?")) return;
+    await supabase.from("email_templates").delete().eq("id", id);
+    fetchTemplates();
+  };
+
+  return (
+    <div>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+        <h2 style={{ margin:0, fontFamily:T.head, fontSize:18, fontWeight:700, color:T.ink, letterSpacing:"-0.01em" }}>
+          Templates de Email <span style={{ fontSize:12, color:T.muted, fontWeight:600 }}>({templates.length})</span>
+        </h2>
+        <Btn onClick={() => setImportOpen(true)} variant="primary" size="sm" icon={Upload}>Importar do RD</Btn>
+      </div>
+
+      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
+        {categories.map(c => (
+          <button key={c} onClick={() => setFilterCat(c)}
+            style={{ padding:"5px 12px", fontSize:11, fontWeight:700, fontFamily:T.font, borderRadius:7,
+                     border:`1px solid ${filterCat === c ? T.blue : T.border}`,
+                     background: filterCat === c ? `${T.blue}12` : "transparent",
+                     color: filterCat === c ? T.blue : T.muted, cursor:"pointer" }}>
+            {c === "all" ? "Todas categorias" : c}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:"center", padding:48, color:T.muted }}>Carregando…</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign:"center", padding:48, color:T.muted, fontFamily:T.font }}>
+          {filterCat === "all" ? "Nenhum template ainda. Importe do RD para começar." : "Nenhum template nesta categoria."}
+        </div>
+      ) : (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16 }}>
+          {filtered.map(tpl => (
+            <div key={tpl.id} style={{ background:T.white, border:`0.5px solid ${T.border}`, borderRadius:12, overflow:"hidden", transition:"all 0.2s" }}>
+              <div style={{ height:120, background:`linear-gradient(135deg,${T.blue},${T.teal})`, display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+                <TypeIcon type={tpl.category} size={32}/>
+                {tpl.source === "rd_station" && (
+                  <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:700, background:"rgba(255,255,255,.25)", color:"#fff", padding:"2px 7px", borderRadius:4, fontFamily:T.font, letterSpacing:.4 }}>
+                    DO RD
+                  </span>
+                )}
+              </div>
+              <div style={{ padding:"14px 16px" }}>
+                <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink, marginBottom:4 }}>{tpl.name || "—"}</div>
+                <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginBottom:4, fontWeight:600, textTransform:"uppercase", letterSpacing:.4 }}>
+                  {tpl.category || "general"} · usado {tpl.use_count || 0}x
+                </div>
+                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:500, color:T.muted, marginBottom:12, minHeight:32 }}>{tpl.description || "Sem descrição"}</div>
+                <div style={{ display:"flex", gap:6 }}>
+                  <Btn onClick={() => useTemplate(tpl)} variant="primary" size="xs" sx={{ flex:1, justifyContent:"center" }}>Usar</Btn>
+                  <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" sx={{ flex:1, justifyContent:"center" }}>Preview</Btn>
+                  <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {importOpen && <RdImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); fetchTemplates(); }} />}
+      {previewTpl && <TemplatePreviewModal template={previewTpl} onClose={() => setPreviewTpl(null)} />}
+    </div>
+  );
+}
+
+function RdImportModal({ onClose, onDone }) {
+  const [mode, setMode] = useState("file"); // "paste" | "file"
+  const [name, setName] = useState("");
+  const [category, setCategory] = useState("general");
+  const [subject, setSubject] = useState("");
+  const [html, setHtml] = useState("");
+  const [beeJson, setBeeJson] = useState(null);   // BeeFree JSON (estrutura do RD)
+  const [format, setFormat] = useState(null);     // "html" | "bee_json"
+  const [saving, setSaving] = useState(false);
+
+  // Extrai HTML básico de um BeeFree JSON (text modules + image)
+  const extractHtmlFromBee = (json) => {
+    try {
+      const rows = json?.page?.body?.rows || [];
+      let html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">';
+      const walk = (modules) => {
+        (modules || []).forEach(m => {
+          if (m.type?.includes("text") && m.descriptor?.text?.html) {
+            html += m.descriptor.text.html;
+          } else if (m.type?.includes("image") && m.descriptor?.image?.src) {
+            html += `<img src="${m.descriptor.image.src}" style="max-width:100%;height:auto" alt="${m.descriptor.image.alt||""}"/>`;
+          } else if (m.type?.includes("button") && m.descriptor?.button) {
+            const b = m.descriptor.button;
+            html += `<div style="text-align:center;padding:12px 0"><a href="${b.href||"#"}" style="display:inline-block;padding:10px 24px;background:${b.style?.["background-color"]||"#0D7491"};color:#fff;text-decoration:none;border-radius:6px;font-weight:700">${b.label||"Clique aqui"}</a></div>`;
+          } else if (m.type?.includes("divider")) {
+            html += '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0"/>';
+          } else if (m.type?.includes("html") && m.descriptor?.html?.html) {
+            html += m.descriptor.html.html;
+          }
+        });
+      };
+      rows.forEach(row => {
+        (row.columns || []).forEach(col => walk(col.modules));
+      });
+      html += '</div>';
+      return html;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const onFile = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const text = await f.text();
+    if (!name) setName(f.name.replace(/\.[^.]+$/, ""));
+
+    // Detecta formato
+    const trimmed = text.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const json = JSON.parse(trimmed);
+        const extracted = extractHtmlFromBee(json);
+        setBeeJson(json);
+        setHtml(extracted || JSON.stringify(json));
+        setFormat("bee_json");
+        return;
+      } catch (e) {
+        // fallback: trata como HTML
+      }
+    }
+    setHtml(text);
+    setBeeJson(null);
+    setFormat("html");
+  };
+
+  const onPasteChange = (val) => {
+    setHtml(val);
+    const trimmed = val.trim();
+    if (trimmed.startsWith("{")) {
+      try {
+        const json = JSON.parse(trimmed);
+        setBeeJson(json);
+        setFormat("bee_json");
+        const extracted = extractHtmlFromBee(json);
+        if (extracted) setHtml(extracted);
+        return;
+      } catch (e) {}
+    }
+    setBeeJson(null);
+    setFormat("html");
+  };
+
+  const save = async () => {
+    if (!name.trim() || !html.trim()) { alert("Preencha nome e conteúdo."); return; }
+    setSaving(true);
+    const slug = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    const { error } = await supabase.from("email_templates").insert({
+      name: name.trim(),
+      slug: slug + "-" + Date.now().toString(36),
+      category, subject, html,
+      bee_json: beeJson,
+      source: "rd_station",
+      active: true,
+    });
+    setSaving(false);
+    if (error) { alert("Erro: " + error.message); return; }
+    onDone();
+  };
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.45)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:"#fff", borderRadius:14, width:640, maxWidth:"94vw", maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
+        <div style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <span style={{ fontFamily:T.head, fontWeight:700, fontSize:16, color:T.ink }}>Importar Template do RD Station</span>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:T.muted, fontSize:18 }}>×</button>
+        </div>
+
+        <div style={{ flex:1, overflowY:"auto", padding:"18px 22px" }}>
+          <p style={{ fontSize:12, color:T.muted, marginTop:0, fontFamily:T.font }}>
+            No RD Station: <strong>Relacionamento → Email → Template → Exportar HTML</strong>. Cole o conteúdo ou faça upload do arquivo .html.
+          </p>
+
+          <div style={{ display:"flex", gap:6, marginBottom:14 }}>
+            <button onClick={() => setMode("paste")} style={{ padding:"6px 12px", fontSize:12, fontWeight:700, borderRadius:7, border:`1px solid ${mode==="paste"?T.blue:T.border}`, background: mode==="paste"?`${T.blue}12`:"transparent", color: mode==="paste"?T.blue:T.muted, cursor:"pointer", fontFamily:T.font }}>Colar HTML</button>
+            <button onClick={() => setMode("file")} style={{ padding:"6px 12px", fontSize:12, fontWeight:700, borderRadius:7, border:`1px solid ${mode==="file"?T.blue:T.border}`, background: mode==="file"?`${T.blue}12`:"transparent", color: mode==="file"?T.blue:T.muted, cursor:"pointer", fontFamily:T.font }}>Upload arquivo</button>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Nome do template</label>
+              <input value={name} onChange={e => setName(e.target.value)} style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+            </div>
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Categoria</label>
+              <select value={category} onChange={e => setCategory(e.target.value)} style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none", background:"#fff" }}>
+                <option value="general">Geral</option>
+                <option value="newsletter">Newsletter</option>
+                <option value="promotional">Promocional</option>
+                <option value="follow-up">Follow-up</option>
+                <option value="event">Evento</option>
+                <option value="reactivation">Reativação</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ marginBottom:12 }}>
+            <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Assunto sugerido</label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Ex: Newsletter mensal — {{lead.name}}" style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.font, outline:"none" }}/>
+          </div>
+
+          {mode === "paste" ? (
+            <div>
+              <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>HTML ou JSON BeeFree do template</label>
+              <textarea value={html} onChange={e => onPasteChange(e.target.value)} rows={10} placeholder="Cole o HTML ou JSON exportado do RD aqui..."
+                style={{ width:"100%", padding:"10px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:11, color:T.text, fontFamily:T.mono, outline:"none", resize:"vertical" }}/>
+            </div>
+          ) : (
+            <div>
+              <input type="file" accept=".html,.htm,.json,text/html,application/json" onChange={onFile}
+                style={{ padding:14, border:`2px dashed ${T.border}`, borderRadius:10, width:"100%", fontSize:12, fontFamily:T.font, cursor:"pointer" }}/>
+              {html && (
+                <div style={{ marginTop:8, fontSize:11, color:T.green, fontFamily:T.mono, display:"flex", gap:8, alignItems:"center" }}>
+                  ✓ {html.length.toLocaleString()} caracteres carregados
+                  {format && <span style={{ background:`${T.blue}14`, color:T.blue, padding:"1px 7px", borderRadius:4, fontSize:10, fontWeight:700 }}>{format === "bee_json" ? "BeeFree JSON" : "HTML"}</span>}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}>
+          <Btn onClick={onClose} variant="ghost">Cancelar</Btn>
+          <Btn onClick={save} variant="primary" disabled={saving || !name || !html}>{saving ? "Salvando…" : "Importar template"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TemplatePreviewModal({ template, onClose }) {
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.5)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ background:"#fff", borderRadius:14, width:760, maxWidth:"94vw", maxHeight:"90vh", display:"flex", flexDirection:"column", boxShadow:"0 20px 60px rgba(0,0,0,.2)" }}>
+        <div style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+          <div>
+            <div style={{ fontFamily:T.head, fontWeight:700, fontSize:16, color:T.ink }}>{template.name}</div>
+            <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginTop:2, fontWeight:600 }}>{template.category} · {template.source}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer", color:T.muted, fontSize:18 }}>×</button>
+        </div>
+        <div style={{ flex:1, overflowY:"auto", background:"#F5F8FB", padding:20 }}>
+          {template.html ? (
+            <iframe srcDoc={template.html} sandbox="" style={{ width:"100%", minHeight:480, border:`1px solid ${T.border}`, borderRadius:8, background:"#fff" }} title={template.name} />
+          ) : (
+            <pre style={{ fontFamily:T.mono, fontSize:11, color:T.text, whiteSpace:"pre-wrap", background:"#fff", padding:16, borderRadius:8, border:`1px solid ${T.border}` }}>
+              {JSON.stringify(template.blocks, null, 2)}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VantariEmailMarketing() {
   const [campaigns,  setCampaigns]  = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -1393,30 +1692,7 @@ export default function VantariEmailMarketing() {
               {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete} onSend={handleSend}/>}
               {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
               {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
-              {view==="templates"&&(
-                <div>
-                  <h2 style={{margin:"0 0 20px",fontFamily:T.head,fontSize:18,fontWeight:700,color:T.ink,letterSpacing:"-0.01em"}}>Templates de Email</h2>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:16}}>
-                    {TEMPLATES.map(tpl=>(
-                      <div key={tpl.id} style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,overflow:"hidden",cursor:"pointer",transition:"all 0.2s"}}
-                        onMouseEnter={e=>e.currentTarget.style.transform="translateY(-3px)"}
-                        onMouseLeave={e=>e.currentTarget.style.transform="none"}>
-                        <div style={{height:120,background:`linear-gradient(135deg,${T.blue},${T.teal})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <TypeIcon type={tpl.category} size={32}/>
-                        </div>
-                        <div style={{padding:"16px 18px"}}>
-                          <div style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,marginBottom:4}}>{tpl.name}</div>
-                          <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted,marginBottom:12}}>{tpl.desc}</div>
-                          <div style={{display:"flex",gap:6}}>
-                            <Btn onClick={()=>{setEditCamp({emailBlocks:tpl.blocks});setView("editor");}} variant="primary" size="xs" sx={{flex:1,justifyContent:"center"}}>Usar Template</Btn>
-                            <Btn variant="ghost" size="xs" sx={{flex:1,justifyContent:"center"}}>Preview</Btn>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {view==="templates"&&<TemplatesView onUseTemplate={(blocks)=>{setEditCamp({emailBlocks:blocks});setView("editor");}}/>}
             </>
           )}
         </div>

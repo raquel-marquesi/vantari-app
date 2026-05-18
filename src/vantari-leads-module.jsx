@@ -771,30 +771,40 @@ function ImportsView() {
     "utm term": "utm_term", "utm_term": "utm_term",
   };
 
-  // Auto-mapeia headers contra: presets RD → campos padrão → labels de custom_fields
+  // Auto-mapeia headers contra: presets RD → campos padrão → labels de custom_fields.
+  // Dedup: cada target só é atribuído UMA vez (primeira ocorrência ganha). Resto fica unmapped.
   const autoMapHeaders = (hdr) => {
     const cfByLabel = {};
     (customFields || []).forEach(c => { cfByLabel[norm(c.label)] = c.api_id; });
 
     const auto = {};
+    const used = new Set();
+    const claim = (idx, target) => {
+      if (!target) return false;
+      if (used.has(target)) return false;
+      auto[idx] = target;
+      used.add(target);
+      return true;
+    };
+
     hdr.forEach((h, idx) => {
       const n = norm(h);
       // 1. Preset RD direto
-      if (RD_PRESETS[n]) { auto[idx] = RD_PRESETS[n]; return; }
+      if (RD_PRESETS[n] && claim(idx, RD_PRESETS[n])) return;
       // 2. Já vem com api_id explícito (cf_*, utm_*)
-      if (n.startsWith("utm_") || n.startsWith("cf_")) { auto[idx] = n; return; }
+      if ((n.startsWith("utm_") || n.startsWith("cf_")) && claim(idx, n)) return;
       // 3. Match contra label de custom_field
-      if (cfByLabel[n]) { auto[idx] = cfByLabel[n]; return; }
+      if (cfByLabel[n] && claim(idx, cfByLabel[n])) return;
       // 4. Heurísticas residuais
-      if (n.includes("email") || n.includes("e-mail")) auto[idx] = "email";
-      else if (n.includes("nome") || n === "name") auto[idx] = "name";
-      else if (n.includes("telefone") || n.includes("celular") || n.includes("phone")) auto[idx] = "phone";
-      else if (n.includes("empresa") || n === "company") auto[idx] = "company";
-      else if (n.includes("cidade") || n === "city") auto[idx] = "city";
-      else if (n.includes("estado") || n === "state") auto[idx] = "state";
-      else if (n.includes("origem") || n.includes("source")) auto[idx] = "source";
-      else if (n.includes("estagio") || n.includes("stage")) auto[idx] = "stage";
-      else if (n.includes("tag")) auto[idx] = "tags";
+      if (n.includes("email") || n.includes("e-mail")) { claim(idx, "email"); return; }
+      if (n.includes("nome") || n === "name")          { claim(idx, "name"); return; }
+      if (n.includes("telefone") || n.includes("celular") || n.includes("phone")) { claim(idx, "phone"); return; }
+      if (n.includes("empresa") || n === "company")    { claim(idx, "company"); return; }
+      if (n.includes("cidade") || n === "city")        { claim(idx, "city"); return; }
+      if (n.includes("estado") || n === "state")       { claim(idx, "state"); return; }
+      if (n.includes("origem") || n.includes("source")){ claim(idx, "source"); return; }
+      if (n.includes("estagio") || n.includes("stage")){ claim(idx, "stage"); return; }
+      if (n.includes("tag"))                            { claim(idx, "tags"); return; }
     });
     return auto;
   };
@@ -955,13 +965,25 @@ function ImportsView() {
                 </tr>
               </thead>
               <tbody>
-                {headers.map((h, idx) => (
-                  <tr key={idx} style={{ borderTop:`1px solid ${T.border}` }}>
-                    <td style={{ padding:"10px 14px", fontSize:13, color:T.text, fontFamily:T.font, fontWeight:600 }}>{h}</td>
+                {headers.map((h, idx) => {
+                  // Detecta conflito: este target já foi usado por outro idx menor?
+                  const t = mapping[idx];
+                  const conflict = t && t !== "__skip__"
+                    && Object.entries(mapping).some(([k,v]) => Number(k) < idx && v === t);
+                  return (
+                  <tr key={idx} style={{ borderTop:`1px solid ${T.border}`, background: conflict ? `${T.danger}10` : "transparent" }}>
+                    <td style={{ padding:"10px 14px", fontSize:13, color:T.text, fontFamily:T.font, fontWeight:600 }}>
+                      {h}
+                      {conflict && (
+                        <span title={`Conflito: ${t} já mapeado em outra coluna acima`} style={{ display:"inline-block", marginLeft:6, fontSize:10, fontWeight:700, color:T.danger, background:`${T.danger}20`, padding:"1px 6px", borderRadius:4 }}>
+                          conflito
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding:"10px 14px", fontSize:11, color:T.muted, fontFamily:T.mono, maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{(rawRows[0]||[])[idx] || "—"}</td>
                     <td style={{ padding:"10px 14px" }}>
                       <select value={mapping[idx] || "__skip__"} onChange={e => setMapping(m => ({...m,[idx]:e.target.value}))}
-                        style={{ padding:"6px 10px", border:`1px solid ${T.border}`, borderRadius:6, fontSize:12, fontFamily:T.font, background:"#fff", outline:"none" }}>
+                        style={{ padding:"6px 10px", border:`1px solid ${conflict?T.danger:T.border}`, borderRadius:6, fontSize:12, fontFamily:T.font, background:"#fff", outline:"none" }}>
                         <option value="__skip__">— ignorar —</option>
                         <optgroup label="Campos padrão">
                           {STD_FIELDS.map(f => <option key={f.v} value={f.v}>{f.l}</option>)}
@@ -974,10 +996,24 @@ function ImportsView() {
                       </select>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
+          {/* Detector global de conflitos */}
+          {(() => {
+            const counts = {};
+            Object.values(mapping).forEach(v => { if (v && v !== "__skip__") counts[v] = (counts[v]||0)+1; });
+            const dups = Object.entries(counts).filter(([,c]) => c > 1);
+            if (!dups.length) return null;
+            return (
+              <div style={{ marginTop:12, padding:"10px 14px", background:`${T.danger}10`, border:`1px solid ${T.danger}`, borderRadius:8, fontSize:12, color:T.danger, fontFamily:T.font, fontWeight:600, display:"flex", alignItems:"center", gap:8 }}>
+                <AlertCircle size={14} />
+                Conflitos: {dups.map(([t,c]) => `${t} (${c}x)`).join(", ")}. Cada campo só pode ser mapeado de uma coluna. Ajuste antes de importar.
+              </div>
+            );
+          })()}
           <div style={{ marginTop:16, display:"flex", justifyContent:"flex-end", gap:8, alignItems:"center" }}>
             <span style={{ fontSize:12, color:T.muted, fontFamily:T.font, marginRight:"auto" }}>
               {Object.values(mapping).filter(v => v && v !== "__skip__").length} colunas mapeadas. Email é obrigatório.
@@ -987,10 +1023,20 @@ function ImportsView() {
               <Sparkles size={13} /> Preset RD Station
             </button>
             <button onClick={reset} style={{ padding:"8px 14px", border:`1.5px solid ${T.border}`, borderRadius:10, background:"transparent", color:T.muted, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>Cancelar</button>
-            <button onClick={doImport} disabled={!Object.values(mapping).includes("email")}
-              style={{ padding:"8px 14px", border:"none", borderRadius:10, background:T.gradient, color:"#fff", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font, opacity: Object.values(mapping).includes("email") ? 1 : 0.5 }}>
-              Importar {rawRows.length} leads
-            </button>
+            {(() => {
+              const vals = Object.values(mapping);
+              const counts = {};
+              vals.forEach(v => { if (v && v !== "__skip__") counts[v] = (counts[v]||0)+1; });
+              const hasConflict = Object.values(counts).some(c => c > 1);
+              const hasEmail = vals.includes("email");
+              const blocked = !hasEmail || hasConflict;
+              return (
+                <button onClick={doImport} disabled={blocked} title={!hasEmail ? "Mapeie a coluna de email" : hasConflict ? "Resolva conflitos de mapeamento" : ""}
+                  style={{ padding:"8px 14px", border:"none", borderRadius:10, background:T.gradient, color:"#fff", fontSize:12, fontWeight:700, cursor: blocked ? "not-allowed" : "pointer", fontFamily:T.font, opacity: blocked ? 0.5 : 1 }}>
+                  Importar {rawRows.length} leads
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}

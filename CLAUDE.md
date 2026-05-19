@@ -35,8 +35,8 @@ src/
   vantari-analytics-dashboard.jsx  # /dashboard     ← KPIs reais via Supabase + design Fases 2-4
   vantari-leads-module.jsx         # /leads         ← 4 abas: Leads / Empresas / Importações / Exportações
   vantari-scoring-system.jsx       # /scoring       ← HeroKpiCard + sparklines
-  vantari-email-marketing.jsx      # /email         ← HeroKpiCard + sparklines (campaigns/sends)
-  vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions)
+  vantari-email-marketing.jsx      # /email         ← HeroKpiCard + sparklines (campaigns/sends) + aba "Biblioteca Vantari" em Templates com 5 cards e iframe preview
+  vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions) + aba "Biblioteca" com 3 LPs (LibraryLPCard, LibraryView, MODULAR_BLOCKS, LP_PREVIEW_BODIES)
   vantari-ai-marketing.jsx         # /ai-marketing  ← leads reais via Supabase
   vantari-integrations-hub.jsx     # /integrations
   vantari-settings-admin.jsx       # /settings      ← 8 abas: Workspace / Equipe / Campos Personalizados / Lead Tracking / Email / Billing / Avançado / Audit / Suporte
@@ -243,7 +243,7 @@ Plano em 11 etapas pra substituir 100% o RD Station Marketing.
 | **8** — GA4 + Google Ads | ⏳ | |
 | **9** — Relacionar (WhatsApp/SMS/Chatbot) | ⏳ | WhatsApp via Meta Cloud API (oficial) |
 | **10** — Validador Email + Lista Inteligente | ⏳ | |
-| **11** — Polimento + cutover | 🟡 parcial | Importador de leads RD turbinado (preset + bulk upsert) ✅. Importador de templates (HTML + BeeFree JSON) ✅. Importador de segmentos: usuário recriará manualmente. Importador de campanhas históricas ⏳. Cutover ⏳ |
+| **11** — Polimento + cutover | 🟡 parcial | Importador de leads RD turbinado (preset + bulk upsert) ✅. Importador de templates (HTML + BeeFree JSON) ✅. **Biblioteca de 5 templates de email** ✅ (EMAIL_BODIES + iframe preview + aba "Biblioteca Vantari"). **Biblioteca de 3 LPs Vantari** ✅ (LP_PREVIEW_BODIES + browser-frame + LibraryView + 16 MODULAR_BLOCKS). Importador de segmentos: usuário recriará manualmente. Importador de campanhas históricas ⏳. Cutover ⏳ |
 
 ### Identidade do lead (decisão arquitetural)
 - **CPF é o identificador único primário** (migration 007). Pessoas mudam de email, mas não mudam de CPF.
@@ -314,6 +314,29 @@ API JS no site:
    - Senão se email: upsert por email
    - Insere `lead_event` com `form_submit` (+10 pts via `scoring_rules`)
 5. Source do lead = `forms.source_label` ou `"Form: <name>"`
+
+## Bibliotecas de templates (Etapa 11)
+
+### Email — Biblioteca Vantari (`/email → Templates → Biblioteca Vantari`)
+- 5 cards de template com iframe preview isolado
+- `EMAIL_PREVIEW_CSS`: estilos base compartilhados para os previews
+- `EMAIL_BODIES`: objeto `{ [id]: htmlString }` com HTML de cada template
+- `getEmailPreviewHtml(id)` — monta `<!doctype html>` com CSS + body para o `srcDoc` do iframe
+- Cada card: nome, tag de categoria, from/subject, iframe preview + botões "Usar" / "Pré-visualizar"
+
+### Landing Pages — Biblioteca Vantari (`/landing → Biblioteca`)
+- 3 LP templates: B2B Consultivo (01), B2C Performance/dark (02), B2C Educativa/light (03)
+- `LIBRARY_LP_TEMPLATES`: array com metadados (id, num, color, name, tag, audience, cta, traction, convTarget, url, blocks[])
+- `LP_PREVIEW_BODIES`: objeto `{ [id]: htmlString }` com HTML/CSS de cada LP
+- `getLPPreviewHtml(id)` — monta o doctype completo para `srcDoc`
+- `LibraryLPCard`: card com browser-frame mockup + `ResizeObserver` para escala dinâmica (`scale = containerWidth / 1280`), `iframeH = visibleH / scale`
+- `LibraryView`: grid `repeat(auto-fill, minmax(380px,1fr))` + seção de 16 `MODULAR_BLOCKS`
+- Terceiro estado de `viewMode`: `"pages" | "forms" | "biblioteca"`
+
+### Padrão iframe preview (ambas as bibliotecas)
+- `srcDoc` com `sandbox="allow-same-origin"` para isolamento
+- `ResizeObserver` no container → recalcula `scale` dinamicamente
+- HTML das previews: conteúdo ASCII-safe (evitar acentos diretos em template literals para evitar encoding issues)
 
 ## Email templates — como importar do RD
 

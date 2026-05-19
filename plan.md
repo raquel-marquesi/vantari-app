@@ -17,8 +17,8 @@
 | Dashboard Analytics | vantari-analytics-dashboard.jsx | ✅ KPIs reais | ✅ Fases 1–4 |
 | Lead Management | vantari-leads-module.jsx | ✅ 4 abas + CPF + Atividades 8 cat | ✅ Fases 1+5+6 |
 | Lead Scoring | vantari-scoring-system.jsx | ✅ Perfil 2D + Interesse persistidos | ✅ Fases 1+5 |
-| Email Marketing | vantari-email-marketing.jsx | ✅ Templates DB + import RD; campaigns OK | ✅ Fases 1+5 |
-| Landing Pages | vantari-landing-pages.jsx | ✅ tab Formulários standalone | ✅ Fases 1+5 |
+| Email Marketing | vantari-email-marketing.jsx | ✅ Templates DB + import RD; campaigns OK | ✅ Fases 1+5+11 |
+| Landing Pages | vantari-landing-pages.jsx | ✅ tab Formulários standalone | ✅ Fases 1+5+11 |
 | AI Marketing | vantari-ai-marketing.jsx | ✅ leads reais | ✅ Fase 1 |
 | Integrações | vantari-integrations-hub.jsx | — configuração | ✅ Fase 1 |
 | Settings | vantari-settings-admin.jsx | ✅ 8 abas + Custom Fields + Lead Tracking | ✅ Fase 1 |
@@ -46,7 +46,7 @@ Substituição 100% do RD Station Marketing em 11 etapas.
 | **8** GA4 + Google Ads | ⏳ | |
 | **9** Relacionar (WhatsApp Cloud API + SMS + Chatbot) | 🟡 parcial | Tabelas `campaigns` + `campaign_sends` criadas (Migration 009). WhatsApp pendente |
 | **10** Validador Email + Lista Inteligente | ⏳ | **Próximo bloco recomendado** |
-| **11** Polimento + cutover do RD | 🟡 parcial | Importador RD turbinado ✅; Importador templates (HTML + BeeFree JSON) ✅; Importar 12k completo ⏳; Recriar segmentos críticos ⏳; cutover ⏳ |
+| **11** Polimento + cutover do RD | 🟡 parcial | Importador RD turbinado ✅; Importador templates (HTML + BeeFree JSON) ✅; **Biblioteca de 5 templates de email ✅**; **Biblioteca de 3 LPs Vantari ✅**; Importar 12k completo ⏳; Recriar segmentos críticos ⏳; cutover ⏳ |
 
 ### Decisões arquiteturais
 - **CPF como identidade única** (Migration 007). Email continua UNIQUE quando preenchido (fallback). Lead sem CPF = status PENDENTE.

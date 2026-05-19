@@ -2,6 +2,39 @@
 
 ---
 
+## 2026-05-19 — Bibliotecas de templates (Email + Landing Pages)
+
+### Email Marketing — Biblioteca Vantari de Templates ✅
+
+**Frontend (`vantari-email-marketing.jsx`):**
+- Tab **Biblioteca Vantari** + tab **Importados do RD** no view Templates
+- 5 cards com preview iframe sandboxed escalado a 0.46x (600px → container)
+- `LIBRARY_TEMPLATES`: Editorial (teal), Comparativo (green), Oferta Qualificada (amber), Boas-vindas (violet), Atualização de Status (coral)
+- Cada card: badge numerado, tag de categoria, meta strip (cadência/audiência/CTA/tempo de leitura), slots ativados, variáveis de personalização (`*|PRIMEIRO_NOME|*` etc.)
+- `EMAIL_BODIES`: 5 corpos HTML completos com CSS inline (fontes Montserrat/Nunito Sans via Google Fonts)
+- `EMAIL_PREVIEW_CSS`: CSS compartilhado para todos os iframes (classes `.pre`, `.hdr`, `.hero`, `.body`, `.ey`, `.h1`, `.lead`, `.tldr`, `.cta`, `.compare`, `.stats`, `.offer`, `.steps`, `.payout`, `.timeline`, `.banner`, `.ftr`)
+- Botão "Usar template →" pré-preenche rascunho de campanha
+- Fix: curly quotes (`"Newsletter Blog"`) dentro de string JS → single-quote outer wrapper
+
+### Landing Pages — Biblioteca Vantari de LPs ✅
+
+**Frontend (`vantari-landing-pages.jsx`):**
+- Tab toggle **Páginas | Formulários | Biblioteca** no topbar de `/landing`
+- `LIBRARY_LP_TEMPLATES`: 3 templates com metadados (cor, tag, audiência, CTA, tração, conv. alvo, URL, blocos)
+- `LibraryLPCard`: browser-frame mockup com escala dinâmica via `ResizeObserver` (iframe 1280px → escala proporcional ao container), barra de chrome com traffic lights + URL bar
+- `LP_PREVIEW_BODIES`: 3 corpos HTML com CSS inline fiel ao design doc:
+  - **LP01 B2B Escritórios** — hero-light, 2 colunas, form-card branco, kpi-row, paleta teal
+  - **LP02 B2C Performance** — hero-dark com `radial-gradient` azul-preto, live-strip "Última liberação", form dark
+  - **LP03 B2C Educativa** — hero-split, phone-mockup com progress steps, calc-row (R$ 80k → R$ 52.3k)
+- `LibraryView` com info strip (16 blocos / 3 paletas / densidades) + grid de 16 blocos modulares documentados
+- Botão "Usar template →" abre modal Nova Página
+
+### Problemas resolvidos
+- Curly quotes Unicode dentro de JS template literals: outer wrapper com single-quote
+- Build limpo: `vantari-email-marketing.jsx` 112 kB, `vantari-landing-pages.jsx` 113 kB
+
+---
+
 ## 2026-05-18 — Sessão intensiva: Scoring 2D, CPF, Forms, Templates RD
 
 ### Etapa 1 — Lead Scoring 2D ✅

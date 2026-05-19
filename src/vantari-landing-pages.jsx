@@ -1115,6 +1115,408 @@ const NewPageModal = ({ onClose, onCreate }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
+   LIBRARY — Landing Page Templates Vantari
+════════════════════════════════════════════════════════════════════════ */
+const LIBRARY_LP_TEMPLATES = [
+  {
+    id: "b2b-escritorios", num: "01",
+    color: "#0D7491", colorBg: "#E0F2F8",
+    name: "B2B · Escritórios Jurídicos",
+    sub: 'Substitui o fluxo B2B atual. Honorários previsíveis, caixa sem dívida.',
+    tag: "Consultivo · B2B",
+    audience: "advogados · bancas",
+    cta: "agendar diagnóstico",
+    traction: "LinkedIn · e-mail B2B",
+    convTarget: "3–6%",
+    url: "/antecipacao-escritorios",
+    blocks: ["nav","trust","hero-light","kpi-row","form","logos","steps-3","testi-3","faq","final-cta","footer"],
+  },
+  {
+    id: "b2c-performance", num: "02",
+    color: "#0A5F8A", colorBg: "#DDEFFE",
+    name: "B2C · Performance / Urgência",
+    sub: "Alta intensidade, tráfego pago. Resposta imediata pelo WhatsApp.",
+    tag: "Conversão · Alta Intensidade",
+    audience: "pessoa física · urgência",
+    cta: "falar pelo WhatsApp agora",
+    traction: "Google Ads · Meta Ads",
+    convTarget: "10–14%",
+    url: "/antecipar",
+    blocks: ["nav","trust","hero-dark","live-strip","compare","steps-3","testi-3","final-cta","footer"],
+  },
+  {
+    id: "b2c-educativa", num: "03",
+    color: "#14A273", colorBg: "#ECFDF5",
+    name: "B2C · Educativa",
+    sub: 'Substitui "Antecipe Seu Dinheiro". Tráfego orgânico, SEO, redes sociais.',
+    tag: "Calmo · Light",
+    audience: "leitor de blog · pesquisa",
+    cta: "simular sem cadastro",
+    traction: "SEO · Instagram · YouTube",
+    convTarget: "3–5%",
+    url: "/antecipar-acao-trabalhista",
+    blocks: ["nav","trust","hero-split","calc-row","steps-3","faq","testi-3","final-cta-green","footer"],
+  },
+];
+
+const LP_PREVIEW_BODIES = {
+  "b2b-escritorios": `<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=Inter:wght@500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Inter,sans-serif;background:#fff;color:#0E1A24;width:1280px}
+nav{display:flex;align-items:center;gap:28px;padding:0 64px;height:64px;background:#fff;border-bottom:1px solid #E8EEF3}
+.logo{font-family:Sora,sans-serif;font-size:20px;font-weight:800;color:#0D7491;margin-right:auto}
+.nl{display:flex;gap:4px}.nl a{font-size:14px;color:#5A6B7A;font-weight:600;margin-right:16px;text-decoration:none}
+.ph{font-size:13px;color:#2E3D4B;font-weight:600}.wa{background:#14A273;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700}
+.trust{background:#F5F8FB;border-bottom:1px solid #E8EEF3;padding:10px 64px;display:flex;gap:28px}
+.trust span{font-size:13px;color:#5A6B7A;font-weight:600}.trust b{color:#0E1A24}
+.hero{display:grid;grid-template-columns:1fr 420px;gap:48px;padding:64px 64px;align-items:center}
+.ey{font-size:12px;font-weight:700;color:#14A273;text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;display:flex;align-items:center;gap:6px}
+.ey::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#14A273}
+h1{font-family:Sora,sans-serif;font-size:50px;font-weight:800;color:#0E1A24;line-height:1.08;letter-spacing:-.03em;margin-bottom:18px}
+h1 em{color:#0D7491;font-style:normal}
+.lead{font-size:17px;color:#2E3D4B;font-weight:500;line-height:1.65;margin-bottom:30px}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid #E8EEF3;border-radius:12px;overflow:hidden}
+.kpi{padding:16px 20px;border-right:1px solid #E8EEF3}.kpi:last-child{border-right:none}
+.kv{font-family:Sora,sans-serif;font-size:22px;font-weight:700;color:#0D7491;display:block}
+.kl{font-size:11px;color:#5A6B7A;font-weight:600;margin-top:2px;display:block}
+.fc{background:#fff;border:1.5px solid #E8EEF3;border-radius:16px;padding:30px;box-shadow:0 4px 24px -8px rgba(14,26,36,.1)}
+.badge{display:inline-block;background:#14A27318;color:#14A273;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;margin-bottom:14px}
+.fc h3{font-family:Sora,sans-serif;font-size:19px;font-weight:700;color:#0E1A24;margin-bottom:6px}
+.fsub{font-size:12px;color:#5A6B7A;margin-bottom:18px}
+.row{margin-bottom:12px}.row label{display:block;font-size:10px;font-weight:700;color:#5A6B7A;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.inp{padding:10px 12px;border:1.5px solid #E8EEF3;border-radius:8px;font-size:14px;color:#8696A5;background:#FAFBFC}
+.btn{width:100%;background:linear-gradient(135deg,#0D7491 0%,#14A273 100%);color:#fff;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;margin-top:6px;margin-bottom:10px;display:block;text-align:center}
+.legal{font-size:11px;color:#8696A5;text-align:center}.tl{font-size:11px;color:#5A6B7A;text-align:center;margin-top:6px}
+</style>
+<nav>
+  <div class="logo">vantari</div>
+  <div class="nl"><a>Como funciona</a><a>Para escritórios</a><a>Blog</a><a>FAQ</a></div>
+  <span class="ph">(11) 93401-8661</span>
+  <div class="wa">● WhatsApp</div>
+</nav>
+<div class="trust">
+  <span><b>+12.000</b> clientes</span>
+  <span><b>R$ 280 mi</b> liberados</span>
+  <span><b>5 dias uteis</b> media</span>
+  <span><b>RA1000</b> Reclame Aqui</span>
+</div>
+<div class="hero">
+  <div>
+    <div class="ey">Antecipacao de honorarios</div>
+    <h1>Honorarios previsiveis. <em>Caixa sem divida.</em> Escritorio livre para crescer.</h1>
+    <p class="lead">Seu escritorio tem processos trabalhistas a receber. Nos adiantamos o valor antes da sentenca — sem emprestimo, sem risco juridico.</p>
+    <div class="kpis">
+      <div class="kpi"><span class="kv">R$ 280 mi</span><span class="kl">Ja liberados</span></div>
+      <div class="kpi"><span class="kv">1.840</span><span class="kl">Escritorios clientes</span></div>
+      <div class="kpi"><span class="kv">24h</span><span class="kl">Prazo de resposta</span></div>
+    </div>
+  </div>
+  <div class="fc">
+    <span class="badge">Resposta em 24h</span>
+    <h3>Simule o adiantamento do seu escritorio</h3>
+    <p class="fsub">Informe dados basicos. Um especialista retorna em ate 24h.</p>
+    <div class="row"><label>Nome / Escritorio</label><div class="inp">Razao social ou nome</div></div>
+    <div class="row"><label>Email corporativo</label><div class="inp">email@escritorio.com.br</div></div>
+    <div class="row"><label>WhatsApp</label><div class="inp">(11) 9 0000-0000</div></div>
+    <div class="row"><label>Faixa de processos ativos</label><div class="inp">1-10 · 11-50 · 51-200 · 200+</div></div>
+    <div class="btn">Agendar diagnostico →</div>
+    <div class="legal">Quero receber contato. Sem spam. Politica LGPD.</div>
+    <div class="tl">Humanos reais · seg-sex, 9h-18h · resposta em 24h</div>
+  </div>
+</div>`,
+
+  "b2c-performance": `<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=Inter:wght@400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:Inter,sans-serif;background:radial-gradient(ellipse at 20% 0%,#007fb3 0%,#003d56 55%,#001e2b 100%);color:#fff;width:1280px;min-height:800px}
+.live{background:#001224;border-bottom:1px solid rgba(255,255,255,.08);padding:7px 64px;display:flex;align-items:center;gap:12px}
+.ldot{width:8px;height:8px;border-radius:50%;background:#14A273;box-shadow:0 0 0 3px rgba(20,162,115,.3);flex-shrink:0}
+.live span{font-size:13px;color:rgba(255,255,255,.7);font-weight:600}.live b{color:#fff}
+nav{display:flex;align-items:center;gap:28px;padding:0 64px;height:64px}
+.logo{font-family:Sora,sans-serif;font-size:20px;font-weight:800;color:#fff;margin-right:auto}
+.nl a{font-size:14px;color:rgba(255,255,255,.7);font-weight:600;margin-right:16px;text-decoration:none}
+.ph{font-size:13px;color:rgba(255,255,255,.8);font-weight:600}
+.wa{background:#14A273;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700}
+.hero{display:grid;grid-template-columns:1fr 400px;gap:48px;padding:56px 64px;align-items:start}
+.ey{font-size:12px;font-weight:700;color:#14A273;text-transform:uppercase;letter-spacing:.12em;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.edot{width:6px;height:6px;border-radius:50%;background:#14A273;box-shadow:0 0 0 3px rgba(20,162,115,.3)}
+h1{font-family:Sora,sans-serif;font-size:50px;font-weight:800;color:#fff;line-height:1.08;letter-spacing:-.03em;margin-bottom:22px}
+h1 em{color:#5EE8C8;font-style:normal}
+.chk{display:flex;align-items:center;gap:10px;font-size:16px;color:rgba(255,255,255,.9);font-weight:500;margin-bottom:10px}
+.chk::before{content:"";display:inline-block;width:20px;height:20px;border-radius:50%;background:rgba(20,162,115,.25);flex-shrink:0}
+.fc{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:28px}
+.badge{display:inline-block;background:#14A273;color:#fff;font-size:11px;font-weight:700;padding:4px 10px;border-radius:99px;margin-bottom:14px}
+.fc h3{font-family:Sora,sans-serif;font-size:19px;font-weight:700;color:#fff;margin-bottom:6px}
+.fsub{font-size:12px;color:rgba(255,255,255,.6);margin-bottom:18px}
+.row{margin-bottom:12px}.row label{display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.inp{padding:10px 12px;border:1.5px solid rgba(255,255,255,.12);border-radius:8px;font-size:14px;color:rgba(255,255,255,.4);background:rgba(255,255,255,.05)}
+.inp.on{border-color:#14A273;color:#fff;background:rgba(20,162,115,.08)}
+.btn{width:100%;background:#14A273;color:#fff;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:700;margin-top:6px;margin-bottom:10px;display:block;text-align:center;box-shadow:0 4px 16px rgba(20,162,115,.4)}
+.legal{font-size:11px;color:rgba(255,255,255,.4);text-align:center}
+.tl{font-size:11px;color:rgba(255,255,255,.5);text-align:center;margin-top:6px}
+</style>
+<div class="live">
+  <div class="ldot"></div>
+  <span>Ultima liberacao: <b>R$ 47.200</b> — Sao Paulo · ha 9 minutos</span>
+</div>
+<nav>
+  <div class="logo">vantari</div>
+  <div class="nl"><a>Como funciona</a><a>Para escritorios</a><a>Blog</a></div>
+  <span class="ph">(11) 93401-8661</span>
+  <div class="wa">● WhatsApp</div>
+</nav>
+<div class="hero">
+  <div>
+    <div class="ey"><div class="edot"></div>Atendimento agora · em ate 2 min</div>
+    <h1>Voce nao precisa esperar anos. <em>Antecipe hoje.</em></h1>
+    <div class="chk">Sem emprestimo · nao e divida</div>
+    <div class="chk">Sem analise de Serasa ou CPF</div>
+    <div class="chk">PIX na conta em ate 5 dias uteis</div>
+    <div class="chk">Se perder o processo, o prejuizo e nosso</div>
+  </div>
+  <div class="fc">
+    <span class="badge">Resposta em 2 min</span>
+    <h3>Quanto voce pode receber?</h3>
+    <p class="fsub">Nome e WhatsApp sao suficientes pra comecar.</p>
+    <div class="row"><label>Seu nome</label><div class="inp">Como podemos te chamar?</div></div>
+    <div class="row"><label>WhatsApp</label><div class="inp on">(11) 9 0000-0000</div></div>
+    <div class="row"><label>Em que fase esta seu processo?</label><div class="inp">1a instancia · 2a instancia · transito julgado</div></div>
+    <div class="btn">Falar pelo WhatsApp agora →</div>
+    <div class="legal">Quero receber contato por WhatsApp. Politica LGPD.</div>
+    <div class="tl">Atendentes humanos · seg-sab, 8h-22h · resposta em 2 min</div>
+  </div>
+</div>`,
+
+  "b2c-educativa": `<style>
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@700;800&family=Inter:wght@400;500;600;700&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:Inter,sans-serif;background:#fff;color:#0E1A24;width:1280px}
+nav{display:flex;align-items:center;gap:28px;padding:0 64px;height:64px;background:#fff;border-bottom:1px solid #E8EEF3}
+.logo{font-family:Sora,sans-serif;font-size:20px;font-weight:800;color:#0D7491;margin-right:auto}
+.nl a{font-size:14px;color:#5A6B7A;font-weight:600;margin-right:16px;text-decoration:none}
+.ph{font-size:13px;color:#2E3D4B;font-weight:600}.wa{background:#14A273;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:700}
+.hero{display:grid;grid-template-columns:1fr 400px;gap:64px;padding:64px 64px;align-items:center}
+.ey{font-size:12px;font-weight:700;color:#14A273;letter-spacing:.08em;display:flex;align-items:center;gap:6px;margin-bottom:16px}
+.ey::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#14A273}
+h1{font-family:Sora,sans-serif;font-size:50px;font-weight:800;color:#0E1A24;line-height:1.08;letter-spacing:-.03em;margin-bottom:16px}
+h1 em{color:#0D7491;font-style:normal}
+.lead{font-size:17px;color:#2E3D4B;font-weight:500;line-height:1.65;margin-bottom:26px}
+.calc{display:grid;grid-template-columns:1fr 1fr;border:1px solid #E8EEF3;border-radius:12px;overflow:hidden;margin-bottom:26px}
+.cb{padding:16px 20px;border-right:1px solid #E8EEF3}.cb:last-child{border:none}
+.clab{font-size:11px;color:#5A6B7A;font-weight:600;margin-bottom:4px}
+.cval{font-family:Sora,sans-serif;font-size:26px;font-weight:800;color:#0D7491}
+.cdet{font-size:11px;color:#8696A5;margin-top:2px}
+.btns{display:flex;gap:12px}.btn-p{background:linear-gradient(135deg,#0D7491 0%,#14A273 100%);color:#fff;border:none;padding:14px 26px;border-radius:10px;font-size:15px;font-weight:700}
+.btn-g{background:transparent;color:#2E3D4B;border:1.5px solid #E8EEF3;padding:14px 20px;border-radius:10px;font-size:15px;font-weight:600}
+.stars{color:#F59E0B;font-size:15px;margin-right:4px}.mt{font-size:12px;color:#5A6B7A;margin-top:14px}
+.phone{background:#F5F8FB;border-radius:22px;overflow:hidden;box-shadow:0 8px 32px rgba(14,26,36,.12)}
+.ph-head{background:#0E1A24;padding:9px 16px;display:flex;justify-content:space-between}
+.ph-head span{font-size:12px;color:#fff;font-weight:600}
+.ph-h1{background:#0D7491;padding:14px 16px;font-family:Sora,sans-serif;font-size:15px;color:#fff;font-weight:700;line-height:1.3}
+.ph-h1 em{color:#5EE8C8;font-style:normal}
+.ph-card{background:#fff;margin:12px;border-radius:10px;padding:14px;border:1px solid #E8EEF3}
+.ph-lab{font-size:11px;color:#5A6B7A;margin-bottom:3px}.ph-val{font-family:Sora,sans-serif;font-size:22px;font-weight:800;color:#0D7491}
+.ph-det{font-size:11px;color:#8696A5;margin-top:2px}
+.ph-prog{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:0 12px 10px}
+.seg{height:4px;border-radius:2px;background:#E8EEF3}.seg.done{background:#14A273}.seg.act{background:#0D7491}
+.ph-step{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid #F0F4F7}
+.ic{width:22px;height:22px;border-radius:50%;background:#14A27318;color:#14A273;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ic.p{background:#E8EEF3;color:#5A6B7A}.st{font-size:12px;font-weight:700;color:#0E1A24}.ss{font-size:10px;color:#5A6B7A}
+.ph-cta{background:#14A273;color:#fff;margin:12px;padding:10px;border-radius:8px;font-size:13px;font-weight:700;text-align:center}
+</style>
+<nav>
+  <div class="logo">vantari</div>
+  <div class="nl"><a>Como funciona</a><a>Para escritorios</a><a>Blog</a><a>FAQ</a></div>
+  <span class="ph">(11) 93401-8661</span>
+  <div class="wa">● WhatsApp</div>
+</nav>
+<div class="hero">
+  <div>
+    <div class="ey">Guia rapido · 3 min de leitura</div>
+    <h1>Sua acao trabalhista <em>vale dinheiro hoje</em> — nao daqui a 5 anos.</h1>
+    <p class="lead">Nao e emprestimo. Nao tem juros. Nao vai pro Serasa. E so voce transformar um direito que ja e seu em dinheiro disponivel agora.</p>
+    <div class="calc">
+      <div class="cb"><div class="clab">Valor estimado do processo</div><div class="cval">R$ 80.000</div><div class="cdet">2a instancia · 18 meses</div></div>
+      <div class="cb"><div class="clab">Voce recebe hoje</div><div class="cval" style="color:#14A273">R$ 52.300</div><div class="cdet">Desagio unico · sem parcela</div></div>
+    </div>
+    <div class="btns">
+      <div class="btn-p">Simular sem cadastro →</div>
+      <div class="btn-g">Ver perguntas</div>
+    </div>
+    <div class="mt"><span class="stars">★★★★★</span><b>4,8</b> em 1.240 avaliacoes no Reclame Aqui</div>
+  </div>
+  <div class="phone">
+    <div class="ph-head"><span>9:41</span><span>● ●</span></div>
+    <div class="ph-h1">Ola Marcos, <em>seu processo esta pronto pra antecipar.</em></div>
+    <div class="ph-card">
+      <div class="ph-lab">Valor liquido estimado</div>
+      <div class="ph-val">R$ 52.300</div>
+      <div class="ph-det">Pagamento em ate 5 dias uteis · via PIX</div>
+    </div>
+    <div class="ph-prog">
+      <div class="seg done"></div><div class="seg done"></div>
+      <div class="seg act"></div><div class="seg"></div>
+    </div>
+    <div class="ph-step"><div class="ic">v</div><div><div class="st">Documentos validados</div><div class="ss">11/05 · 14:22</div></div></div>
+    <div class="ph-step"><div class="ic">v</div><div><div class="st">Calculo do desagio</div><div class="ss">12/05 · 09:08</div></div></div>
+    <div class="ph-step"><div class="ic p">3</div><div><div class="st">Proposta enviada</div><div class="ss">Aguardando seu aceite · 7 dias</div></div></div>
+    <div class="ph-cta">Aceitar proposta</div>
+  </div>
+</div>`,
+};
+
+function getLPPreviewHtml(id) {
+  const body = LP_PREVIEW_BODIES[id] || "";
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;overflow:hidden">${body}</body></html>`;
+}
+
+const MODULAR_BLOCKS = [
+  { code: "nav",         name: "Top nav",         desc: "Logo + menu + WhatsApp pill + telefone. Variant light/dark." },
+  { code: "trust",       name: "Trust strip",      desc: "4–5 itens: clientes, R$, prazo, selos. Marquee opcional." },
+  { code: "hero-light",  name: "Hero light",       desc: "2 colunas: copy + form. Para B2B e SEO." },
+  { code: "hero-dark",   name: "Hero dark",        desc: "Gradiente azul-preto · alta intensidade. Para Performance." },
+  { code: "hero-split",  name: "Hero split",       desc: "Copy + mockup de telefone ou imagem + calc-row." },
+  { code: "live-strip",  name: "Live strip",       desc: '"Ultima liberacao" — prova social em tempo real.' },
+  { code: "kpi-row",     name: "KPI row",          desc: "3 KPIs no hero · contadores animaveis." },
+  { code: "form",        name: "Form card",        desc: "2–5 campos · honeypot + captcha invisivel. Submit via webhook." },
+  { code: "logos",       name: "Logos/parceiros",  desc: "Strip de bancas, midia ou selos." },
+  { code: "steps-3",     name: "Steps 3",          desc: '"Como funciona" com numeracao + duracao em mono.' },
+  { code: "compare",     name: "Comparativo",      desc: "2 colunas semanticas verde / neutro." },
+  { code: "testi-3",     name: "Testimonials 3",   desc: "Cards com avatar inicial, nome, contexto e valor." },
+  { code: "faq",         name: "FAQ",              desc: "Lista accordion · primeiro item aberto por default." },
+  { code: "phone",       name: "Phone mockup",     desc: "Frame de proposta — util em LPs educativas." },
+  { code: "final-cta",   name: "Final CTA",        desc: "Faixa azul ou verde com 1 CTA + 1 frase." },
+  { code: "footer",      name: "Footer 4 col",     desc: "Nav + atendimento + compliance + empresa." },
+];
+
+function LibraryLPCard({ tpl, onUse }) {
+  const FRAME_W = 1280;
+  const visibleH = 252;
+  const containerRef = useRef(null);
+  const [scale, setScale] = useState(0.32);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => { const w = el.clientWidth; if (w > 0) setScale(w / FRAME_W); };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const iframeH = Math.ceil(visibleH / scale);
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden", boxShadow: T.shadow }}>
+      <div style={{ padding: "16px 18px 14px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: tpl.colorBg, display: "grid", placeItems: "center", flexShrink: 0 }}>
+            <span style={{ fontFamily: T.mono, fontSize: 13, fontWeight: 700, color: tpl.color }}>{tpl.num}</span>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+              <span style={{ fontFamily: T.head, fontSize: 15, fontWeight: 700, color: T.ink }}>{tpl.name}</span>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: tpl.colorBg, color: tpl.color, fontFamily: T.mono, letterSpacing: "0.04em", flexShrink: 0 }}>{tpl.tag}</span>
+            </div>
+            <span style={{ fontSize: 12, color: T.muted, fontFamily: T.font, fontWeight: 500, lineHeight: 1.4 }}>{tpl.sub}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}`, background: T.faint }}>
+        {[["Audiencia", tpl.audience], ["CTA", tpl.cta], ["Tracao", tpl.traction], ["Conv. alvo", tpl.convTarget]].map(([k, v]) => (
+          <div key={k} style={{ padding: "8px 12px", borderRight: `1px solid ${T.border}` }}>
+            <div style={{ fontSize: 9.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>{k}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: T.text, fontFamily: T.mono }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ background: "#CDD5DE" }}>
+        <div style={{ background: "#EAECEF", borderBottom: "1px solid #C5C9CF", padding: "7px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", gap: 5 }}>
+            {["#FF6058","#FFBE29","#2ACB4B"].map(c => <div key={c} style={{ width: 9, height: 9, borderRadius: "50%", background: c }} />)}
+          </div>
+          <div style={{ flex: 1, background: "#fff", borderRadius: 5, padding: "3px 10px", fontSize: 10, color: "#666", fontFamily: T.mono, textAlign: "center", border: "1px solid #DDD" }}>
+            vantari.com.br{tpl.url}
+          </div>
+        </div>
+        <div ref={containerRef} style={{ height: visibleH, overflow: "hidden", position: "relative" }}>
+          <iframe
+            srcDoc={getLPPreviewHtml(tpl.id)}
+            sandbox="allow-same-origin"
+            title={`Preview LP ${tpl.num}`}
+            style={{ width: FRAME_W, height: iframeH, border: "none", transform: `scale(${scale})`, transformOrigin: "top left", pointerEvents: "none", display: "block" }}
+          />
+        </div>
+      </div>
+
+      <div style={{ padding: "12px 18px", borderTop: `1px solid ${T.border}`, background: T.faint }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Blocos ativados</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+          {tpl.blocks.map(b => (
+            <span key={b} style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: `${tpl.color}14`, color: tpl.color, fontFamily: T.mono }}>{b}</span>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ padding: "14px 18px", display: "flex", gap: 8, justifyContent: "flex-end", borderTop: `1px solid ${T.border}` }}>
+        <Btn variant="secondary" size="sm">Pre-visualizar</Btn>
+        <Btn variant="primary" size="sm" onClick={() => onUse && onUse(tpl.id)}>Usar template →</Btn>
+      </div>
+    </div>
+  );
+}
+
+function LibraryView({ onUse }) {
+  return (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, color: T.text, margin: "0 0 4px", letterSpacing: "-0.01em" }}>Biblioteca Vantari</h2>
+        <p style={{ fontSize: 12, color: T.muted, margin: 0, fontFamily: T.font, fontWeight: 500 }}>
+          3 landing pages otimizadas por canal de tracao. Sistema modular — mesma base de blocos em todas as LPs.
+        </p>
+      </div>
+
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 20px", marginBottom: 24, display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap", boxShadow: T.shadow }}>
+        {[[IC.layout, T.blue, "16 blocos modulares"], [IC.globe, T.green, "3 paletas de cor"], [IC.chart, T.amber, "Densidades light / dark"]].map(([icon, color, label]) => (
+          <div key={label} style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            <Ico d={icon} size={15} color={color} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.font }}>{label}</span>
+          </div>
+        ))}
+        <div style={{ width: 1, height: 20, background: T.border }} />
+        <span style={{ fontSize: 12, color: T.muted, fontFamily: T.font }}>Variacoes de paleta e densidade selecionadas no inicio — depois, basta editar o copy.</span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(380px,1fr))", gap: 20, marginBottom: 40 }}>
+        {LIBRARY_LP_TEMPLATES.map(tpl => (
+          <LibraryLPCard key={tpl.id} tpl={tpl} onUse={onUse} />
+        ))}
+      </div>
+
+      <div>
+        <div style={{ marginBottom: 14 }}>
+          <h3 style={{ fontFamily: T.head, fontSize: 15, fontWeight: 700, color: T.text, margin: "0 0 4px" }}>Sistema modular</h3>
+          <p style={{ fontSize: 12, color: T.muted, margin: 0, fontFamily: T.font }}>16 blocos · todos opcionais · as 3 LPs sao montadas a partir dos mesmos blocos.</p>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(200px,1fr))", gap: 10 }}>
+          {MODULAR_BLOCKS.map(b => (
+            <div key={b.code} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px", boxShadow: T.shadow }}>
+              <div style={{ marginBottom: 5 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 700, color: T.teal, background: `${T.teal}12`, padding: "2px 6px", borderRadius: 4 }}>{b.code}</span>
+              </div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.text, fontFamily: T.font, marginBottom: 3 }}>{b.name}</div>
+              <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, lineHeight: 1.4 }}>{b.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
    MAIN MODULE
 ════════════════════════════════════════════════════════════════════════ */
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1543,7 +1945,7 @@ export default function VantariLandingPages() {
         <div style={{height:52,background:T.surface,borderBottom:`0.5px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0}}>
           <div style={{ display:"flex", alignItems:"center", gap:14 }}>
             <span style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.head,letterSpacing:"-0.01em"}}>
-              {viewMode === "pages" ? "Landing Pages" : "Formulários"}
+              {viewMode === "pages" ? "Landing Pages" : viewMode === "forms" ? "Formulários" : "Biblioteca Vantari"}
             </span>
             <div style={{ display:"flex", gap:2, background:T.faint, padding:3, borderRadius:8, border:`0.5px solid ${T.border}` }}>
               <button onClick={() => setViewMode("pages")}
@@ -1560,6 +1962,13 @@ export default function VantariLandingPages() {
                          boxShadow: viewMode === "forms" ? T.shadow : "none" }}>
                 Formulários
               </button>
+              <button onClick={() => setViewMode("biblioteca")}
+                style={{ padding:"5px 12px", borderRadius:6, border:"none", cursor:"pointer", fontSize:11, fontWeight:700, fontFamily:T.font,
+                         background: viewMode === "biblioteca" ? T.surface : "transparent",
+                         color: viewMode === "biblioteca" ? T.text : T.muted,
+                         boxShadow: viewMode === "biblioteca" ? T.shadow : "none" }}>
+                Biblioteca
+              </button>
             </div>
           </div>
           {viewMode === "pages" && (
@@ -1570,6 +1979,7 @@ export default function VantariLandingPages() {
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #EEFCF7 0%, #E6FAF0 100%)"}}>
           {viewMode === "forms" && <FormsManager />}
+          {viewMode === "biblioteca" && <LibraryView onUse={() => setShowNew(true)} />}
           {viewMode === "pages" && (<>
           {/* Hero KPI strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>

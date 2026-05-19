@@ -2,6 +2,123 @@
 
 ---
 
+## 2026-05-18 — Sessão intensiva: Scoring 2D, CPF, Forms, Templates RD
+
+### Etapa 1 — Lead Scoring 2D ✅
+
+**Backend (`005_lead_scoring_2d.sql`):**
+- ENUM `lead_profile` (A/B/C/D); colunas `leads.profile` e `leads.profile_points`
+- Tabela `profile_rules` (regras configuráveis: lead_column ou custom_field + operador + valor + pontos)
+- Tabela `profile_thresholds` (linha única, defaults 70/40/20)
+- Tabela `scoring_rules` (persiste regras de Interesse antes hardcoded)
+- Funções `eval_profile_rule`, `get_lead_field_value`, `recompute_lead_profile`, `recompute_all_profiles`
+- Triggers automáticos em `leads` (insert) e `lead_custom_values` (qualquer mudança) → recalculam perfil
+- Seeds: 11 regras de Interesse + 5 regras de Perfil
+
+**Frontend (`vantari-scoring-system.jsx`):**
+- Tab **Perfil (A-D)** com construtor visual de regras (categoria, origem, campo, operador, valor, pontos)
+- Sliders A/B/C de thresholds persistidos no banco
+- Botão **Recalcular todos** (chama `recompute_all_profiles` via RPC)
+- **Matriz 2D Perfil × Interesse** com células coloridas e destaque "MQL ideal" em A/B × Hot/SQL
+- Distribuição A/B/C/D em barras horizontais
+- Badges A/B/C no topbar ao lado de WARM/HOT/SQL
+
+**`vantari-leads-module.jsx`:** coluna **Perfil** (chip + pontos), filtro por perfil, painel detalhe com Perfil + Interesse lado a lado.
+**`vantari-segments.jsx`:** filtros `profile` e `profile_points` no segment builder.
+
+### Etapa 11 (parcial) — Importador de Leads RD turbinado ✅
+
+- Preset **RD Station** auto-mapeia colunas conhecidas
+- Match por `label` de custom_fields
+- Bulk upsert 200/chamada (20-50x mais rápido)
+- Dedupe: cada campo recebe apenas primeira ocorrência
+- Detector visual de conflitos + bloqueio do botão
+- Auto-skip de linhas de título antes do header real
+
+### Identidade do lead — CPF como primário (decisão arquitetural) ✅
+
+Motivação: pessoas mudam de email, não mudam de CPF. RD usa email como ID — ponto fraco a evitar.
+
+**Backend (`007_cpf_identifier.sql`):**
+- Coluna `cpf` em leads + `clean_cpf()` (normaliza p/ 11 dígitos) + `valid_cpf()` (checksum brasileiro)
+- Trigger `trg_normalize_cpf` antes de insert/update
+- Índice UNIQUE parcial em `cpf` (NULL permitido)
+- **Função `merge_lead_by_cpf`**: quando CPF é descoberto e já há lead com mesmo CPF, funde os dois:
+  - Move `lead_events`, `form_submissions`
+  - Move `lead_custom_values` (target ganha em conflito)
+  - Atualiza campos NULL do target com source
+  - Funde tags, mantém maior score
+  - Deleta source
+- View `leads_pending` para consulta rápida
+- Cria `cf_cpf` em custom_fields
+
+**Frontend:**
+- Coluna **CPF** formatada em `/leads` (`000.000.000-00`)
+- Badge **PENDENTE** vermelho + filtro toggle "Pendentes" + busca por CPF
+- Modal de criação/edição: CPF + email; valida checksum
+- Importador detecta "CPF", "Documento", "CPF/CNPJ" automaticamente
+- doImport separa em 2 grupos (byCpf, byEmail) e faz bulk upsert por grupo
+
+### Etapa 5 (parcial) — Forms standalone ✅
+
+**Backend (`006_forms_standalone.sql`):**
+- Tabela `forms` (slug, fields jsonb, style, source_label, tags, success_msg, redirect_url, stage_on_submit)
+- Tabela `form_submissions` (payload jsonb, UTMs, user_agent, referrer)
+- **Função `trg_form_submission_to_lead`**:
+  - Upsert por CPF (prioridade) ou email
+  - Merge automático quando CPF descoberto + email existente em outro lead
+  - Insere lead_event `form_submit` (+10 pts via scoring_rules)
+  - Incrementa `forms.submission_count`
+
+**Frontend:**
+- Tab toggle **Páginas | Formulários** em `/landing`
+- `FormsManager` — CRUD de forms, embed code modal
+- `FormEditor` — campos jsonb editáveis (drag-order, tipos: text/email/cpf/phone/number/date/textarea/select/checkbox)
+- `EmbedCodeModal` — 3 formatos: URL pública / iframe / script JS
+- **Rota pública** `/f/:slug` em novo `vantari-public-form.jsx`:
+  - Validação CPF (checksum) + email
+  - Format on-type
+  - Forward de UTMs da querystring
+  - Mensagem de sucesso ou redirect
+- **Snippet `public/forms-embed.js`** — injeta iframe responsivo no site externo
+
+### Etapa 11 (parcial) — Importador de Email Templates ✅
+
+**Backend (`008_email_templates.sql`):**
+- Tabela `email_templates` com `html`, `blocks` (Vantari), `bee_json` (BeeFree do RD)
+- Colunas defensivas (compat com schema legado)
+- Seed: 3 templates iniciais
+
+**Frontend (`vantari-email-marketing.jsx`):**
+- Tab Templates puxa do banco (antes hardcoded)
+- Filtro por categoria, contador de uso, badge "DO RD"
+- `RdImportModal`: aceita `.html`, `.htm`, `.json` (auto-detecta)
+- **Extrator BeeFree**: parseia rows/columns/modules e gera HTML básico para preview (text/image/button/divider)
+- `TemplatePreviewModal` com iframe sandboxed
+
+### Etapa 9 (parcial) — Campaigns ✅
+
+**Backend (`009_campaigns.sql`):**
+- Tabela `campaigns` (html_content, bee_json, blocks, template_id com FK condicional, audience_count, scheduled_at)
+- Tabela `campaign_sends` (delivered/opened/clicked/bounced/unsubscribed)
+- FKs adicionadas DEPOIS das colunas (fix de ordem)
+
+### Discussões / Decisões
+
+- **149 segmentos RD**: API não expõe regras. Usuário decidiu recriar manualmente os críticos em vez de importar listas estáticas.
+- **28 arquivos RD**: confirmado que são campanhas históricas (não templates). Usuário vai baixar templates reais e importar.
+
+### Problemas resolvidos
+
+- Schemas legados em `scoring_rules`, `leads`, `forms`, `campaigns`: ALTER COLUMN DROP NOT NULL + ADD COLUMN IF NOT EXISTS via DO blocks
+- Lockfile do git: documentado fluxo de remoção antes do push
+- Índice UNIQUE parcial não funciona com ON CONFLICT: troca por constraint UNIQUE completa
+- Coluna `tags` NOT NULL bloqueando upsert: relaxado
+- FK duplicada `campaigns × campaign_sends`: removida a nova, mantida a legacy
+- CSV com linha de título antes do header: auto-skip implementado
+
+---
+
 ## 2026-05-14 — Auditoria RD + Plano de Migração em 11 Etapas
 
 ### Leitura da auditoria

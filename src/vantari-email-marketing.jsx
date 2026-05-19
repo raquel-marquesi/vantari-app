@@ -73,25 +73,36 @@ const STATUS_META = {
 
 
 const TEMPLATES = [
-  { id:"t1", name:"Newsletter Mensal",   category:"newsletter",  desc:"Layout editorial com destaque para artigos e conteúdo", blocks:[
-    {id:"b1",type:"header", content:{logo:true,headline:"Vantari Insights",subline:"Novembro 2024"}},
-    {id:"b2",type:"text",   content:{text:"Olá, {{lead.name}}!\n\nBem-vindo à nossa newsletter mensal com as principais tendências de marketing digital.",align:"left"}},
+  { id:"editorial",    name:"Newsletter Editorial",     category:"newsletter",    desc:"Hero, TL;DR, artigo com 1 CTA primário + depoimento.", blocks:[
+    {id:"b1",type:"header", content:{logo:true,headline:"Vantari Insights",subline:""}},
+    {id:"b2",type:"text",   content:{text:"*|PRIMEIRO_NOME|*, você sabia que antecipar seu crédito trabalhista não gera dívida?\n\nNo empréstimo, você contrai um passivo e paga juros. Na antecipação, você vende um ativo que já existe.",align:"left"}},
     {id:"b3",type:"divider",content:{}},
-    {id:"b4",type:"text",   content:{text:"Continue lendo para descobrir insights exclusivos do mercado.",align:"left"}},
-    {id:"b5",type:"button", content:{text:"Ler Artigo Completo",url:"#",align:"center",color:"#0D7491"}},
-    {id:"b6",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
+    {id:"b4",type:"button", content:{text:"Ler artigo completo",url:"#",align:"left",color:"#0D7491"}},
+    {id:"b5",type:"footer", content:{text:"© Vantari · Descadastrar"}},
   ]},
-  { id:"t2", name:"Oferta Promocional",  category:"promotional", desc:"Alta conversão com urgência e call-to-action em destaque", blocks:[
-    {id:"b1",type:"header", content:{logo:true,headline:"Oferta Especial",subline:"Por tempo limitado"}},
-    {id:"b2",type:"text",   content:{text:"{{lead.name}}, temos uma oferta exclusiva para você.\n\nNão perca esta oportunidade única.",align:"center"}},
-    {id:"b3",type:"button", content:{text:"Aproveitar Agora",url:"#",align:"center",color:"#FF6B5E"}},
-    {id:"b4",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
-  ]},
-  { id:"t3", name:"Follow-up de Vendas", category:"follow-up",   desc:"Sequência de nurturing focada em conversão", blocks:[
+  { id:"compare",      name:"Comparativo lado a lado",  category:"conversion",    desc:"Grid 2 colunas: Antecipação vs Empréstimo + KPIs.", blocks:[
     {id:"b1",type:"header", content:{logo:true,headline:"",subline:""}},
-    {id:"b2",type:"text",   content:{text:"Oi {{lead.name}},\n\nSoftwares e automação podem triplicar seus resultados. Que tal explorarmos isso juntos?\n\nAbraços,\nTime Vantari",align:"left"}},
-    {id:"b3",type:"button", content:{text:"Agendar uma Conversa",url:"#",align:"left",color:"#0D7491"}},
-    {id:"b4",type:"footer", content:{text:"© 2024 Vantari · Descadastrar"}},
+    {id:"b2",type:"text",   content:{text:"*|PRIMEIRO_NOME|*, sua dívida pode ter outra saída.\n\nSe você tem um processo trabalhista correndo, já existe um valor seu esperando.",align:"left"}},
+    {id:"b3",type:"button", content:{text:"Simular antecipação",url:"#",align:"left",color:"#14A273"}},
+    {id:"b4",type:"footer", content:{text:"© Vantari · Descadastrar"}},
+  ]},
+  { id:"offer",        name:"Oferta qualificada",       category:"segmented",     desc:"Card escuro premium com bullets e CTA de agendamento.", blocks:[
+    {id:"b1",type:"header", content:{logo:true,headline:"",subline:""}},
+    {id:"b2",type:"text",   content:{text:"*|PRIMEIRO_NOME|*, seu processo se qualifica para uma condição especial.\n\nApós análise, identificamos que seu processo atende aos critérios da nossa linha premium.",align:"left"}},
+    {id:"b3",type:"button", content:{text:"Agendar análise com especialista →",url:"#",align:"left",color:"#14A273"}},
+    {id:"b4",type:"footer", content:{text:"© Vantari · Descadastrar destas ofertas"}},
+  ]},
+  { id:"welcome",      name:"Boas-vindas / Onboarding", category:"onboarding",    desc:"Stepper 3 passos + TL;DR 'o que você nunca terá'.", blocks:[
+    {id:"b1",type:"header", content:{logo:true,headline:"",subline:""}},
+    {id:"b2",type:"text",   content:{text:"Oi, *|PRIMEIRO_NOME|*. Que bom ter você aqui.\n\nVocê acabou de entrar para a base de mais de 12 mil pessoas que descobriram que dá pra transformar um processo trabalhista em dinheiro.",align:"left"}},
+    {id:"b3",type:"button", content:{text:"Simular meu processo agora",url:"#",align:"left",color:"#0D7491"}},
+    {id:"b4",type:"footer", content:{text:"© Vantari · Descadastrar"}},
+  ]},
+  { id:"transactional",name:"Atualização de status",    category:"transactional", desc:"Payout box + Timeline 5 etapas. Disparo via API.", blocks:[
+    {id:"b1",type:"header", content:{logo:true,headline:"",subline:""}},
+    {id:"b2",type:"text",   content:{text:"*|PRIMEIRO_NOME|*, sua proposta foi aprovada.\n\nA análise jurídica e financeira do seu processo terminou. Você pode revisar a proposta e assinar pelo nosso portal.",align:"left"}},
+    {id:"b3",type:"button", content:{text:"Ver proposta completa",url:"#",align:"left",color:"#0D7491"}},
+    {id:"b4",type:"footer", content:{text:"© Vantari · E-mail transacional"}},
   ]},
 ];
 
@@ -1193,14 +1204,398 @@ const MODULE_TABS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════
-   TEMPLATES VIEW — DB-backed + Import RD
+   LIBRARY TEMPLATES — 5 curated design templates (Vantari Email Templates)
+════════════════════════════════════════════════════════════════════════ */
+const LIBRARY_TEMPLATES = [
+  {
+    id:"editorial", num:"01", color:T.teal,   colorBg:"#E0F2F8",
+    name:"Newsletter Editorial",
+    sub:'Substitui o atual "Newsletter Blog". Educar a base com um artigo por vez.',
+    tag:"Quinzenal", audience:"base ativa", ctaLabel:"ler artigo", readTime:"45s",
+    category:"newsletter",
+    slots:["hero_image — imagem 600×220","edition_label — ex: 'Edição 14 · Educativo'","headline + tldr + body","primary_cta + secondary_cta","testimonial (opcional, on/off)"],
+    vars:["*|PRIMEIRO_NOME|* — vantari.leads.name","*|WEB_PREVIEW|* — render externo","*|UNSUBSCRIBE|* — LGPD obrigatório"],
+  },
+  {
+    id:"compare", num:"02", color:T.green,  colorBg:"#ECFDF5",
+    name:"Comparativo lado a lado",
+    sub:"Para a mensagem mais forte da marca: antecipação vs empréstimo.",
+    tag:"Conversão", audience:"leads MQL", ctaLabel:"simular", readTime:"30s",
+    category:"conversion",
+    slots:["compare_win[] — até 6 bullets","compare_lose[] — até 6 bullets","stats[3] — KPI strip opcional"],
+    vars:["Lead chegou via blog/Ads de 'empréstimo'","Segmento 'consultou alternativas de crédito'","Reativação de lead que abandonou simulação"],
+    varsLabel:"Quando usar",
+  },
+  {
+    id:"offer", num:"03", color:T.amber,   colorBg:"#FEF3C7",
+    name:"Oferta qualificada",
+    sub:"Disparado por segmento: processo em 2ª instância + ticket ≥ R$ 50k.",
+    tag:"Segmentada", audience:"lead SQL", ctaLabel:"agendar", readTime:"25s",
+    category:"segmented",
+    slots:["specialist_name + specialist_phone","offer_pill + offer_bullets","kpi_strip (3 itens)"],
+    vars:["segment = 'Premium · 2a-inst · 50k+'","lead_score ≥ 80","expires_in = 7d (countdown opcional)"],
+    varsLabel:"Trigger automático",
+  },
+  {
+    id:"welcome", num:"04", color:"#7C5CFF", colorBg:"#F0ECFC",
+    name:"Boas-vindas / Onboarding",
+    sub:"Primeiro contato após cadastro. Explica a Vantari em 3 passos.",
+    tag:"Automático", audience:"novo lead", ctaLabel:"simular", readTime:"40s",
+    category:"onboarding",
+    slots:["social_proof — número de clientes ativo","steps[3] — copy editável","tldr — 'o que você nunca terá'"],
+    vars:["Workflow onboarding · trigger: novo cadastro","Delay: 5 min após confirmação de e-mail"],
+    varsLabel:"Disparo automático",
+  },
+  {
+    id:"transactional", num:"05", color:T.coral,  colorBg:"#FEF2F2",
+    name:"Atualização de status",
+    sub:"Notifica o cliente quando sua proposta avança de etapa. Disparo via API.",
+    tag:"Transacional", audience:"cliente em proposta", ctaLabel:"ver proposta", readTime:"20s",
+    category:"transactional",
+    slots:["proposal_id, net_amount, est_date","stage: analise · avaliacao · proposta · assinatura · pagamento","specialist — nome e contato"],
+    vars:["POST /v1/email/transactional","Domínio dedicado · sem footer de marketing","LGPD: legítimo interesse, sem opt-out"],
+    varsLabel:"Disparo via API",
+  },
+];
+
+/* Shared CSS injected into all email preview iframes */
+const EMAIL_PREVIEW_CSS = `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}body{margin:0;padding:0;font-family:'Inter',Arial,sans-serif;color:#2E3D4B;background:#fff}
+.pre{background:#F7F8FA;padding:8px 22px;font-size:11px;color:#A8B0B8;text-align:center;border-bottom:1px solid #EEF0F3;font-family:'JetBrains Mono',monospace}
+.hdr{padding:20px 30px 16px;background:#fff;border-bottom:1px solid #EEF0F3;display:flex;justify-content:space-between;align-items:center}
+.logo{height:22px;width:72px;background:linear-gradient(135deg,#0D7491,#14A273);border-radius:4px}
+.wa{display:inline-flex;align-items:center;gap:6px;font-size:9px;color:#14A273;padding:5px 9px;border:1px solid rgba(20,162,115,.3);border-radius:999px;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.06em}
+.dot{width:5px;height:5px;border-radius:50%;background:#14A273}
+.hero{width:100%;height:160px;background:linear-gradient(135deg,rgba(13,116,145,.1),rgba(20,162,115,.1)),repeating-linear-gradient(45deg,#e7eef3 0 8px,#f1f5f8 8px 16px);border-bottom:1px solid #EEF0F3;display:flex;align-items:center;justify-content:center;color:#A8B0B8;font-size:10px;text-transform:uppercase;letter-spacing:.1em;font-family:'JetBrains Mono',monospace}
+.body{padding:28px 34px 18px}
+.ey{font-family:'JetBrains Mono',monospace;font-size:10px;color:#0D7491;text-transform:uppercase;letter-spacing:.12em;margin-bottom:11px}
+.h1{font-family:'Sora',Arial,sans-serif;font-weight:700;color:#181A1F;font-size:24px;line-height:1.2;letter-spacing:-.01em;margin:0 0 12px}
+.lead{font-size:14px;line-height:1.55;color:#2E3D4B;margin:0 0 14px;font-weight:500}
+.p{font-size:13px;line-height:1.6;color:#2E3D4B;margin:0 0 12px;font-weight:500}
+.tldr{border:1px solid rgba(13,116,145,.25);background:#E0F2F8;border-radius:8px;padding:13px 15px;margin:0 0 18px}
+.tldr-l{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:#0D7491;margin-bottom:6px}
+.tldr p{font-size:13px;line-height:1.5;margin:0;color:#0E1A24;font-weight:600}
+.cta{display:inline-block;background:#0D7491;color:#fff;text-decoration:none;font-family:'Sora',Arial,sans-serif;font-weight:700;font-size:12px;padding:12px 20px;border-radius:8px}
+.cta.green{background:#14A273}
+.cta.ghost{background:transparent;color:#0D7491;border:1.5px solid #0D7491}
+.cta-row{display:flex;gap:9px;align-items:center;margin:4px 0 20px}
+.note{font-size:11px;color:#8696A5;font-family:'JetBrains Mono',monospace}
+.quote{border-left:3px solid #14A273;padding:3px 0 3px 15px;margin:20px 0}
+.quote p{font-size:13px;line-height:1.5;color:#0E1A24;font-weight:500;margin:0 0 6px}
+.quote cite{font-size:10px;color:#5A6B7A;font-family:'JetBrains Mono',monospace}
+.sig{margin:20px 0 0;padding-top:16px;border-top:1px solid #EEF0F3;font-size:12.5px;line-height:1.5;color:#2E3D4B}
+.ps{font-size:11.5px;color:#5A6B7A;margin-top:9px;padding:9px 11px;background:#FAFBFC;border-radius:7px;border-left:2px solid #A8B0B8}
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0 18px}
+.col{border:1px solid #E8EEF3;border-radius:8px;padding:13px}
+.col.win{border-color:rgba(20,162,115,.35);background:#ECFDF5}
+.col h4{font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#5A6B7A;margin:0 0 3px}
+.col.win h4{color:#14A273}
+.col .name{font-family:'Sora',Arial,sans-serif;font-weight:700;font-size:13.5px;color:#0E1A24;margin-bottom:9px}
+.col.lose .name{color:#888}
+.col ul{list-style:none;margin:0;padding:0}
+.col li{display:grid;grid-template-columns:17px 1fr;gap:6px;font-size:11.5px;color:#2E3D4B;padding:5px 0;border-top:1px solid rgba(0,0,0,.05)}
+.col li:first-child{border-top:0}
+.mk{font-family:'Sora',Arial,sans-serif;font-weight:700;text-align:center}
+.win .mk{color:#14A273}
+.lose .mk{color:#B8BABC}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;border:1px solid #E8EEF3;border-radius:8px;overflow:hidden;margin:10px 0 16px}
+.stat{padding:12px 10px;text-align:center;border-right:1px solid #E8EEF3;background:#FAFBFC}
+.stat:last-child{border-right:0}
+.stat .v{font-family:'Sora',Arial,sans-serif;font-weight:700;font-size:19px;color:#0D7491;line-height:1}
+.stat .l{font-family:'JetBrains Mono',monospace;font-size:9px;color:#5A6B7A;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.offer{background:linear-gradient(135deg,#0D7491,#14A273);border-radius:10px;padding:20px;color:#fff;margin:10px 0 16px;position:relative;overflow:hidden}
+.offer::after{content:'';position:absolute;top:-40%;right:-20%;width:280px;height:280px;background:radial-gradient(circle,rgba(20,162,115,.4) 0%,transparent 60%);pointer-events:none}
+.offer .pill{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.12em;text-transform:uppercase;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);padding:4px 9px;border-radius:999px;margin-bottom:11px;display:inline-block;position:relative;z-index:1}
+.offer h3{color:#fff;font-family:'Sora',Arial,sans-serif;font-size:17px;line-height:1.25;font-weight:700;margin:0 0 9px;max-width:90%;position:relative;z-index:1}
+.offer ul{list-style:none;margin:0 0 13px;padding:0;position:relative;z-index:1}
+.offer li{font-size:12px;color:rgba(255,255,255,.92);padding:4px 0;display:grid;grid-template-columns:19px 1fr;gap:4px;align-items:start}
+.offer li::before{content:'';width:11px;height:11px;border-radius:50%;background:#14A273;box-shadow:inset 0 0 0 3px #fff,inset 0 0 0 4px #14A273;margin-top:3px}
+.offer .cta{background:#14A273;position:relative;z-index:1}
+.steps{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin:10px 0 16px}
+.step{border:1px solid #E8EEF3;border-radius:8px;padding:13px 10px 11px;background:#FAFBFC}
+.step .n{font-family:'Sora',Arial,sans-serif;font-weight:800;font-size:19px;color:#0D7491;line-height:1;margin-bottom:7px}
+.step .t{font-size:11.5px;font-weight:700;color:#0E1A24;margin-bottom:3px;line-height:1.3}
+.step .d{font-size:10.5px;color:#5A6B7A;line-height:1.4}
+.payout{background:#ECFDF5;border:1px solid rgba(20,162,115,.3);border-radius:8px;padding:15px 17px;margin:10px 0 16px;display:grid;grid-template-columns:1fr auto;gap:11px;align-items:end}
+.payout .l{font-family:'JetBrains Mono',monospace;font-size:9px;color:#14A273;text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px}
+.payout .v{font-family:'Sora',Arial,sans-serif;font-weight:700;font-size:22px;color:#064E36;line-height:1}
+.payout .date{text-align:right;font-family:'JetBrains Mono',monospace;font-size:9px;color:#5A6B7A}
+.payout .date b{display:block;color:#0E1A24;font-size:11px;font-weight:700;margin-top:2px}
+.timeline{border:1px solid #E8EEF3;border-radius:8px;overflow:hidden;margin:10px 0 16px}
+.trow{display:grid;grid-template-columns:95px 1fr auto;gap:11px;padding:10px 15px;align-items:center;border-top:1px solid #E8EEF3;font-size:11.5px}
+.trow:first-child{border-top:0}
+.trow.done{background:#ECFDF5}
+.trow.active{background:#E0F2F8}
+.trow .stage{font-family:'JetBrains Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#5A6B7A}
+.trow.done .stage{color:#14A273}
+.trow.active .stage{color:#0D7491}
+.trow .title{color:#0E1A24;font-weight:600}
+.trow .date{font-family:'JetBrains Mono',monospace;font-size:9px;color:#A8B0B8}
+.trow.done .date{color:#14A273}
+.banner{background:linear-gradient(90deg,#ECFDF5,#fff);padding:10px 26px;font-size:11px;color:#2E3D4B;border-bottom:1px solid rgba(20,162,115,.2);display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace}
+.banner b{color:#14A273}
+.ftr{background:#F7F8FA;padding:20px 34px 16px;border-top:1px solid #EEF0F3}
+.ftr-nav{display:flex;gap:16px;justify-content:center;padding-bottom:13px;border-bottom:1px solid #EEF0F3;flex-wrap:wrap}
+.ftr-nav a{color:#0D7491;text-decoration:none;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;font-family:'Sora',Arial,sans-serif}
+.ftr-soc{display:flex;gap:7px;justify-content:center;padding:12px 0}
+.ftr-soc a{width:26px;height:26px;border-radius:50%;background:#0D7491;color:#fff;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:700;text-decoration:none}
+.ftr-info{text-align:center;font-size:10px;color:#A8B0B8;line-height:1.6}
+.ftr-brand{font-family:'Sora',Arial,sans-serif;font-weight:700;color:#0E1A24;text-transform:uppercase;letter-spacing:.03em;font-size:10px;display:block;margin-bottom:5px}
+.ftr-info a{color:#5A6B7A}
+.slot{background:rgba(20,162,115,.1);border-radius:3px;padding:0 3px}
+</style>`;
+
+const EMAIL_BODIES = {
+  editorial: `
+<div class="pre">Não está vendo este e-mail? <a href="#" style="color:#5A6B7A">Abrir como página</a></div>
+<div class="hdr"><div class="logo"></div><span class="wa"><span class="dot"></span>WhatsApp</span></div>
+<div class="hero">[ hero · imagem do artigo · 600×220 ]</div>
+<div class="body">
+  <div class="ey">Edição 14 · Educativo</div>
+  <h1 class="h1">Vender o processo ou pedir empréstimo? A diferença é crucial.</h1>
+  <div style="display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:10px;color:#A8B0B8;text-transform:uppercase;letter-spacing:.08em;margin-bottom:18px">
+    <span>5 min de leitura</span><span>·</span><span>Por Equipe Vantari</span>
+  </div>
+  <div class="tldr"><div class="tldr-l">— Em 30 segundos</div><p>Antecipar seu crédito trabalhista não é empréstimo. Você vende um direito que já é seu — sem juros, sem parcelas, sem análise de Serasa.</p></div>
+  <p class="lead"><span class="slot">*|PRIMEIRO_NOME|*</span>, você sabia que <strong style="color:#0E1A24">antecipar seu crédito trabalhista não gera dívida?</strong></p>
+  <p class="p">No empréstimo, você contrai um passivo, paga juros compostos e compromete sua renda futura. Na antecipação, você vende um ativo que já existe — o valor do seu processo — e recebe à vista.</p>
+  <div class="cta-row"><a class="cta" href="#">Ler artigo completo</a><a class="cta ghost" href="#">Falar com um especialista</a></div>
+  <div class="quote"><p>"Pensei que antecipação fosse empréstimo. A Vantari me explicou que era uma venda. Sem dívida, sem parcela."</p><cite>Deise S. — aprovada em 04/2026</cite></div>
+  <div class="sig">Um abraço,<br><strong style="color:#0E1A24">Equipe Vantari</strong><div class="ps"><b style="color:#0E1A24">P.S.</b> Quer entender ainda mais? Nosso blog tem um <a href="#" style="color:#0D7491">guia completo de antecipação</a> com casos reais.</div></div>
+</div>
+<div class="ftr">
+  <nav class="ftr-nav"><a href="#">Como funciona</a><a href="#">Perguntas frequentes</a><a href="#">Blog</a><a href="#">Simular</a></nav>
+  <div class="ftr-soc"><a href="#">IG</a><a href="#">FB</a><a href="#">IN</a></div>
+  <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>Alameda Santos, 1165 · cj 11 · São Paulo · SP<br><a href="#">Atualizar preferências</a> · <a href="#">Descadastrar</a> · <a href="#">Política de privacidade</a></div>
+</div>`,
+
+  compare: `
+<div class="pre">Não é empréstimo. Não tem juros. Não vai pro Serasa.</div>
+<div class="hdr"><div class="logo"></div><span class="wa"><span class="dot"></span>WhatsApp</span></div>
+<div class="body" style="padding-top:22px">
+  <div class="ey">Antes de pedir empréstimo, leia isto</div>
+  <h1 class="h1"><span class="slot">*|PRIMEIRO_NOME|*</span>, sua dívida pode ter <span style="color:#14A273">outra saída.</span></h1>
+  <p class="lead">Se você tem um processo trabalhista correndo, já existe um valor seu esperando. Você não precisa contrair mais dívida — você pode antecipar.</p>
+  <div class="compare">
+    <div class="col win"><h4>Recomendado</h4><div class="name">Antecipação</div><ul>
+      <li><span class="mk">✓</span>Você vende um ativo seu</li>
+      <li><span class="mk">✓</span>Sem análise de Serasa ou CPF</li>
+      <li><span class="mk">✓</span>Pagamento único, à vista</li>
+      <li><span class="mk">✓</span>Deságio único, não juros</li>
+      <li><span class="mk">✓</span>Risco do processo é da Vantari</li>
+    </ul></div>
+    <div class="col lose"><h4>Atenção</h4><div class="name">Empréstimo pessoal</div><ul>
+      <li><span class="mk">—</span>Cria uma dívida nova</li>
+      <li><span class="mk">—</span>Juros compostos (até 3,5% a.m.)</li>
+      <li><span class="mk">—</span>Parcelas comprometem orçamento</li>
+      <li><span class="mk">—</span>Atraso = negativação</li>
+      <li><span class="mk">—</span>Risco é todo seu</li>
+    </ul></div>
+  </div>
+  <div class="cta-row"><a class="cta green" href="#">Simular antecipação</a><span class="note">leva 2 minutos · sem cadastro</span></div>
+  <div class="stats">
+    <div class="stat"><div class="v">5 dias</div><div class="l">pagamento</div></div>
+    <div class="stat"><div class="v">100%</div><div class="l">online</div></div>
+    <div class="stat"><div class="v">0</div><div class="l">parcelas</div></div>
+  </div>
+  <div class="ps" style="border-left-color:#14A273;background:#ECFDF5"><b style="color:#0E1A24">P.S.</b> Ainda em dúvida? Nosso especialista responde em até 2h pelo <a href="#" style="color:#14A273">WhatsApp</a>.</div>
+</div>
+<div class="ftr">
+  <nav class="ftr-nav"><a href="#">Como funciona</a><a href="#">Perguntas frequentes</a><a href="#">Blog</a></nav>
+  <div class="ftr-soc"><a href="#">IG</a><a href="#">FB</a><a href="#">IN</a></div>
+  <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>Alameda Santos, 1165 · cj 11 · São Paulo · SP<br><a href="#">Descadastrar</a> · <a href="#">Política de privacidade</a></div>
+</div>`,
+
+  offer: `
+<div class="pre">Condição especial para o seu perfil — válida por 7 dias.</div>
+<div class="hdr"><div class="logo"></div><span class="wa"><span class="dot"></span>WhatsApp</span></div>
+<div class="banner"><span>Identificamos uma <b>oportunidade no seu processo</b></span><span style="color:#5A6B7A">Análise · 13/05/2026</span></div>
+<div class="body">
+  <div class="ey">Análise personalizada</div>
+  <h1 class="h1"><span class="slot">*|PRIMEIRO_NOME|*</span>, seu processo se qualifica para uma condição especial.</h1>
+  <p class="lead">Após análise do seu cadastro, identificamos que seu processo atende aos critérios da nossa <strong style="color:#0E1A24">linha premium de antecipação</strong> — deságio reduzido e pagamento em 3 dias úteis.</p>
+  <div class="offer">
+    <span class="pill">Linha Premium · 7 dias</span>
+    <h3>Antecipação com deságio reduzido e pagamento em até 3 dias úteis.</h3>
+    <ul>
+      <li>Processo em 2ª instância confirmado</li>
+      <li>Valor estimado acima de R$ 50.000</li>
+      <li>Análise gratuita e sem compromisso</li>
+    </ul>
+    <a class="cta" href="#" style="background:#14A273">Agendar análise com especialista →</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="v" style="color:#14A273">3 dias</div><div class="l">pagamento</div></div>
+    <div class="stat"><div class="v" style="color:#14A273">−1.5pp</div><div class="l">deságio</div></div>
+    <div class="stat"><div class="v" style="color:#14A273">Premium</div><div class="l">atendimento</div></div>
+  </div>
+  <p class="p" style="color:#8696A5;font-size:12px">Esta análise expira em 7 dias e foi enviada apenas para a base qualificada.</p>
+  <div class="cta-row"><a class="cta ghost" href="#">Falar pelo WhatsApp</a></div>
+  <div class="sig"><strong style="color:#0E1A24">Raquel · Especialista Vantari</strong><br><span style="color:#5A6B7A;font-size:11px">raquel@vantari.com.br · (11) 93401-8661</span></div>
+</div>
+<div class="ftr">
+  <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>Você recebeu este e-mail porque consultou uma antecipação conosco.<br><a href="#">Descadastrar destas ofertas</a> · <a href="#">Atualizar preferências</a></div>
+</div>`,
+
+  welcome: `
+<div class="pre">Bem-vindo à Vantari — veja como funciona em 3 passos.</div>
+<div class="hdr"><div class="logo"></div><span class="wa"><span class="dot"></span>WhatsApp</span></div>
+<div class="body">
+  <div class="ey">Boas-vindas</div>
+  <h1 class="h1">Oi, <span class="slot">*|PRIMEIRO_NOME|*</span>. Que bom ter você aqui.</h1>
+  <p class="lead">Você acabou de entrar para a base de mais de <strong style="color:#0E1A24">12 mil pessoas</strong> que descobriram que dá pra transformar um processo trabalhista em dinheiro — sem dívida, sem juros, sem complicação.</p>
+  <p class="p" style="font-weight:700;color:#0E1A24;margin-top:16px">Como funciona, em 3 passos:</p>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="t">Você envia o processo</div><div class="d">Pelo WhatsApp ou pelo nosso portal. Em minutos.</div></div>
+    <div class="step"><div class="n">02</div><div class="t">A gente analisa e propõe</div><div class="d">Análise gratuita. Você recebe uma proposta em até 48h.</div></div>
+    <div class="step"><div class="n">03</div><div class="t">Aceitou? Recebe à vista</div><div class="d">Pagamento em até 5 dias úteis, direto na sua conta.</div></div>
+  </div>
+  <div class="cta-row"><a class="cta" href="#">Simular meu processo agora</a><a class="cta ghost" href="#">Ver FAQ</a></div>
+  <div class="tldr" style="margin-top:20px;border-color:rgba(20,162,115,.25);background:#ECFDF5">
+    <div class="tldr-l" style="color:#14A273">— O que você nunca terá com a gente</div>
+    <p style="font-weight:500">Análise de Serasa · CPF na praça · juros · parcela · risco do processo. Nada disso. Se algo der errado no processo, o prejuízo é nosso, não seu.</p>
+  </div>
+  <div class="sig">Tem qualquer dúvida? É só responder este e-mail.<br><strong style="color:#0E1A24">— Equipe Vantari</strong></div>
+</div>
+<div class="ftr">
+  <nav class="ftr-nav"><a href="#">Como funciona</a><a href="#">FAQ</a><a href="#">Blog</a><a href="#">Contato</a></nav>
+  <div class="ftr-soc"><a href="#">IG</a><a href="#">FB</a><a href="#">IN</a></div>
+  <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>Alameda Santos, 1165 · cj 11 · São Paulo · SP<br><a href="#">Descadastrar</a> · <a href="#">Política de privacidade</a></div>
+</div>`,
+
+  transactional: `
+<div class="pre">Atualização da sua proposta · Vantari · #VTR-2026-04823</div>
+<div class="hdr"><div class="logo"></div><span class="wa"><span class="dot"></span>WhatsApp</span></div>
+<div class="body">
+  <div class="ey" style="color:#14A273">✓ Proposta aprovada</div>
+  <h1 class="h1"><span class="slot">*|PRIMEIRO_NOME|*</span>, sua proposta foi aprovada.</h1>
+  <p class="lead">A análise jurídica e financeira do seu processo terminou. Você pode revisar a proposta, tirar dúvidas e, se concordar, assinar pelo nosso portal.</p>
+  <div class="payout">
+    <div><div class="l">Valor líquido a receber</div><div class="v">R$ <span class="slot">68.420</span>,00</div></div>
+    <div class="date">Pagamento estimado em<br><b><span class="slot">22 de maio · 2026</span></b></div>
+  </div>
+  <div class="timeline">
+    <div class="trow done"><div class="stage">01 · Análise</div><div class="title">Documentos validados</div><div class="date">11/05</div></div>
+    <div class="trow done"><div class="stage">02 · Avaliação</div><div class="title">Cálculo do deságio concluído</div><div class="date">12/05</div></div>
+    <div class="trow active"><div class="stage">03 · Proposta</div><div class="title">Aguardando sua aprovação</div><div class="date">hoje</div></div>
+    <div class="trow"><div class="stage">04 · Assinatura</div><div class="title">Contrato digital</div><div class="date">—</div></div>
+    <div class="trow"><div class="stage">05 · Pagamento</div><div class="title">Transferência via PIX</div><div class="date">—</div></div>
+  </div>
+  <div class="cta-row"><a class="cta" href="#">Ver proposta completa</a><a class="cta ghost" href="#">Falar com Raquel</a></div>
+  <p class="p" style="font-size:12px;color:#8696A5;margin-top:16px">A proposta fica válida por 7 dias corridos. Se precisar de mais tempo ou tiver qualquer dúvida sobre o cálculo, sua especialista responde no WhatsApp.</p>
+  <div class="sig"><strong style="color:#0E1A24">Raquel Andrade</strong><br><span style="color:#5A6B7A;font-size:11px">Especialista responsável · raquel@vantari.com.br</span></div>
+</div>
+<div class="ftr">
+  <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>E-mail transacional · enviado em 13/05/2026 às 16:12<br>Identificador da proposta: <a href="#">#VTR-2026-04823</a></div>
+</div>`,
+};
+
+function getEmailPreviewHtml(tplId) {
+  return `<!doctype html><html><head><meta charset="utf-8">${EMAIL_PREVIEW_CSS}</head><body>${EMAIL_BODIES[tplId] || ""}</body></html>`;
+}
+
+/* Template card for the Biblioteca Vantari section */
+function LibraryTemplateCard({ tpl, onUse, onPreview }) {
+  const [hov, setHov] = useState(false);
+  const scale = 0.46;
+  const emailW = 600;
+  const containerH = 300;
+
+  return (
+    <article
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background: T.white, border:`1px solid ${hov ? tpl.color+"55" : T.border}`,
+        borderRadius:14, overflow:"hidden",
+        boxShadow: hov ? `0 8px 24px -8px ${tpl.color}30` : "0 1px 3px rgba(14,26,36,.04)",
+        transition:"all .2s",
+      }}>
+
+      {/* Card header */}
+      <header style={{ padding:"18px 20px 14px", borderBottom:`1px solid ${T.border}`, display:"grid", gridTemplateColumns:"40px 1fr auto", gap:14, alignItems:"center" }}>
+        <div style={{
+          width:40, height:40, borderRadius:9, background:tpl.colorBg,
+          color:tpl.color, fontFamily:T.head, fontWeight:800, fontSize:15,
+          display:"grid", placeItems:"center", letterSpacing:"-0.02em",
+        }}>{tpl.num}</div>
+        <div>
+          <div style={{ fontFamily:T.head, fontSize:14.5, fontWeight:700, color:T.ink }}>{tpl.name}</div>
+          <div style={{ fontFamily:T.font, fontSize:11.5, color:T.muted, marginTop:2, fontWeight:500, lineHeight:1.4 }}>{tpl.sub}</div>
+        </div>
+        <span style={{
+          fontFamily:T.mono, fontSize:9.5, textTransform:"uppercase", letterSpacing:"0.08em",
+          color:T.muted, padding:"4px 9px", border:`1px solid ${T.border}`, borderRadius:999, whiteSpace:"nowrap",
+        }}>{tpl.tag}</span>
+      </header>
+
+      {/* Meta bar */}
+      <div style={{ display:"flex", gap:20, padding:"10px 20px", background:"#FAFBFC", borderBottom:`1px solid ${T.border}`, fontSize:11.5, color:T.muted, fontFamily:T.font }}>
+        <span>📨 <b style={{ color:T.ink }}>Audiência</b> · {tpl.audience}</span>
+        <span>🎯 <b style={{ color:T.ink }}>CTA</b> · {tpl.ctaLabel}</span>
+        <span>⏱ <b style={{ color:T.ink }}>Leitura</b> · {tpl.readTime}</span>
+      </div>
+
+      {/* Email preview */}
+      <div style={{ background:"#EBEEF2", padding:"18px 20px", display:"grid", placeItems:"start center" }}>
+        <div style={{ width: emailW * scale, height: containerH, overflow:"hidden", borderRadius:6, boxShadow:"0 2px 8px rgba(14,26,36,.08)" }}>
+          <iframe
+            srcDoc={getEmailPreviewHtml(tpl.id)}
+            style={{ width:emailW, height:Math.ceil(containerH / scale), border:"none", transform:`scale(${scale})`, transformOrigin:"top left", pointerEvents:"none" }}
+            title={`Preview: ${tpl.name}`}
+            sandbox="allow-same-origin"
+          />
+        </div>
+      </div>
+
+      {/* Footer: slots + vars */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, padding:"14px 20px 16px", background:"#FAFBFC", borderTop:`1px solid ${T.border}` }}>
+        <div>
+          <div style={{ fontFamily:T.mono, fontSize:9.5, color:T.faint3, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:7 }}>Slots editáveis</div>
+          <ul style={{ margin:0, padding:0, listStyle:"none" }}>
+            {tpl.slots.map((s,i) => (
+              <li key={i} style={{ padding:"2px 0", fontSize:11.5, color:T.muted, fontFamily:T.font }}>
+                <code style={{ fontFamily:T.mono, fontSize:10.5, background:"#EEF1F4", padding:"1px 4px", borderRadius:3, color:T.teal }}>{s.split(" — ")[0]}</code>
+                {s.includes(" — ") && <span style={{ color:T.faint3 }}> — {s.split(" — ")[1]}</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <div style={{ fontFamily:T.mono, fontSize:9.5, color:T.faint3, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:7 }}>{tpl.varsLabel || "Variáveis dinâmicas"}</div>
+          <ul style={{ margin:0, padding:0, listStyle:"none" }}>
+            {tpl.vars.map((v,i) => (
+              <li key={i} style={{ padding:"2px 0", fontSize:11.5, color:T.muted, fontFamily:T.font }}>
+                {v.startsWith("*|")
+                  ? <><code style={{ fontFamily:T.mono, fontSize:10.5, background:"#EEF1F4", padding:"1px 4px", borderRadius:3, color:T.teal }}>{v.split(" — ")[0]}</code>{v.includes(" — ") && <span style={{ color:T.faint3 }}> — {v.split(" — ")[1]}</span>}</>
+                  : v}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div style={{ padding:"12px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:8 }}>
+        <Btn onClick={() => onUse(tpl)} variant="primary" size="sm" style={{ flex:1, justifyContent:"center" }}>Usar template</Btn>
+        <Btn onClick={() => onPreview(tpl)} variant="ghost" size="sm">Preview</Btn>
+      </div>
+    </article>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TEMPLATES VIEW — Biblioteca Vantari (5) + Importados do RD
 ════════════════════════════════════════════════════════════════════════ */
 function TemplatesView({ onUseTemplate }) {
-  const [templates, setTemplates] = useState([]);
-  const [loading, setLoading]     = useState(true);
+  const [tab,        setTab]        = useState("library");   // "library" | "imported"
+  const [templates,  setTemplates]  = useState([]);
+  const [loading,    setLoading]    = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [previewTpl, setPreviewTpl] = useState(null);
-  const [filterCat, setFilterCat] = useState("all");
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -1212,18 +1607,14 @@ function TemplatesView({ onUseTemplate }) {
     setTemplates(data || []);
     setLoading(false);
   };
-
   useEffect(() => { fetchTemplates(); }, []);
 
-  const categories = useMemo(() => {
-    const set = new Set(["all"]);
-    templates.forEach(t => set.add(t.category || "general"));
-    return Array.from(set);
-  }, [templates]);
+  const useLibraryTemplate = (tpl) => {
+    const match = TEMPLATES.find(t => t.id === tpl.id);
+    onUseTemplate(match ? match.blocks : []);
+  };
 
-  const filtered = filterCat === "all" ? templates : templates.filter(t => t.category === filterCat);
-
-  const useTemplate = async (tpl) => {
+  const useDbTemplate = async (tpl) => {
     await supabase.from("email_templates").update({ use_count: (tpl.use_count || 0) + 1 }).eq("id", tpl.id);
     onUseTemplate(tpl.blocks || []);
   };
@@ -1236,58 +1627,79 @@ function TemplatesView({ onUseTemplate }) {
 
   return (
     <div>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
-        <h2 style={{ margin:0, fontFamily:T.head, fontSize:18, fontWeight:700, color:T.ink, letterSpacing:"-0.01em" }}>
-          Templates de Email <span style={{ fontSize:12, color:T.muted, fontWeight:600 }}>({templates.length})</span>
-        </h2>
-        <Btn onClick={() => setImportOpen(true)} variant="primary" size="sm" icon={Upload}>Importar do RD</Btn>
-      </div>
-
-      <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-        {categories.map(c => (
-          <button key={c} onClick={() => setFilterCat(c)}
-            style={{ padding:"5px 12px", fontSize:11, fontWeight:700, fontFamily:T.font, borderRadius:7,
-                     border:`1px solid ${filterCat === c ? T.blue : T.border}`,
-                     background: filterCat === c ? `${T.blue}12` : "transparent",
-                     color: filterCat === c ? T.blue : T.muted, cursor:"pointer" }}>
-            {c === "all" ? "Todas categorias" : c}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign:"center", padding:48, color:T.muted }}>Carregando…</div>
-      ) : filtered.length === 0 ? (
-        <div style={{ textAlign:"center", padding:48, color:T.muted, fontFamily:T.font }}>
-          {filterCat === "all" ? "Nenhum template ainda. Importe do RD para começar." : "Nenhum template nesta categoria."}
-        </div>
-      ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16 }}>
-          {filtered.map(tpl => (
-            <div key={tpl.id} style={{ background:T.white, border:`0.5px solid ${T.border}`, borderRadius:12, overflow:"hidden", transition:"all 0.2s" }}>
-              <div style={{ height:120, background:`linear-gradient(135deg,${T.blue},${T.teal})`, display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
-                <TypeIcon type={tpl.category} size={32}/>
-                {tpl.source === "rd_station" && (
-                  <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:700, background:"rgba(255,255,255,.25)", color:"#fff", padding:"2px 7px", borderRadius:4, fontFamily:T.font, letterSpacing:.4 }}>
-                    DO RD
-                  </span>
-                )}
-              </div>
-              <div style={{ padding:"14px 16px" }}>
-                <div style={{ fontFamily:T.head, fontSize:14, fontWeight:700, color:T.ink, marginBottom:4 }}>{tpl.name || "—"}</div>
-                <div style={{ fontFamily:T.font, fontSize:11, color:T.muted, marginBottom:4, fontWeight:600, textTransform:"uppercase", letterSpacing:.4 }}>
-                  {tpl.category || "general"} · usado {tpl.use_count || 0}x
-                </div>
-                <div style={{ fontFamily:T.font, fontSize:12, fontWeight:500, color:T.muted, marginBottom:12, minHeight:32 }}>{tpl.description || "Sem descrição"}</div>
-                <div style={{ display:"flex", gap:6 }}>
-                  <Btn onClick={() => useTemplate(tpl)} variant="primary" size="xs" sx={{ flex:1, justifyContent:"center" }}>Usar</Btn>
-                  <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" sx={{ flex:1, justifyContent:"center" }}>Preview</Btn>
-                  <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
-                </div>
-              </div>
-            </div>
+      {/* Tab bar */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+        <div style={{ display:"flex", gap:4, background:"#EEF2F6", borderRadius:10, padding:3 }}>
+          {[
+            { id:"library",  label:`Biblioteca Vantari`, count:5 },
+            { id:"imported", label:`Importados do RD`,   count:templates.length },
+          ].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{
+              padding:"7px 16px", fontSize:12.5, fontWeight:700, fontFamily:T.font, borderRadius:8,
+              border:"none", background: tab===t.id ? T.white : "transparent",
+              color: tab===t.id ? T.ink : T.muted, cursor:"pointer",
+              boxShadow: tab===t.id ? "0 1px 3px rgba(14,26,36,.08)" : "none", transition:"all .15s",
+            }}>
+              {t.label} <span style={{ fontFamily:T.mono, fontSize:10, color: tab===t.id ? T.teal : T.faint3, marginLeft:4 }}>({t.count})</span>
+            </button>
           ))}
         </div>
+        {tab === "imported" && (
+          <Btn onClick={() => setImportOpen(true)} variant="primary" size="sm" icon={Upload}>Importar do RD</Btn>
+        )}
+      </div>
+
+      {/* Library tab */}
+      {tab === "library" && (
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(560px,1fr))", gap:28 }}>
+          {LIBRARY_TEMPLATES.map(tpl => (
+            <LibraryTemplateCard
+              key={tpl.id}
+              tpl={tpl}
+              onUse={useLibraryTemplate}
+              onPreview={(t) => setPreviewTpl({ name:t.name, html: getEmailPreviewHtml(t.id) })}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Imported tab */}
+      {tab === "imported" && (
+        loading ? (
+          <div style={{ textAlign:"center", padding:48, color:T.muted }}>Carregando…</div>
+        ) : templates.length === 0 ? (
+          <div style={{ textAlign:"center", padding:56, color:T.muted, fontFamily:T.font }}>
+            <LayoutTemplate size={36} color={T.border} style={{ marginBottom:12 }}/>
+            <div style={{ fontFamily:T.head, fontWeight:700, fontSize:15, color:T.ink, marginBottom:6 }}>Nenhum template importado ainda</div>
+            <div style={{ fontSize:13, marginBottom:18 }}>Importe templates HTML ou BeeFree JSON do RD Station para começar.</div>
+            <Btn onClick={() => setImportOpen(true)} variant="primary" size="md" icon={Upload}>Importar do RD</Btn>
+          </div>
+        ) : (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:16 }}>
+            {templates.map(tpl => (
+              <div key={tpl.id} style={{ background:T.white, border:`0.5px solid ${T.border}`, borderRadius:12, overflow:"hidden" }}>
+                <div style={{ height:110, background:`linear-gradient(135deg,${T.blue},${T.teal})`, display:"flex", alignItems:"center", justifyContent:"center", position:"relative" }}>
+                  <TypeIcon type={tpl.category} size={30}/>
+                  {tpl.source === "rd_station" && (
+                    <span style={{ position:"absolute", top:8, right:8, fontSize:9, fontWeight:700, background:"rgba(255,255,255,.25)", color:"#fff", padding:"2px 7px", borderRadius:4, fontFamily:T.font, letterSpacing:.4 }}>DO RD</span>
+                  )}
+                </div>
+                <div style={{ padding:"13px 15px" }}>
+                  <div style={{ fontFamily:T.head, fontSize:13.5, fontWeight:700, color:T.ink, marginBottom:3 }}>{tpl.name || "—"}</div>
+                  <div style={{ fontFamily:T.font, fontSize:10.5, color:T.muted, marginBottom:3, fontWeight:600, textTransform:"uppercase", letterSpacing:.4 }}>
+                    {tpl.category || "general"} · usado {tpl.use_count || 0}x
+                  </div>
+                  <div style={{ fontFamily:T.font, fontSize:11.5, fontWeight:500, color:T.muted, marginBottom:11, minHeight:28 }}>{tpl.description || "Sem descrição"}</div>
+                  <div style={{ display:"flex", gap:6 }}>
+                    <Btn onClick={() => useDbTemplate(tpl)} variant="primary" size="xs" style={{ flex:1, justifyContent:"center" }}>Usar</Btn>
+                    <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" style={{ flex:1, justifyContent:"center" }}>Preview</Btn>
+                    <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {importOpen && <RdImportModal onClose={() => setImportOpen(false)} onDone={() => { setImportOpen(false); fetchTemplates(); }} />}

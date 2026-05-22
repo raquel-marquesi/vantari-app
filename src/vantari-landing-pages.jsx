@@ -424,6 +424,18 @@ const SectionPreview = ({ section }) => {
       <span style={{fontSize:11,fontWeight:600,color:"#64748b"}}>{c.text||"© 2025 Empresa"}</span>
     </div>
   );
+  if(type==="library_html") {
+    const body = c.html || (c.libraryId ? LP_PREVIEW_BODIES[c.libraryId] : "") || "";
+    const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1280"></head><body style="margin:0">${body}</body></html>`;
+    return (
+      <iframe
+        srcDoc={fullHtml}
+        sandbox="allow-same-origin"
+        title={c.libraryName || "Conteúdo da Biblioteca"}
+        style={{ ...base, width:"100%", height: 900, border:"none", display:"block", background:"#fff" }}
+      />
+    );
+  }
   return null;
 };
 
@@ -530,6 +542,35 @@ const SectionEditor = ({ section, onChange }) => {
       <Input label="Texto do rodapé" value={c.text||""} onChange={v=>upd("text",v)}/>
     </div>
   );
+  if(type==="library_html") {
+    const resetToOriginal = () => {
+      if (!c.libraryId) return;
+      const original = LP_PREVIEW_BODIES[c.libraryId] || "";
+      if (!confirm("Restaurar o conteúdo original do template? Suas edições no HTML serão perdidas.")) return;
+      upd("html", original);
+    };
+    return (
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{padding:"10px 12px",background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3,fontFamily:T.mono}}>Template da Biblioteca</div>
+          <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.font}}>{c.libraryName || c.libraryId || "—"}</div>
+          <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>Layout completo da biblioteca Vantari. Edite o HTML abaixo (avançado) ou restaure o original.</div>
+        </div>
+        <div>
+          <label style={{display:"block",fontSize:12,fontWeight:700,color:T.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>HTML do conteúdo</label>
+          <textarea
+            value={c.html||""}
+            onChange={e => upd("html", e.target.value)}
+            spellCheck={false}
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:11,fontFamily:T.mono,minHeight:280,outline:"none",resize:"vertical",lineHeight:1.5}}
+          />
+        </div>
+        {c.libraryId && (
+          <Btn variant="secondary" icon={IC.copy} onClick={resetToOriginal}>Restaurar HTML original</Btn>
+        )}
+      </div>
+    );
+  }
   return <div style={{fontSize:13,fontWeight:600,color:T.muted,fontFamily:T.font}}>Selecione uma seção para editar.</div>;
 };
 
@@ -834,7 +875,7 @@ const PageBuilder = ({ page:initialPage, onSave, onBack }) => {
   const updateSection = (updated) => { setPage(p=>({...p,sections:p.sections.map(s=>s.id===updated.id?updated:s)}));setSelectedSection(updated); };
   const handleSave = () => { onSave(page);setSaved(true);setTimeout(()=>setSaved(false),2200); };
   const previewW = {desktop:"100%",tablet:768,mobile:390}[previewDevice];
-  const sectionLabels = {header:"Cabeçalho",hero:"Hero",features:"Recursos",testimonials:"Depoimentos",cta:"CTA",form:"Formulário",stats:"Estatísticas",video:"Vídeo",footer:"Rodapé"};
+  const sectionLabels = {header:"Cabeçalho",hero:"Hero",features:"Recursos",testimonials:"Depoimentos",cta:"CTA",form:"Formulário",stats:"Estatísticas",video:"Vídeo",footer:"Rodapé",library_html:"Conteúdo da Biblioteca"};
 
   const editorTabs = [
     {id:"editor",    label:"Editor",    icon:IC.layout},
@@ -1065,8 +1106,23 @@ const NewPageModal = ({ onClose, onCreate, libraryTpl }) => {
   const handleCreate = () => {
     if(!name.trim()) return;
     const slug = name.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
-    const tpl  = TEMPLATES[template];
-    onCreate({ id:`pg_${uid()}`, name:name.trim(), url_slug:slug, status:"draft", template, library_id: libraryTpl?.id || null, sections:tpl.sections.map((s,i)=>({...s,id:`s${uid()}${i}`})), seo:{title:name,description:"",keywords:""}, og:{title:name,description:"",image:""}, pixels:{fbPixel:"",ga4:"",gtm:""}, abTest:{enabled:false,variantName:"",variantSections:null,variantTraffic:50}, metrics:{visitors:0,leads:0,convRate:0,avgTime:"—"}, created_at:new Date().toISOString() });
+    let sections;
+    if (libraryTpl && LP_PREVIEW_BODIES[libraryTpl.id]) {
+      // LP da Biblioteca: cria 1 seção library_html com o HTML completo do template
+      sections = [{
+        id: `s${uid()}0`,
+        type: "library_html",
+        content: {
+          libraryId:   libraryTpl.id,
+          libraryName: libraryTpl.name,
+          html:        LP_PREVIEW_BODIES[libraryTpl.id],
+        }
+      }];
+    } else {
+      const tpl = TEMPLATES[template];
+      sections = tpl.sections.map((s,i)=>({...s,id:`s${uid()}${i}`}));
+    }
+    onCreate({ id:`pg_${uid()}`, name:name.trim(), url_slug:slug, status:"draft", template, library_id: libraryTpl?.id || null, sections, seo:{title:name,description:"",keywords:""}, og:{title:name,description:"",image:""}, pixels:{fbPixel:"",ga4:"",gtm:""}, abTest:{enabled:false,variantName:"",variantSections:null,variantTraffic:50}, metrics:{visitors:0,leads:0,convRate:0,avgTime:"—"}, created_at:new Date().toISOString() });
   };
 
   return (

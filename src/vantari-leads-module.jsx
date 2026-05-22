@@ -1376,6 +1376,7 @@ export default function LeadsModule() {
   const [showModal, setShowModal] = useState(false);
   const [editLead, setEditLead]   = useState(null);
   const [selected, setSelected]   = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [error, setError]         = useState(null);
   const [sparkData, setSparkData] = useState({ total: [], hot: [], mql: [], customer: [] });
 
@@ -1430,6 +1431,34 @@ export default function LeadsModule() {
   const handleDelete = async (id) => {
     if (!confirm("Excluir este lead?")) return;
     await supabase.from("leads").delete().eq("id", id);
+    setSelected(null);
+    setSelectedIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+    fetchLeads();
+  };
+
+  const toggleSelectOne = (id, e) => {
+    if (e) e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => {
+      if (prev.size === leads.length && leads.length > 0) return new Set();
+      return new Set(leads.map(l => l.id));
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Excluir ${selectedIds.size} lead${selectedIds.size !== 1 ? "s" : ""} selecionado${selectedIds.size !== 1 ? "s" : ""}? Esta ação não pode ser desfeita.`)) return;
+    const ids = Array.from(selectedIds);
+    const { error: err } = await supabase.from("leads").delete().in("id", ids);
+    if (err) { setError(err.message); return; }
+    setSelectedIds(new Set());
     setSelected(null);
     fetchLeads();
   };
@@ -1496,7 +1525,7 @@ export default function LeadsModule() {
             {LEADS_TABS.map(t => {
               const active = activeTab === t.v;
               return (
-                <button key={t.v} onClick={()=>{ setActiveTab(t.v); setSelected(null); }}
+                <button key={t.v} onClick={()=>{ setActiveTab(t.v); setSelected(null); setSelectedIds(new Set()); }}
                   style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px", background:"transparent", border:"none", borderBottom: active ? `2px solid ${T.teal}` : "2px solid transparent", marginBottom:-1, color: active ? T.teal : T.muted, fontSize:13, fontWeight: active ? 700 : 600, fontFamily:T.font, cursor:"pointer", transition:"all 0.15s" }}>
                   <t.Icon size={14}/> {t.l}
                 </button>
@@ -1604,6 +1633,22 @@ export default function LeadsModule() {
             </div>
           )}
 
+          {/* Bulk action bar */}
+          {selectedIds.size > 0 && (
+            <div style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", marginBottom:12, background:`${T.teal}10`, border:`1px solid ${T.teal}40`, borderRadius:10 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:T.teal, fontFamily:T.font }}>
+                {selectedIds.size} selecionado{selectedIds.size !== 1 ? "s" : ""}
+              </span>
+              <button onClick={() => setSelectedIds(new Set())} style={{ background:"transparent", border:"none", color:T.muted, fontSize:12, fontWeight:600, cursor:"pointer", padding:"4px 8px", fontFamily:T.font, textDecoration:"underline" }}>
+                Limpar seleção
+              </button>
+              <div style={{ flex:1 }} />
+              <button onClick={handleBulkDelete} style={{ display:"flex", alignItems:"center", gap:6, padding:"8px 14px", background:T.danger, color:"#fff", border:"none", borderRadius:8, fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>
+                <Trash2 size={13} /> Excluir selecionados
+              </button>
+            </div>
+          )}
+
           {/* Tabela */}
           <div style={{
             background: T.surface, borderRadius: 14,
@@ -1614,6 +1659,16 @@ export default function LeadsModule() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: T.faint }}>
+                  <th style={{ padding: "11px 12px 11px 16px", textAlign: "left", width: 36 }}>
+                    <input
+                      type="checkbox"
+                      checked={leads.length > 0 && selectedIds.size === leads.length}
+                      ref={el => { if (el) el.indeterminate = selectedIds.size > 0 && selectedIds.size < leads.length; }}
+                      onChange={toggleSelectAll}
+                      style={{ cursor:"pointer", accentColor: T.teal, width:15, height:15 }}
+                      aria-label="Selecionar todos"
+                    />
+                  </th>
                   {["Lead", "CPF", "Empresa", "Estágio", "Perfil", "Score", "Tags", "Fonte", ""].map(h => (
                     <th key={h} style={{ padding: "11px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: T.head, textTransform: "uppercase", letterSpacing: .5 }}>
                       {h}
@@ -1624,13 +1679,13 @@ export default function LeadsModule() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} style={{ textAlign: "center", padding: 48, color: T.muted }}>
+                    <td colSpan={10} style={{ textAlign: "center", padding: 48, color: T.muted }}>
                       <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
                     </td>
                   </tr>
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={9} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
+                    <td colSpan={10} style={{ textAlign: "center", padding: 48, color: T.muted, fontSize: 14, fontFamily: T.font }}>
                       Nenhum lead encontrado.
                     </td>
                   </tr>
@@ -1640,17 +1695,27 @@ export default function LeadsModule() {
                     const st = stageBadge(lead.stage);
                     const pf = profileBadge(lead.profile || "D");
                     const isSelected = selected?.id === lead.id;
+                    const isChecked = selectedIds.has(lead.id);
                     return (
                       <tr key={lead.id}
                         onClick={() => setSelected(isSelected ? null : lead)}
                         style={{
                           borderTop: `1px solid ${T.border}`,
-                          background: isSelected ? `${T.teal}08` : "transparent",
+                          background: isChecked ? `${T.teal}14` : (isSelected ? `${T.teal}08` : "transparent"),
                           cursor: "pointer", transition: "background .1s",
                         }}
-                        onMouseEnter={e => !isSelected && (e.currentTarget.style.background = T.faint)}
-                        onMouseLeave={e => !isSelected && (e.currentTarget.style.background = "transparent")}
+                        onMouseEnter={e => !isSelected && !isChecked && (e.currentTarget.style.background = T.faint)}
+                        onMouseLeave={e => !isSelected && !isChecked && (e.currentTarget.style.background = "transparent")}
                       >
+                        <td style={{ padding: "12px 12px 12px 16px", width: 36 }} onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => toggleSelectOne(lead.id, e)}
+                            style={{ cursor:"pointer", accentColor: T.teal, width:15, height:15 }}
+                            aria-label={`Selecionar ${lead.name || lead.email}`}
+                          />
+                        </td>
                         <td style={{ padding: "12px 16px" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                             <div style={{ width: 32, height: 32, borderRadius: "50%", background: T.teal, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 13, flexShrink: 0 }}>

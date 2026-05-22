@@ -1051,15 +1051,22 @@ const PageCard = ({ page, onEdit, onClone, onDelete }) => {
 const TEMPLATE_ICONS = { webinar:Calendar, ebook:BookOpen, trial:Zap, newsletter:Mail };
 const TEMPLATE_DESCS = { webinar:"Para eventos ao vivo e gravados", ebook:"Para materiais ricos e lead magnets", trial:"Para trial e demo requests", newsletter:"Para captura simples de emails" };
 
-const NewPageModal = ({ onClose, onCreate }) => {
-  const [name,     setName]     = useState("");
-  const [template, setTemplate] = useState("trial");
+const LIBRARY_TO_TEMPLATE = {
+  "b2b-escritorios": "trial",
+  "b2c-performance": "trial",
+  "b2c-educativa":   "ebook",
+};
+
+const NewPageModal = ({ onClose, onCreate, libraryTpl }) => {
+  const defaultTpl = libraryTpl ? (LIBRARY_TO_TEMPLATE[libraryTpl.id] || "trial") : "trial";
+  const [name,     setName]     = useState(libraryTpl ? libraryTpl.name : "");
+  const [template, setTemplate] = useState(defaultTpl);
 
   const handleCreate = () => {
     if(!name.trim()) return;
     const slug = name.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
     const tpl  = TEMPLATES[template];
-    onCreate({ id:`pg_${uid()}`, name:name.trim(), url_slug:slug, status:"draft", template, sections:tpl.sections.map((s,i)=>({...s,id:`s${uid()}${i}`})), seo:{title:name,description:"",keywords:""}, og:{title:name,description:"",image:""}, pixels:{fbPixel:"",ga4:"",gtm:""}, abTest:{enabled:false,variantName:"",variantSections:null,variantTraffic:50}, metrics:{visitors:0,leads:0,convRate:0,avgTime:"—"}, created_at:new Date().toISOString() });
+    onCreate({ id:`pg_${uid()}`, name:name.trim(), url_slug:slug, status:"draft", template, library_id: libraryTpl?.id || null, sections:tpl.sections.map((s,i)=>({...s,id:`s${uid()}${i}`})), seo:{title:name,description:"",keywords:""}, og:{title:name,description:"",image:""}, pixels:{fbPixel:"",ga4:"",gtm:""}, abTest:{enabled:false,variantName:"",variantSections:null,variantTraffic:50}, metrics:{visitors:0,leads:0,convRate:0,avgTime:"—"}, created_at:new Date().toISOString() });
   };
 
   return (
@@ -1072,29 +1079,44 @@ const NewPageModal = ({ onClose, onCreate }) => {
           </button>
         </div>
 
+        {libraryTpl && (
+          <div style={{marginBottom:16,padding:"12px 14px",borderRadius:10,background:libraryTpl.colorBg,border:`1px solid ${libraryTpl.color}40`,display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:40,height:40,borderRadius:10,background:T.surface,display:"grid",placeItems:"center",flexShrink:0}}>
+              <span style={{fontFamily:T.mono,fontSize:13,fontWeight:700,color:libraryTpl.color}}>{libraryTpl.num}</span>
+            </div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:11,fontWeight:700,color:libraryTpl.color,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:2,fontFamily:T.mono}}>Template da Biblioteca</div>
+              <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.font}}>{libraryTpl.name}</div>
+              <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:2}}>{libraryTpl.sub}</div>
+            </div>
+          </div>
+        )}
+
         <div style={{marginBottom:16}}>
           <Input label="Nome da página" value={name} onChange={setName} placeholder="Ex: Webinar de Marketing Digital"/>
         </div>
 
-        <div style={{marginBottom:6}}>
-          <label style={{fontSize:12,fontWeight:700,color:T.muted,fontFamily:T.font}}>Escolha um template</label>
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
-          {Object.entries(TEMPLATES).map(([key,tpl])=>{
-            const TIcon = TEMPLATE_ICONS[key]||LayoutTemplate;
-            return (
-              <div key={key} onClick={()=>setTemplate(key)}
-                style={{borderRadius:10,border:`2px solid ${template===key?T.blue:T.border}`,padding:"12px 14px",cursor:"pointer",background:template===key?"#eff6ff":T.surface,transition:"all .15s"}}>
-                <div style={{width:36,height:36,borderRadius:8,background:`${T.blue}14`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
-                  <TIcon size={18} color={T.blue} aria-hidden="true"/>
+        {!libraryTpl && (<>
+          <div style={{marginBottom:6}}>
+            <label style={{fontSize:12,fontWeight:700,color:T.muted,fontFamily:T.font}}>Escolha um template</label>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+            {Object.entries(TEMPLATES).map(([key,tpl])=>{
+              const TIcon = TEMPLATE_ICONS[key]||LayoutTemplate;
+              return (
+                <div key={key} onClick={()=>setTemplate(key)}
+                  style={{borderRadius:10,border:`2px solid ${template===key?T.blue:T.border}`,padding:"12px 14px",cursor:"pointer",background:template===key?"#eff6ff":T.surface,transition:"all .15s"}}>
+                  <div style={{width:36,height:36,borderRadius:8,background:`${T.blue}14`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+                    <TIcon size={18} color={T.blue} aria-hidden="true"/>
+                  </div>
+                  <div style={{fontSize:13,fontWeight:700,color:template===key?T.blue:T.text,fontFamily:T.font}}>{tpl.name}</div>
+                  <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font,marginTop:2}}>{TEMPLATE_DESCS[key]}</div>
+                  <div style={{fontSize:10,fontWeight:600,color:T.muted,fontFamily:T.font,marginTop:6}}>{tpl.sections.length} seções incluídas</div>
                 </div>
-                <div style={{fontSize:13,fontWeight:700,color:template===key?T.blue:T.text,fontFamily:T.font}}>{tpl.name}</div>
-                <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font,marginTop:2}}>{TEMPLATE_DESCS[key]}</div>
-                <div style={{fontSize:10,fontWeight:600,color:T.muted,fontFamily:T.font,marginTop:6}}>{tpl.sections.length} seções incluídas</div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </>)}
 
         {template&&(
           <div style={{marginBottom:20,padding:"10px 12px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`}}>
@@ -1832,6 +1854,7 @@ export default function VantariLandingPages() {
   const [pages,       setPages]   = useState(DB.pages);
   const [editingPage, setEditing] = useState(null);
   const [showNew,     setShowNew] = useState(false);
+  const [libraryTplId, setLibraryTplId] = useState(null);
   const [search,      setSearch]  = useState("");
   const [filterStatus,setFilter]  = useState("all");
   const [toast,       setToast]   = useState(null);
@@ -1979,7 +2002,7 @@ export default function VantariLandingPages() {
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #EEFCF7 0%, #E6FAF0 100%)"}}>
           {viewMode === "forms" && <FormsManager />}
-          {viewMode === "biblioteca" && <LibraryView onUse={() => setShowNew(true)} />}
+          {viewMode === "biblioteca" && <LibraryView onUse={(tplId) => { setLibraryTplId(tplId); setViewMode("pages"); setShowNew(true); }} />}
           {viewMode === "pages" && (<>
           {/* Hero KPI strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
@@ -2069,7 +2092,7 @@ export default function VantariLandingPages() {
         </div>
       </div>
 
-      {showNew&&<NewPageModal onClose={()=>setShowNew(false)} onCreate={newPage=>{setPages(ps=>[newPage,...ps]);setShowNew(false);setEditing(newPage);showToast(`"${newPage.name}" criada! Edite as seções.`);}}/>}
+      {showNew&&<NewPageModal libraryTpl={libraryTplId ? LIBRARY_LP_TEMPLATES.find(t=>t.id===libraryTplId) : null} onClose={()=>{setShowNew(false);setLibraryTplId(null);}} onCreate={newPage=>{setPages(ps=>[newPage,...ps]);setShowNew(false);setLibraryTplId(null);setEditing(newPage);showToast(`"${newPage.name}" criada! Edite as seções.`);}}/>}
     </div>
   );
 }

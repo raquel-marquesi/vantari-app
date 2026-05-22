@@ -1,11 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Link2, Unplug, ClipboardList, RefreshCw, Key,
   AlertTriangle, Pencil, CheckCircle2, XCircle, Download,
-  ArrowLeftRight, Plus, Play, Pause, X, Settings2
+  ArrowLeftRight, Plus, Play, Pause, X, Settings2, Loader2
 } from "lucide-react";
+import { supabase } from "./supabase";
 
 /* ═══════════════════════════════════════════════════════════
    DESIGN TOKENS — Vantari redesign
@@ -305,6 +306,161 @@ const StatsBar = ({ provider }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   OAUTH CREDENTIALS — hook + card reutilizável
+═══════════════════════════════════════════════════════════ */
+const OAUTH_PROVIDER_META = {
+  meta: {
+    label:         "Meta (Facebook/Instagram)",
+    docsUrl:       "https://developers.facebook.com/apps/",
+    clientIdLabel: "App ID",
+    clientSecretLabel: "App Secret",
+    scopes:        "ads_read,ads_management,leads_retrieval,pages_show_list,pages_read_engagement",
+    authBase:      "https://www.facebook.com/v19.0/dialog/oauth",
+  },
+  google: {
+    label:         "Google Ads",
+    docsUrl:       "https://console.cloud.google.com/apis/credentials",
+    clientIdLabel: "OAuth Client ID",
+    clientSecretLabel: "OAuth Client Secret",
+    scopes:        "https://www.googleapis.com/auth/adwords",
+    authBase:      "https://accounts.google.com/o/oauth2/v2/auth",
+  },
+};
+
+function useIntegrationCredentials(provider) {
+  const [row,     setRow]     = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState(null);
+
+  const reload = useCallback(async () => {
+    setLoading(true); setError(null);
+    const { data, error: err } = await supabase
+      .from("integration_credentials")
+      .select("*")
+      .eq("provider", provider)
+      .maybeSingle();
+    setLoading(false);
+    if (err) { setError(err.message); return; }
+    setRow(data || null);
+  }, [provider]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const save = useCallback(async (patch) => {
+    const { error: err } = await supabase
+      .from("integration_credentials")
+      .upsert({ provider, ...patch }, { onConflict: "provider" });
+    if (err) { setError(err.message); return false; }
+    await reload();
+    return true;
+  }, [provider, reload]);
+
+  const disconnect = useCallback(async () => {
+    await supabase
+      .from("integration_credentials")
+      .update({ status: "disconnected", access_token: null, refresh_token: null, expires_at: null })
+      .eq("provider", provider);
+    await reload();
+  }, [provider, reload]);
+
+  return { row, loading, error, save, disconnect, reload };
+}
+
+const CredentialsCard = ({ provider }) => {
+  const meta = OAUTH_PROVIDER_META[provider];
+  const { row, loading, error, save, disconnect } = useIntegrationCredentials(provider);
+  const [clientId,     setClientId]     = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [accountId,    setAccountId]    = useState("");
+  const [saving,       setSaving]       = useState(false);
+  const [savedMsg,     setSavedMsg]     = useState("");
+
+  useEffect(() => {
+    if (row) {
+      setClientId(row.client_id || "");
+      setClientSecret(row.client_secret || "");
+      setAccountId(row.account_id || "");
+    }
+  }, [row]);
+
+  const onSave = async () => {
+    setSaving(true);
+    const ok = await save({
+      client_id:     clientId.trim() || null,
+      client_secret: clientSecret.trim() || null,
+      account_id:    accountId.trim() || null,
+      status:        row?.status === "connected" ? "connected" : (clientId && clientSecret ? "pending" : "disconnected"),
+    });
+    setSaving(false);
+    if (ok) { setSavedMsg("Credenciais salvas."); setTimeout(()=>setSavedMsg(""), 2500); }
+  };
+
+  const onConnect = () => {
+    if (!clientId || !clientSecret) { alert("Salve App ID e Secret antes de conectar."); return; }
+    const supaUrl = import.meta.env.VITE_SUPABASE_URL || "";
+    if (!supaUrl) { alert("VITE_SUPABASE_URL não configurada."); return; }
+    const redirectUri = `${supaUrl}/functions/v1/oauth-callback?provider=${provider}`;
+    const params = new URLSearchParams({
+      client_id:     clientId,
+      redirect_uri:  redirectUri,
+      response_type: "code",
+      scope:         meta.scopes,
+      state:         provider,
+    });
+    if (provider === "google") {
+      params.set("access_type", "offline");
+      params.set("prompt", "consent");
+    }
+    window.open(`${meta.authBase}?${params.toString()}`, "_blank", "width=720,height=720");
+  };
+
+  if (loading) {
+    return <Card><div style={{display:"flex",alignItems:"center",gap:8,color:T.muted,fontSize:13}}><Loader2 size={14} style={{animation:"spin 1s linear infinite"}}/> Carregando credenciais…</div></Card>;
+  }
+
+  return (
+    <Card>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
+        <div>
+          <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font}}>Credenciais OAuth — {meta.label}</div>
+          <a href={meta.docsUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:T.teal,textDecoration:"none",fontWeight:600,fontFamily:T.font}}>Criar app no provedor →</a>
+        </div>
+        <StatusBadge status={row?.status || "disconnected"}/>
+      </div>
+
+      {error && (
+        <div style={{padding:"8px 12px",background:T.redL,color:T.red,borderRadius:8,fontSize:12,fontWeight:600,marginBottom:12}}>{error}</div>
+      )}
+
+      <Input label={meta.clientIdLabel}     value={clientId}     onChange={setClientId}     mono required/>
+      <Input label={meta.clientSecretLabel} value={clientSecret} onChange={setClientSecret} mono required type="password" hint="Armazenado no Supabase com RLS. Para produção, mover para vault."/>
+      <Input label="Account ID / Customer ID" value={accountId} onChange={setAccountId} mono hint={provider==="meta"?"ID da conta de anúncios (act_xxxxxxxxx)":"Customer ID do Google Ads (xxx-xxx-xxxx)"}/>
+
+      <div style={{marginTop:12,padding:"10px 12px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,fontSize:11,fontFamily:T.mono,color:T.muted,wordBreak:"break-all"}}>
+        <span style={{fontWeight:700}}>Redirect URI:</span> {(import.meta.env.VITE_SUPABASE_URL||"")}/functions/v1/oauth-callback?provider={provider}
+        <div style={{marginTop:4,fontFamily:T.font,fontSize:11,fontWeight:600}}>Cole essa URL nos &quot;Valid OAuth Redirect URIs&quot; do app no provedor.</div>
+      </div>
+
+      <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
+        <Btn onClick={onSave} disabled={saving}>{saving?"Salvando…":"Salvar credenciais"}</Btn>
+        <Btn variant="secondary" icon={Link2} onClick={onConnect}>Conectar via OAuth</Btn>
+        {row?.status === "connected" && (
+          <Btn variant="danger" icon={Unplug} onClick={()=>{ if(confirm("Desconectar? Tokens serão removidos.")) disconnect(); }}>Desconectar</Btn>
+        )}
+        {savedMsg && <span style={{fontSize:12,fontWeight:600,color:T.green,fontFamily:T.font}}>{savedMsg}</span>}
+      </div>
+
+      {row?.last_sync && (
+        <div style={{marginTop:10,fontSize:11,color:T.muted,fontFamily:T.font}}>
+          Última sync: {fmtDate(row.last_sync)}
+          {row.expires_at && <> · Token expira: {fmtDate(row.expires_at)}</>}
+        </div>
+      )}
+    </Card>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    VIEW: META / FACEBOOK
 ═══════════════════════════════════════════════════════════ */
 const MetaView = ({ integration, onBack }) => {
@@ -414,15 +570,7 @@ const MetaView = ({ integration, onBack }) => {
       )}
 
       {tab==="config"&&(
-        <Card>
-          <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:16,fontFamily:T.font}}>OAuth e Credenciais</div>
-          <Input label="Account ID" value={cfg.account_id} onChange={v=>setCfg({...cfg,account_id:v})} mono/>
-          <Input label="Formulários Conectados (IDs separados por vírgula)" value={cfg.form_ids?.join(", ")} onChange={v=>setCfg({...cfg,form_ids:v.split(",").map(s=>s.trim())})} mono hint="Encontre os IDs no Meta Business Suite → Lead Ads"/>
-          <div style={{display:"flex",gap:8}}>
-            <Btn>Salvar Configuração</Btn>
-            <Btn variant="secondary" icon={RefreshCw}>Re-autenticar via OAuth</Btn>
-          </div>
-        </Card>
+        <CredentialsCard provider="meta"/>
       )}
     </div>
   );
@@ -515,15 +663,7 @@ const GoogleView = ({ integration, onBack }) => {
       )}
 
       {tab==="config"&&(
-        <Card>
-          <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:16,fontFamily:T.font}}>Configuração Google Ads API</div>
-          <Input label="Customer ID" value={integration.config.customer_id} onChange={()=>{}} mono/>
-          <Input label="OAuth Client ID" value="●●●●●●●●.apps.googleusercontent.com" onChange={()=>{}} mono hint="OAuth 2.0 via Google Cloud Console"/>
-          <div style={{display:"flex",gap:8}}>
-            <Btn>Salvar</Btn>
-            <Btn variant="secondary" icon={Key}>Renovar Token OAuth</Btn>
-          </div>
-        </Card>
+        <CredentialsCard provider="google"/>
       )}
     </div>
   );
@@ -890,9 +1030,51 @@ const LogsView = ({ onBack }) => {
 export default function VantariIntegrationsHub() {
   const [view,                setView]               = useState("hub");
   const [selectedIntegration, setSelectedIntegration]= useState(null);
-  const integrations = DB.integrations;
+  const [dbIntegrations,      setDbIntegrations]     = useState([]);
+  const [oauthMsg,            setOauthMsg]           = useState(null);
   const extLeads     = DB.external_leads;
   const pendingLeads = extLeads.filter(l=>!l.processed).length;
+
+  // Carrega credenciais reais do Supabase e mergeia com metadata estática
+  const reloadIntegrations = useCallback(async () => {
+    const { data } = await supabase.from("integration_credentials").select("*");
+    const byProvider = Object.fromEntries((data || []).map(r => [r.provider, r]));
+    const merged = DB.integrations.map(stub => {
+      const r = byProvider[stub.provider];
+      if (!r) return stub;
+      return {
+        ...stub,
+        status:    r.status,
+        last_sync: r.last_sync,
+        config:    { ...stub.config, ...(r.config || {}), account_id: r.account_id || stub.config.account_id },
+        _row:      r,
+      };
+    });
+    setDbIntegrations(merged);
+  }, []);
+
+  useEffect(() => { reloadIntegrations(); }, [reloadIntegrations]);
+
+  // Feedback do callback OAuth (?connected=meta ou ?error=...)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const connected = sp.get("connected");
+    const error     = sp.get("error");
+    if (connected) {
+      setOauthMsg({ type:"success", text:`${connected === "meta" ? "Meta" : connected === "google" ? "Google Ads" : connected} conectado com sucesso.` });
+      reloadIntegrations();
+    } else if (error) {
+      setOauthMsg({ type:"error", text:`Falha na conexão: ${error}` });
+    }
+    if (connected || error) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("connected"); url.searchParams.delete("error");
+      window.history.replaceState({}, "", url.toString());
+      setTimeout(() => setOauthMsg(null), 6000);
+    }
+  }, [reloadIntegrations]);
+
+  const integrations = dbIntegrations.length > 0 ? dbIntegrations : DB.integrations;
 
   const openIntegration = (integration) => {
     setSelectedIntegration(integration);
@@ -972,6 +1154,19 @@ export default function VantariIntegrationsHub() {
 
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"28px",maxWidth:1100,margin:"0 auto",width:"100%",background:"#F5F8FB"}}>
+
+          {oauthMsg && (
+            <div style={{
+              display:"flex", alignItems:"center", gap:10,
+              padding:"10px 14px", marginBottom:18, borderRadius:10,
+              background: oauthMsg.type==="success" ? T.greenL : T.redL,
+              color:      oauthMsg.type==="success" ? "#065f46" : T.red,
+              border: `1px solid ${oauthMsg.type==="success" ? T.green : T.red}30`,
+              fontSize:13, fontWeight:600, fontFamily:T.font,
+            }}>
+              {oauthMsg.type==="success" ? <CheckCircle2 size={16}/> : <XCircle size={16}/>} {oauthMsg.text}
+            </div>
+          )}
 
           {view==="hub"&&(
             <div>

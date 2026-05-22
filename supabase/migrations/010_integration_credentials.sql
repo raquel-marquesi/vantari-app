@@ -1,7 +1,5 @@
--- ╔══════════════════════════════════════════════════════════════════╗
--- ║  010 — Integration credentials (Meta Ads, Google Ads, etc.)      ║
--- ║  Persiste API keys, OAuth tokens e configurações por provider.   ║
--- ╚══════════════════════════════════════════════════════════════════╝
+-- 010 - Integration credentials (Meta Ads, Google Ads, etc.)
+-- Persiste API keys, OAuth tokens e configuracoes por provider.
 
 create type integration_provider as enum (
   'meta',
@@ -27,7 +25,7 @@ create table if not exists integration_credentials (
   client_id       text,
   client_secret   text,
 
-  -- Tokens recebidos do provedor (após OAuth)
+  -- Tokens recebidos do provedor (apos OAuth)
   access_token    text,
   refresh_token   text,
   expires_at      timestamptz,
@@ -64,7 +62,7 @@ create trigger trg_integration_credentials_updated_at
   before update on integration_credentials
   for each row execute function tg_integration_credentials_updated_at();
 
--- RLS — permissivo em dev (trocar por auth.uid() em produção)
+-- RLS - permissivo em dev (trocar por auth.uid() em producao)
 alter table integration_credentials enable row level security;
 
 drop policy if exists integration_credentials_all on integration_credentials;

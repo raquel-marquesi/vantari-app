@@ -425,8 +425,7 @@ const SectionPreview = ({ section }) => {
     </div>
   );
   if(type==="library_html") {
-    const rawBody = c.html || (c.libraryId ? LP_PREVIEW_BODIES[c.libraryId] : "") || "";
-    const body = renderLPTokens(rawBody, c.tokens, c.libraryId);
+    const body = c.html || (c.libraryId ? LP_PREVIEW_BODIES[c.libraryId] : "") || "";
     const fullHtml = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=1280"></head><body style="margin:0">${body}</body></html>`;
     return (
       <iframe
@@ -438,105 +437,6 @@ const SectionPreview = ({ section }) => {
     );
   }
   return null;
-};
-
-/* ═══════════════════════════════════════════════════════════════════════
-   LIBRARY HTML EDITOR — form gerado dos tokens do template
-════════════════════════════════════════════════════════════════════════ */
-const LibraryHtmlEditor = ({ c, upd }) => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const schema = LP_TOKEN_SCHEMA[c.libraryId] || [];
-  const tokens = c.tokens || {};
-
-  const setToken = (key, val) => {
-    upd("tokens", { ...tokens, [key]: val });
-  };
-
-  const resetToOriginal = () => {
-    if (!c.libraryId) return;
-    if (!confirm("Restaurar o conteúdo original do template? Todas as suas edições (textos e HTML) serão perdidas.")) return;
-    upd("html", LP_PREVIEW_BODIES[c.libraryId] || "");
-    upd("tokens", {});
-  };
-
-  const groups = schema.reduce((acc, field) => {
-    (acc[field.group] = acc[field.group] || []).push(field);
-    return acc;
-  }, {});
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:14}}>
-      <div style={{padding:"10px 12px",background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:8}}>
-        <div style={{fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3,fontFamily:T.mono}}>Template da Biblioteca</div>
-        <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.font}}>{c.libraryName || c.libraryId || "—"}</div>
-        <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>Edite os textos abaixo. O preview atualiza em tempo real.</div>
-      </div>
-
-      {schema.length === 0 ? (
-        <div style={{padding:"12px 14px",background:T.faint,borderRadius:8,fontSize:12,color:T.muted,fontFamily:T.font}}>
-          Este template ainda não tem campos editáveis. Use o HTML avançado abaixo.
-        </div>
-      ) : (
-        Object.entries(groups).map(([groupName, fields]) => (
-          <div key={groupName}>
-            <div style={{fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.08em",fontFamily:T.mono,marginBottom:8,paddingBottom:4,borderBottom:`1px solid ${T.border}`}}>{groupName}</div>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {fields.map(f => {
-                const val = tokens[f.key] !== undefined ? tokens[f.key] : f.default;
-                if (f.type === "textarea") {
-                  return (
-                    <div key={f.key}>
-                      <label style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,marginBottom:4,fontFamily:T.font}}>{f.label}</label>
-                      <textarea
-                        value={val}
-                        onChange={e => setToken(f.key, e.target.value)}
-                        style={{width:"100%",boxSizing:"border-box",padding:"8px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:T.font,minHeight:60,outline:"none",resize:"vertical",lineHeight:1.45,color:T.text}}
-                      />
-                    </div>
-                  );
-                }
-                return (
-                  <div key={f.key}>
-                    <label style={{display:"block",fontSize:11,fontWeight:700,color:T.muted,marginBottom:4,fontFamily:T.font}}>{f.label}</label>
-                    <input
-                      value={val}
-                      onChange={e => setToken(f.key, e.target.value)}
-                      style={{width:"100%",boxSizing:"border-box",padding:"7px 10px",border:`1px solid ${T.border}`,borderRadius:6,fontSize:12,fontFamily:T.font,outline:"none",color:T.text,background:T.surface}}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))
-      )}
-
-      <div style={{borderTop:`1px dashed ${T.border}`,paddingTop:12,display:"flex",flexDirection:"column",gap:10}}>
-        <button
-          onClick={() => setShowAdvanced(v => !v)}
-          style={{background:"none",border:"none",padding:0,cursor:"pointer",fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font,textAlign:"left",display:"flex",alignItems:"center",gap:6}}
-        >
-          <span>{showAdvanced ? "▾" : "▸"}</span> Edição avançada (HTML cru)
-        </button>
-        {showAdvanced && (
-          <div>
-            <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginBottom:6,lineHeight:1.45}}>
-              Mexer aqui altera o layout. Os <code style={{fontFamily:T.mono,background:T.faint,padding:"1px 4px",borderRadius:3}}>{`<<TOKEN:nome>>`}</code> são substituídos pelos textos acima.
-            </div>
-            <textarea
-              value={c.html||""}
-              onChange={e => upd("html", e.target.value)}
-              spellCheck={false}
-              style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:11,fontFamily:T.mono,minHeight:240,outline:"none",resize:"vertical",lineHeight:1.5}}
-            />
-          </div>
-        )}
-        {c.libraryId && (
-          <Btn variant="secondary" icon={IC.copy} onClick={resetToOriginal}>Restaurar template original</Btn>
-        )}
-      </div>
-    </div>
-  );
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -643,7 +543,33 @@ const SectionEditor = ({ section, onChange }) => {
     </div>
   );
   if(type==="library_html") {
-    return <LibraryHtmlEditor c={c} upd={upd} />;
+    const resetToOriginal = () => {
+      if (!c.libraryId) return;
+      const original = LP_PREVIEW_BODIES[c.libraryId] || "";
+      if (!confirm("Restaurar o conteúdo original do template? Suas edições no HTML serão perdidas.")) return;
+      upd("html", original);
+    };
+    return (
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{padding:"10px 12px",background:`${T.blue}10`,border:`1px solid ${T.blue}30`,borderRadius:8}}>
+          <div style={{fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.05em",marginBottom:3,fontFamily:T.mono}}>Template da Biblioteca</div>
+          <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.font}}>{c.libraryName || c.libraryId || "—"}</div>
+          <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>Layout completo da biblioteca Vantari. Edite o HTML abaixo (avançado) ou restaure o original.</div>
+        </div>
+        <div>
+          <label style={{display:"block",fontSize:12,fontWeight:700,color:T.muted,marginBottom:5,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>HTML do conteúdo</label>
+          <textarea
+            value={c.html||""}
+            onChange={e => upd("html", e.target.value)}
+            spellCheck={false}
+            style={{width:"100%",boxSizing:"border-box",padding:"10px 12px",border:`1px solid ${T.border}`,borderRadius:8,fontSize:11,fontFamily:T.mono,minHeight:280,outline:"none",resize:"vertical",lineHeight:1.5}}
+          />
+        </div>
+        {c.libraryId && (
+          <Btn variant="secondary" icon={IC.copy} onClick={resetToOriginal}>Restaurar HTML original</Btn>
+        )}
+      </div>
+    );
   }
   return <div style={{fontSize:13,fontWeight:600,color:T.muted,fontFamily:T.font}}>Selecione uma seção para editar.</div>;
 };
@@ -1190,7 +1116,6 @@ const NewPageModal = ({ onClose, onCreate, libraryTpl }) => {
           libraryId:   libraryTpl.id,
           libraryName: libraryTpl.name,
           html:        LP_PREVIEW_BODIES[libraryTpl.id],
-          tokens:      {},
         }
       }];
     } else {
@@ -1344,37 +1269,37 @@ h1 em{color:#0D7491;font-style:normal}
 <nav>
   <div class="logo">vantari</div>
   <div class="nl"><a>Como funciona</a><a>Para escritórios</a><a>Blog</a><a>FAQ</a></div>
-  <span class="ph"><<TOKEN:nav_phone>></span>
+  <span class="ph">(11) 93401-8661</span>
   <div class="wa">● WhatsApp</div>
 </nav>
 <div class="trust">
-  <span><b><<TOKEN:trust_1_value>></b> <<TOKEN:trust_1_label>></span>
-  <span><b><<TOKEN:trust_2_value>></b> <<TOKEN:trust_2_label>></span>
-  <span><b><<TOKEN:trust_3_value>></b> <<TOKEN:trust_3_label>></span>
-  <span><b><<TOKEN:trust_4_value>></b> <<TOKEN:trust_4_label>></span>
+  <span><b>+12.000</b> clientes</span>
+  <span><b>R$ 280 mi</b> liberados</span>
+  <span><b>5 dias uteis</b> media</span>
+  <span><b>RA1000</b> Reclame Aqui</span>
 </div>
 <div class="hero">
   <div>
-    <div class="ey"><<TOKEN:hero_eyebrow>></div>
-    <h1><<TOKEN:hero_title_pre>> <em><<TOKEN:hero_title_em>></em> <<TOKEN:hero_title_post>></h1>
-    <p class="lead"><<TOKEN:hero_lead>></p>
+    <div class="ey">Antecipacao de honorarios</div>
+    <h1>Honorarios previsiveis. <em>Caixa sem divida.</em> Escritorio livre para crescer.</h1>
+    <p class="lead">Seu escritorio tem processos trabalhistas a receber. Nos adiantamos o valor antes da sentenca — sem emprestimo, sem risco juridico.</p>
     <div class="kpis">
-      <div class="kpi"><span class="kv"><<TOKEN:kpi_1_value>></span><span class="kl"><<TOKEN:kpi_1_label>></span></div>
-      <div class="kpi"><span class="kv"><<TOKEN:kpi_2_value>></span><span class="kl"><<TOKEN:kpi_2_label>></span></div>
-      <div class="kpi"><span class="kv"><<TOKEN:kpi_3_value>></span><span class="kl"><<TOKEN:kpi_3_label>></span></div>
+      <div class="kpi"><span class="kv">R$ 280 mi</span><span class="kl">Ja liberados</span></div>
+      <div class="kpi"><span class="kv">1.840</span><span class="kl">Escritorios clientes</span></div>
+      <div class="kpi"><span class="kv">24h</span><span class="kl">Prazo de resposta</span></div>
     </div>
   </div>
   <div class="fc">
-    <span class="badge"><<TOKEN:form_badge>></span>
-    <h3><<TOKEN:form_title>></h3>
-    <p class="fsub"><<TOKEN:form_sub>></p>
+    <span class="badge">Resposta em 24h</span>
+    <h3>Simule o adiantamento do seu escritorio</h3>
+    <p class="fsub">Informe dados basicos. Um especialista retorna em ate 24h.</p>
     <div class="row"><label>Nome / Escritorio</label><div class="inp">Razao social ou nome</div></div>
     <div class="row"><label>Email corporativo</label><div class="inp">email@escritorio.com.br</div></div>
     <div class="row"><label>WhatsApp</label><div class="inp">(11) 9 0000-0000</div></div>
     <div class="row"><label>Faixa de processos ativos</label><div class="inp">1-10 · 11-50 · 51-200 · 200+</div></div>
-    <div class="btn"><<TOKEN:form_cta>></div>
-    <div class="legal"><<TOKEN:form_legal>></div>
-    <div class="tl"><<TOKEN:form_hours>></div>
+    <div class="btn">Agendar diagnostico →</div>
+    <div class="legal">Quero receber contato. Sem spam. Politica LGPD.</div>
+    <div class="tl">Humanos reais · seg-sex, 9h-18h · resposta em 24h</div>
   </div>
 </div>`,
 
@@ -1410,33 +1335,33 @@ h1 em{color:#5EE8C8;font-style:normal}
 </style>
 <div class="live">
   <div class="ldot"></div>
-  <span><<TOKEN:live_strip>></span>
+  <span>Ultima liberacao: <b>R$ 47.200</b> — Sao Paulo · ha 9 minutos</span>
 </div>
 <nav>
   <div class="logo">vantari</div>
   <div class="nl"><a>Como funciona</a><a>Para escritorios</a><a>Blog</a></div>
-  <span class="ph"><<TOKEN:nav_phone>></span>
+  <span class="ph">(11) 93401-8661</span>
   <div class="wa">● WhatsApp</div>
 </nav>
 <div class="hero">
   <div>
-    <div class="ey"><div class="edot"></div><<TOKEN:hero_eyebrow>></div>
-    <h1><<TOKEN:hero_title_pre>> <em><<TOKEN:hero_title_em>></em></h1>
-    <div class="chk"><<TOKEN:chk_1>></div>
-    <div class="chk"><<TOKEN:chk_2>></div>
-    <div class="chk"><<TOKEN:chk_3>></div>
-    <div class="chk"><<TOKEN:chk_4>></div>
+    <div class="ey"><div class="edot"></div>Atendimento agora · em ate 2 min</div>
+    <h1>Voce nao precisa esperar anos. <em>Antecipe hoje.</em></h1>
+    <div class="chk">Sem emprestimo · nao e divida</div>
+    <div class="chk">Sem analise de Serasa ou CPF</div>
+    <div class="chk">PIX na conta em ate 5 dias uteis</div>
+    <div class="chk">Se perder o processo, o prejuizo e nosso</div>
   </div>
   <div class="fc">
-    <span class="badge"><<TOKEN:form_badge>></span>
-    <h3><<TOKEN:form_title>></h3>
-    <p class="fsub"><<TOKEN:form_sub>></p>
+    <span class="badge">Resposta em 2 min</span>
+    <h3>Quanto voce pode receber?</h3>
+    <p class="fsub">Nome e WhatsApp sao suficientes pra comecar.</p>
     <div class="row"><label>Seu nome</label><div class="inp">Como podemos te chamar?</div></div>
     <div class="row"><label>WhatsApp</label><div class="inp on">(11) 9 0000-0000</div></div>
     <div class="row"><label>Em que fase esta seu processo?</label><div class="inp">1a instancia · 2a instancia · transito julgado</div></div>
-    <div class="btn"><<TOKEN:form_cta>></div>
-    <div class="legal"><<TOKEN:form_legal>></div>
-    <div class="tl"><<TOKEN:form_hours>></div>
+    <div class="btn">Falar pelo WhatsApp agora →</div>
+    <div class="legal">Quero receber contato por WhatsApp. Politica LGPD.</div>
+    <div class="tl">Atendentes humanos · seg-sab, 8h-22h · resposta em 2 min</div>
   </div>
 </div>`,
 
@@ -1479,137 +1404,46 @@ h1 em{color:#0D7491;font-style:normal}
 <nav>
   <div class="logo">vantari</div>
   <div class="nl"><a>Como funciona</a><a>Para escritorios</a><a>Blog</a><a>FAQ</a></div>
-  <span class="ph"><<TOKEN:nav_phone>></span>
+  <span class="ph">(11) 93401-8661</span>
   <div class="wa">● WhatsApp</div>
 </nav>
 <div class="hero">
   <div>
-    <div class="ey"><<TOKEN:hero_eyebrow>></div>
-    <h1><<TOKEN:hero_title_pre>> <em><<TOKEN:hero_title_em>></em> <<TOKEN:hero_title_post>></h1>
-    <p class="lead"><<TOKEN:hero_lead>></p>
+    <div class="ey">Guia rapido · 3 min de leitura</div>
+    <h1>Sua acao trabalhista <em>vale dinheiro hoje</em> — nao daqui a 5 anos.</h1>
+    <p class="lead">Nao e emprestimo. Nao tem juros. Nao vai pro Serasa. E so voce transformar um direito que ja e seu em dinheiro disponivel agora.</p>
     <div class="calc">
-      <div class="cb"><div class="clab"><<TOKEN:calc_1_label>></div><div class="cval"><<TOKEN:calc_1_value>></div><div class="cdet"><<TOKEN:calc_1_detail>></div></div>
-      <div class="cb"><div class="clab"><<TOKEN:calc_2_label>></div><div class="cval" style="color:#14A273"><<TOKEN:calc_2_value>></div><div class="cdet"><<TOKEN:calc_2_detail>></div></div>
+      <div class="cb"><div class="clab">Valor estimado do processo</div><div class="cval">R$ 80.000</div><div class="cdet">2a instancia · 18 meses</div></div>
+      <div class="cb"><div class="clab">Voce recebe hoje</div><div class="cval" style="color:#14A273">R$ 52.300</div><div class="cdet">Desagio unico · sem parcela</div></div>
     </div>
     <div class="btns">
-      <div class="btn-p"><<TOKEN:cta_primary>></div>
-      <div class="btn-g"><<TOKEN:cta_secondary>></div>
+      <div class="btn-p">Simular sem cadastro →</div>
+      <div class="btn-g">Ver perguntas</div>
     </div>
-    <div class="mt"><span class="stars">★★★★★</span><b><<TOKEN:rating_score>></b> <<TOKEN:rating_text>></div>
+    <div class="mt"><span class="stars">★★★★★</span><b>4,8</b> em 1.240 avaliacoes no Reclame Aqui</div>
   </div>
   <div class="phone">
     <div class="ph-head"><span>9:41</span><span>● ●</span></div>
-    <div class="ph-h1"><<TOKEN:phone_title_pre>> <em><<TOKEN:phone_title_em>></em></div>
+    <div class="ph-h1">Ola Marcos, <em>seu processo esta pronto pra antecipar.</em></div>
     <div class="ph-card">
-      <div class="ph-lab"><<TOKEN:phone_card_label>></div>
-      <div class="ph-val"><<TOKEN:phone_card_value>></div>
-      <div class="ph-det"><<TOKEN:phone_card_detail>></div>
+      <div class="ph-lab">Valor liquido estimado</div>
+      <div class="ph-val">R$ 52.300</div>
+      <div class="ph-det">Pagamento em ate 5 dias uteis · via PIX</div>
     </div>
     <div class="ph-prog">
       <div class="seg done"></div><div class="seg done"></div>
       <div class="seg act"></div><div class="seg"></div>
     </div>
-    <div class="ph-step"><div class="ic">v</div><div><div class="st"><<TOKEN:phone_step_1>></div><div class="ss"><<TOKEN:phone_step_1_date>></div></div></div>
-    <div class="ph-step"><div class="ic">v</div><div><div class="st"><<TOKEN:phone_step_2>></div><div class="ss"><<TOKEN:phone_step_2_date>></div></div></div>
-    <div class="ph-step"><div class="ic p">3</div><div><div class="st"><<TOKEN:phone_step_3>></div><div class="ss"><<TOKEN:phone_step_3_date>></div></div></div>
-    <div class="ph-cta"><<TOKEN:phone_cta>></div>
+    <div class="ph-step"><div class="ic">v</div><div><div class="st">Documentos validados</div><div class="ss">11/05 · 14:22</div></div></div>
+    <div class="ph-step"><div class="ic">v</div><div><div class="st">Calculo do desagio</div><div class="ss">12/05 · 09:08</div></div></div>
+    <div class="ph-step"><div class="ic p">3</div><div><div class="st">Proposta enviada</div><div class="ss">Aguardando seu aceite · 7 dias</div></div></div>
+    <div class="ph-cta">Aceitar proposta</div>
   </div>
 </div>`,
 };
 
-const LP_TOKEN_SCHEMA = {
-  "b2b-escritorios": [
-    { group: "Topo",      key: "nav_phone",       label: "Telefone (nav)",         type: "text",     default: "(11) 93401-8661" },
-    { group: "Trust",     key: "trust_1_value",   label: "Trust #1 — número",      type: "text",     default: "+12.000" },
-    { group: "Trust",     key: "trust_1_label",   label: "Trust #1 — texto",       type: "text",     default: "clientes" },
-    { group: "Trust",     key: "trust_2_value",   label: "Trust #2 — número",      type: "text",     default: "R$ 280 mi" },
-    { group: "Trust",     key: "trust_2_label",   label: "Trust #2 — texto",       type: "text",     default: "liberados" },
-    { group: "Trust",     key: "trust_3_value",   label: "Trust #3 — número",      type: "text",     default: "5 dias úteis" },
-    { group: "Trust",     key: "trust_3_label",   label: "Trust #3 — texto",       type: "text",     default: "média" },
-    { group: "Trust",     key: "trust_4_value",   label: "Trust #4 — número",      type: "text",     default: "RA1000" },
-    { group: "Trust",     key: "trust_4_label",   label: "Trust #4 — texto",       type: "text",     default: "Reclame Aqui" },
-    { group: "Hero",      key: "hero_eyebrow",    label: "Eyebrow",                type: "text",     default: "Antecipação de honorários" },
-    { group: "Hero",      key: "hero_title_pre",  label: "Título — antes",         type: "text",     default: "Honorários previsíveis." },
-    { group: "Hero",      key: "hero_title_em",   label: "Título — em destaque",   type: "text",     default: "Caixa sem dívida." },
-    { group: "Hero",      key: "hero_title_post", label: "Título — depois",        type: "text",     default: "Escritório livre para crescer." },
-    { group: "Hero",      key: "hero_lead",       label: "Subtítulo",              type: "textarea", default: "Seu escritório tem processos trabalhistas a receber. Nós adiantamos o valor antes da sentença — sem empréstimo, sem risco jurídico." },
-    { group: "KPIs",      key: "kpi_1_value",     label: "KPI 1 — valor",          type: "text",     default: "R$ 280 mi" },
-    { group: "KPIs",      key: "kpi_1_label",     label: "KPI 1 — texto",          type: "text",     default: "Já liberados" },
-    { group: "KPIs",      key: "kpi_2_value",     label: "KPI 2 — valor",          type: "text",     default: "1.840" },
-    { group: "KPIs",      key: "kpi_2_label",     label: "KPI 2 — texto",          type: "text",     default: "Escritórios clientes" },
-    { group: "KPIs",      key: "kpi_3_value",     label: "KPI 3 — valor",          type: "text",     default: "24h" },
-    { group: "KPIs",      key: "kpi_3_label",     label: "KPI 3 — texto",          type: "text",     default: "Prazo de resposta" },
-    { group: "Formulário", key: "form_badge",     label: "Badge do form",          type: "text",     default: "Resposta em 24h" },
-    { group: "Formulário", key: "form_title",     label: "Título do form",         type: "text",     default: "Simule o adiantamento do seu escritório" },
-    { group: "Formulário", key: "form_sub",       label: "Subtítulo do form",      type: "text",     default: "Informe dados básicos. Um especialista retorna em até 24h." },
-    { group: "Formulário", key: "form_cta",       label: "Texto do botão",         type: "text",     default: "Agendar diagnóstico →" },
-    { group: "Formulário", key: "form_legal",     label: "Texto legal",            type: "textarea", default: "Quero receber contato. Sem spam. Política LGPD." },
-    { group: "Formulário", key: "form_hours",     label: "Horário / SLA",          type: "text",     default: "Humanos reais · seg-sex, 9h-18h · resposta em 24h" },
-  ],
-  "b2c-performance": [
-    { group: "Topo",      key: "live_strip",      label: "Live strip (prova social)", type: "text",  default: "Última liberação: R$ 47.200 — São Paulo · há 9 minutos" },
-    { group: "Topo",      key: "nav_phone",       label: "Telefone (nav)",         type: "text",     default: "(11) 93401-8661" },
-    { group: "Hero",      key: "hero_eyebrow",    label: "Eyebrow",                type: "text",     default: "Atendimento agora · em até 2 min" },
-    { group: "Hero",      key: "hero_title_pre",  label: "Título — antes",         type: "text",     default: "Você não precisa esperar anos." },
-    { group: "Hero",      key: "hero_title_em",   label: "Título — em destaque",   type: "text",     default: "Antecipe hoje." },
-    { group: "Hero",      key: "chk_1",           label: "Checklist #1",           type: "text",     default: "Sem empréstimo · não é dívida" },
-    { group: "Hero",      key: "chk_2",           label: "Checklist #2",           type: "text",     default: "Sem análise de Serasa ou CPF" },
-    { group: "Hero",      key: "chk_3",           label: "Checklist #3",           type: "text",     default: "PIX na conta em até 5 dias úteis" },
-    { group: "Hero",      key: "chk_4",           label: "Checklist #4",           type: "text",     default: "Se perder o processo, o prejuízo é nosso" },
-    { group: "Formulário", key: "form_badge",     label: "Badge do form",          type: "text",     default: "Resposta em 2 min" },
-    { group: "Formulário", key: "form_title",     label: "Título do form",         type: "text",     default: "Quanto você pode receber?" },
-    { group: "Formulário", key: "form_sub",       label: "Subtítulo do form",      type: "text",     default: "Nome e WhatsApp são suficientes pra começar." },
-    { group: "Formulário", key: "form_cta",       label: "Texto do botão",         type: "text",     default: "Falar pelo WhatsApp agora →" },
-    { group: "Formulário", key: "form_legal",     label: "Texto legal",            type: "textarea", default: "Quero receber contato por WhatsApp. Política LGPD." },
-    { group: "Formulário", key: "form_hours",     label: "Horário / SLA",          type: "text",     default: "Atendentes humanos · seg-sáb, 8h-22h · resposta em 2 min" },
-  ],
-  "b2c-educativa": [
-    { group: "Topo",      key: "nav_phone",       label: "Telefone (nav)",         type: "text",     default: "(11) 93401-8661" },
-    { group: "Hero",      key: "hero_eyebrow",    label: "Eyebrow",                type: "text",     default: "Guia rápido · 3 min de leitura" },
-    { group: "Hero",      key: "hero_title_pre",  label: "Título — antes",         type: "text",     default: "Sua ação trabalhista" },
-    { group: "Hero",      key: "hero_title_em",   label: "Título — em destaque",   type: "text",     default: "vale dinheiro hoje" },
-    { group: "Hero",      key: "hero_title_post", label: "Título — depois",        type: "text",     default: "— não daqui a 5 anos." },
-    { group: "Hero",      key: "hero_lead",       label: "Subtítulo",              type: "textarea", default: "Não é empréstimo. Não tem juros. Não vai pro Serasa. É só você transformar um direito que já é seu em dinheiro disponível agora." },
-    { group: "Calculadora", key: "calc_1_label", label: "Calc #1 — label",        type: "text",     default: "Valor estimado do processo" },
-    { group: "Calculadora", key: "calc_1_value", label: "Calc #1 — valor",        type: "text",     default: "R$ 80.000" },
-    { group: "Calculadora", key: "calc_1_detail",label: "Calc #1 — detalhe",      type: "text",     default: "2ª instância · 18 meses" },
-    { group: "Calculadora", key: "calc_2_label", label: "Calc #2 — label",        type: "text",     default: "Você recebe hoje" },
-    { group: "Calculadora", key: "calc_2_value", label: "Calc #2 — valor",        type: "text",     default: "R$ 52.300" },
-    { group: "Calculadora", key: "calc_2_detail",label: "Calc #2 — detalhe",      type: "text",     default: "Deságio único · sem parcela" },
-    { group: "CTAs",      key: "cta_primary",     label: "CTA primário",           type: "text",     default: "Simular sem cadastro →" },
-    { group: "CTAs",      key: "cta_secondary",   label: "CTA secundário",         type: "text",     default: "Ver perguntas" },
-    { group: "CTAs",      key: "rating_score",    label: "Nota (Reclame Aqui)",    type: "text",     default: "4,8" },
-    { group: "CTAs",      key: "rating_text",     label: "Texto da avaliação",     type: "text",     default: "em 1.240 avaliações no Reclame Aqui" },
-    { group: "Mockup celular", key: "phone_title_pre",  label: "Saudação — antes",       type: "text", default: "Olá Marcos," },
-    { group: "Mockup celular", key: "phone_title_em",   label: "Saudação — destaque",    type: "text", default: "seu processo está pronto pra antecipar." },
-    { group: "Mockup celular", key: "phone_card_label", label: "Card — label",           type: "text", default: "Valor líquido estimado" },
-    { group: "Mockup celular", key: "phone_card_value", label: "Card — valor",           type: "text", default: "R$ 52.300" },
-    { group: "Mockup celular", key: "phone_card_detail",label: "Card — detalhe",         type: "text", default: "Pagamento em até 5 dias úteis · via PIX" },
-    { group: "Mockup celular", key: "phone_step_1",     label: "Etapa 1",                type: "text", default: "Documentos validados" },
-    { group: "Mockup celular", key: "phone_step_1_date",label: "Etapa 1 — data",         type: "text", default: "11/05 · 14:22" },
-    { group: "Mockup celular", key: "phone_step_2",     label: "Etapa 2",                type: "text", default: "Cálculo do deságio" },
-    { group: "Mockup celular", key: "phone_step_2_date",label: "Etapa 2 — data",         type: "text", default: "12/05 · 09:08" },
-    { group: "Mockup celular", key: "phone_step_3",     label: "Etapa 3",                type: "text", default: "Proposta enviada" },
-    { group: "Mockup celular", key: "phone_step_3_date",label: "Etapa 3 — data",         type: "text", default: "Aguardando seu aceite · 7 dias" },
-    { group: "Mockup celular", key: "phone_cta",        label: "Botão do card",          type: "text", default: "Aceitar proposta" },
-  ],
-};
-
-function getLPDefaults(id) {
-  const schema = LP_TOKEN_SCHEMA[id] || [];
-  return schema.reduce((acc, f) => { acc[f.key] = f.default; return acc; }, {});
-}
-
-function renderLPTokens(html, tokens, schemaId) {
-  if (!html) return "";
-  const merged = { ...getLPDefaults(schemaId), ...(tokens || {}) };
-  return html.replace(/<<TOKEN:([a-zA-Z0-9_]+)>>/g, (_, key) =>
-    Object.prototype.hasOwnProperty.call(merged, key) ? String(merged[key] ?? "") : ""
-  );
-}
-
-function getLPPreviewHtml(id, tokens) {
-  const body = renderLPTokens(LP_PREVIEW_BODIES[id] || "", tokens, id);
+function getLPPreviewHtml(id) {
+  const body = LP_PREVIEW_BODIES[id] || "";
   return `<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;overflow:hidden">${body}</body></html>`;
 }
 
@@ -1632,7 +1466,7 @@ const MODULAR_BLOCKS = [
   { code: "footer",      name: "Footer 4 col",     desc: "Nav + atendimento + compliance + empresa." },
 ];
 
-function LibraryLPCard({ tpl, onUse, onPreview }) {
+function LibraryLPCard({ tpl, onUse }) {
   const FRAME_W = 1280;
   const visibleH = 252;
   const containerRef = useRef(null);
@@ -1705,65 +1539,14 @@ function LibraryLPCard({ tpl, onUse, onPreview }) {
       </div>
 
       <div style={{ padding: "14px 18px", display: "flex", gap: 8, justifyContent: "flex-end", borderTop: `1px solid ${T.border}` }}>
-        <Btn variant="secondary" size="sm" onClick={() => onPreview && onPreview(tpl.id)}>Pré-visualizar</Btn>
+        <Btn variant="secondary" size="sm">Pre-visualizar</Btn>
         <Btn variant="primary" size="sm" onClick={() => onUse && onUse(tpl.id)}>Usar template →</Btn>
       </div>
     </div>
   );
 }
 
-function LibraryPreviewModal({ tpl, onClose, onUse }) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [onClose]);
-
-  if (!tpl) return null;
-
-  return (
-    <div
-      onClick={onClose}
-      style={{position:"fixed",inset:0,background:"rgba(8,15,22,.72)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:"24px",backdropFilter:"blur(6px)"}}
-    >
-      <div
-        onClick={e => e.stopPropagation()}
-        style={{width:"min(1320px, 96vw)",height:"min(92vh, 92vh)",background:"#CDD5DE",borderRadius:14,overflow:"hidden",boxShadow:"0 40px 100px rgba(0,0,0,.5)",display:"flex",flexDirection:"column"}}
-      >
-        <div style={{background:"#EAECEF",borderBottom:"1px solid #C5C9CF",padding:"10px 16px",display:"flex",alignItems:"center",gap:12}}>
-          <div style={{display:"flex",gap:6}}>
-            {["#FF6058","#FFBE29","#2ACB4B"].map(c => <div key={c} style={{ width: 12, height: 12, borderRadius: "50%", background: c }} />)}
-          </div>
-          <div style={{flex:1,background:"#fff",borderRadius:6,padding:"5px 12px",fontSize:12,color:"#666",fontFamily:T.mono,textAlign:"center",border:"1px solid #DDD"}}>
-            vantari.com.br{tpl.url}
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <span style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font}}>ESC para fechar</span>
-            <Btn variant="primary" size="sm" onClick={() => { onUse(tpl.id); onClose(); }}>Usar template →</Btn>
-            <button
-              onClick={onClose}
-              style={{background:"none",border:"none",cursor:"pointer",width:30,height:30,borderRadius:6,display:"grid",placeItems:"center",color:T.muted}}
-              title="Fechar"
-            >
-              <Ico d={IC.close} size={16} color={T.muted}/>
-            </button>
-          </div>
-        </div>
-        <div style={{flex:1,overflow:"auto",background:"#fff"}}>
-          <iframe
-            srcDoc={getLPPreviewHtml(tpl.id)}
-            sandbox="allow-same-origin"
-            title={`Preview ${tpl.name}`}
-            style={{width:"100%",minWidth:1280,height:"100%",border:"none",display:"block",background:"#fff"}}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function LibraryView({ onUse, onPreview }) {
+function LibraryView({ onUse }) {
   return (
     <div>
       <div style={{ marginBottom: 20 }}>
@@ -1786,7 +1569,7 @@ function LibraryView({ onUse, onPreview }) {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(380px,1fr))", gap: 20, marginBottom: 40 }}>
         {LIBRARY_LP_TEMPLATES.map(tpl => (
-          <LibraryLPCard key={tpl.id} tpl={tpl} onUse={onUse} onPreview={onPreview} />
+          <LibraryLPCard key={tpl.id} tpl={tpl} onUse={onUse} />
         ))}
       </div>
 
@@ -2128,7 +1911,6 @@ export default function VantariLandingPages() {
   const [editingPage, setEditing] = useState(null);
   const [showNew,     setShowNew] = useState(false);
   const [libraryTplId, setLibraryTplId] = useState(null);
-  const [previewLibraryId, setPreviewLibraryId] = useState(null);
   const [search,      setSearch]  = useState("");
   const [filterStatus,setFilter]  = useState("all");
   const [toast,       setToast]   = useState(null);
@@ -2276,10 +2058,7 @@ export default function VantariLandingPages() {
         {/* Content */}
         <div style={{flex:1,overflowY:"auto",padding:"24px 28px",background:"linear-gradient(180deg, #EEFCF7 0%, #E6FAF0 100%)"}}>
           {viewMode === "forms" && <FormsManager />}
-          {viewMode === "biblioteca" && <LibraryView
-            onUse={(tplId) => { setLibraryTplId(tplId); setViewMode("pages"); setShowNew(true); }}
-            onPreview={(tplId) => setPreviewLibraryId(tplId)}
-          />}
+          {viewMode === "biblioteca" && <LibraryView onUse={(tplId) => { setLibraryTplId(tplId); setViewMode("pages"); setShowNew(true); }} />}
           {viewMode === "pages" && (<>
           {/* Hero KPI strip */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 14, marginBottom: 20 }}>
@@ -2370,14 +2149,6 @@ export default function VantariLandingPages() {
       </div>
 
       {showNew&&<NewPageModal libraryTpl={libraryTplId ? LIBRARY_LP_TEMPLATES.find(t=>t.id===libraryTplId) : null} onClose={()=>{setShowNew(false);setLibraryTplId(null);}} onCreate={newPage=>{setPages(ps=>[newPage,...ps]);setShowNew(false);setLibraryTplId(null);setEditing(newPage);showToast(`"${newPage.name}" criada! Edite as seções.`);}}/>}
-
-      {previewLibraryId && (
-        <LibraryPreviewModal
-          tpl={LIBRARY_LP_TEMPLATES.find(t => t.id === previewLibraryId)}
-          onClose={() => setPreviewLibraryId(null)}
-          onUse={(tplId) => { setPreviewLibraryId(null); setLibraryTplId(tplId); setViewMode("pages"); setShowNew(true); }}
-        />
-      )}
     </div>
   );
 }

@@ -1,14 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings,
-  Building2, CreditCard, ClipboardList, Headphones, Zap, Sparkles,
-  Save, Send, Key, Package, RefreshCw, Download, FileText, Plus,
-  FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
-  Loader2, AlertTriangle, ArrowUp,
-  Database, Edit3, Trash2, Search, X, Copy as CopyIcon,
-  Activity, Globe,
+  Building2, Save, Send, RefreshCw, Plus, HelpCircle,
+  Loader2, AlertTriangle, Database, Edit3, Trash2, Search, X,
+  Copy as CopyIcon, Activity, FileText, User, Lock,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════
@@ -130,40 +127,12 @@ const T = {
   mono:    "'JetBrains Mono', monospace",
 };
 
-/* ───── MOCK DATA ───── */
-const MOCK_MEMBERS = [
-  { id:"u1", name:"Ana Costa",      email:"ana@empresa.com.br",   role:"admin",   status:"active",    lastActive:"agora", avatar:"AC", joined:"Jan 2024" },
-  { id:"u2", name:"Bruno Lima",     email:"bruno@empresa.com.br", role:"manager", status:"active",    lastActive:"2h",    avatar:"BL", joined:"Mar 2024" },
-  { id:"u3", name:"Carla Mendes",   email:"carla@empresa.com.br", role:"user",    status:"active",    lastActive:"1d",    avatar:"CM", joined:"Mai 2024" },
-  { id:"u4", name:"Diego Ferreira", email:"diego@empresa.com.br", role:"user",    status:"invited",   lastActive:"—",     avatar:"DF", joined:"—" },
-  { id:"u5", name:"Elena Souza",    email:"elena@empresa.com.br", role:"manager", status:"suspended", lastActive:"7d",    avatar:"ES", joined:"Fev 2024" },
-];
-
-const MOCK_AUDIT = [];
-
-const MOCK_USAGE = {
-  leads_stored:      { used:0, limit:5000,   label:"Leads Armazenados",     Icon:Users,    color:T.teal   },
-  emails_sent:       { used:0, limit:25000,  label:"Emails Enviados",       Icon:Mail,     color:T.teal   },
-  api_calls:         { used:0, limit:100000, label:"Chamadas de API",       Icon:Zap,      color:T.violet },
-  contacts_enriched: { used:0, limit:1000,   label:"Contatos Enriquecidos", Icon:Sparkles, color:T.green  },
-};
-
-const MOCK_KEYS = [];
-
-const MOCK_WEBHOOKS = [];
-
-const MOCK_INVOICES = [];
-
 const TABS = [
-  { id:"workspace",    Icon:Building2,     label:"Workspace"             },
-  { id:"team",         Icon:Users,         label:"Equipe"                },
-  { id:"customfields", Icon:Database,      label:"Campos Personalizados" },
-  { id:"tracking",     Icon:Activity,      label:"Lead Tracking"         },
-  { id:"email",        Icon:Mail,          label:"Email"                 },
-  { id:"billing",      Icon:CreditCard,    label:"Billing"               },
-  { id:"advanced",     Icon:Settings,      label:"Avançado"              },
-  { id:"audit",        Icon:ClipboardList, label:"Audit Log"             },
-  { id:"support",      Icon:Headphones,    label:"Suporte"               },
+  { id:"account",      Icon:User,      label:"Minha Conta"           },
+  { id:"geral",        Icon:Building2, label:"Geral"                 },
+  { id:"team",         Icon:Users,     label:"Equipe"                },
+  { id:"customfields", Icon:Database,  label:"Campos Personalizados" },
+  { id:"tracking",     Icon:Activity,  label:"Lead Tracking"         },
 ];
 
 const FUNNEL_OPTIONS = [
@@ -209,17 +178,7 @@ const slugifyApiId = (label) =>
     .replace(/^_+|_+$/g,"")
     .slice(0, 60);
 
-const PERMISSIONS = { campaigns:"Campanhas", leads:"Leads", integrations:"Integrações", analytics:"Analytics", billing:"Billing", settings:"Configurações" };
-const ROLE_DEFAULTS = {
-  admin:   { campaigns:["view","create","edit","delete","manage"], leads:["view","create","edit","delete","manage"], integrations:["view","create","edit","delete","manage"], analytics:["view","manage"], billing:["view","manage"], settings:["view","manage"] },
-  manager: { campaigns:["view","create","edit"], leads:["view","create","edit","delete"], integrations:["view","create"], analytics:["view"], billing:["view"], settings:["view"] },
-  user:    { campaigns:["view"], leads:["view","create","edit"], integrations:["view"], analytics:["view"], billing:[], settings:[] },
-};
-const SCOPE_OPTIONS = ["read:leads","write:leads","read:campaigns","write:campaigns","read:analytics","webhooks","manage:settings"];
-
 /* ───── UTILS ───── */
-const pct = (u,l) => Math.min(Math.round((u/l)*100),100);
-const fmt = n => n>=1000?(n/1000).toFixed(1)+"k":String(n);
 const avatarBg = s => { const p=[T.blue,T.teal,T.green,T.purple,"#E91E8C",T.orange]; let h=0; for(const c of s)h=(h*31+c.charCodeAt(0))%p.length; return p[h]; };
 
 /* ───── TOAST ───── */
@@ -288,150 +247,146 @@ const Toggle = ({checked,onChange,label}) => (
   </label>
 );
 
-const UsageBar = ({data}) => {
-  const p=pct(data.used,data.limit);
-  const barColor=p>=95?T.red:p>=80?T.orange:data.color;
-  const IconComp = data.Icon;
+/* ═══════════════════════════════════════════════════════════
+   TAB SECTIONS
+═══════════════════════════════════════════════════════════ */
+const ACCOUNT_PW_MIN = 8;
+
+const AccountTab = ({toast}) => {
+  const [loading,setLoading]   = useState(true);
+  const [email,setEmail]       = useState("");
+  const [name,setName]         = useState("");
+  const [savingProfile,setSavingProfile] = useState(false);
+  const [pw,setPw]             = useState({ next:"", confirm:"" });
+  const [savingPw,setSavingPw] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!alive) return;
+      if (!error && data?.user) {
+        setEmail(data.user.email || "");
+        const m = data.user.user_metadata || {};
+        setName(m.name || m.full_name || "");
+      }
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    const { error } = await supabase.auth.updateUser({ data: { name: name.trim() } });
+    setSavingProfile(false);
+    if (error) toast(`Erro: ${error.message}`, "error");
+    else toast("Perfil atualizado!", "success");
+  };
+
+  const changePassword = async () => {
+    if (pw.next.length < ACCOUNT_PW_MIN) return toast(`Senha precisa de ao menos ${ACCOUNT_PW_MIN} caracteres`, "error");
+    if (pw.next !== pw.confirm) return toast("As senhas não coincidem", "error");
+    setSavingPw(true);
+    const { error } = await supabase.auth.updateUser({ password: pw.next });
+    setSavingPw(false);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    setPw({ next:"", confirm:"" });
+    toast("Senha alterada com sucesso!", "success");
+  };
+
+  if (loading) {
+    return (
+      <Card style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,padding:30}}>
+        <Loader2 size={18} color={T.teal} style={{animation:"spin 1s linear infinite"}}/>
+        <span style={{fontSize:13,color:T.muted,fontFamily:T.font}}>Carregando sua conta...</span>
+      </Card>
+    );
+  }
+
   return (
-    <div style={{padding:"14px 0",borderBottom:`1px solid ${T.border}`}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <IconComp size={18} color={data.color}/>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <SectionTitle sub="Seus dados de acesso à plataforma">Dados Pessoais</SectionTitle>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:16}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:avatarBg(name||email||"?"),display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:18,fontWeight:700,fontFamily:T.head,flexShrink:0}}>
+            {(name||email||"?").split(" ").map(w=>w[0]).join("").substring(0,2).toUpperCase()}
+          </div>
           <div>
-            <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{data.label}</div>
-            <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>{fmt(data.used)} / {fmt(data.limit)}</div>
+            <div style={{fontSize:15,fontWeight:700,color:T.ink,fontFamily:T.head}}>{name || "—"}</div>
+            <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>{email}</div>
           </div>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {p>=80&&<Badge color={p>=95?T.red:T.orange} bg={p>=95?"#fee2e2":"#fef3c7"}>{p>=95?"Crítico":"Atenção"}</Badge>}
-          <span style={{fontSize:13,fontWeight:700,color:barColor,fontFamily:T.font}}>{p}%</span>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Input label="Nome" value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome"/>
+          <Input label="Email" value={email} disabled hint="O email de login não pode ser alterado por aqui."/>
         </div>
-      </div>
-      <div style={{height:5,background:T.border,borderRadius:3}}>
-        <div style={{height:"100%",width:`${p}%`,background:barColor,borderRadius:3,transition:"width 0.5s ease"}}/>
-      </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+          <Btn onClick={saveProfile} disabled={savingProfile} size="md" icon={savingProfile?<Loader2 size={12}/>:<Save size={12}/>}>{savingProfile?"Salvando...":"Salvar Perfil"}</Btn>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle sub={`Mínimo de ${ACCOUNT_PW_MIN} caracteres`}>Trocar Senha</SectionTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Input label="Nova Senha"     type="password" value={pw.next}    onChange={e=>setPw(p=>({...p,next:e.target.value}))}    placeholder="••••••••"/>
+          <Input label="Confirmar Senha" type="password" value={pw.confirm} onChange={e=>setPw(p=>({...p,confirm:e.target.value}))} placeholder="••••••••"/>
+        </div>
+        <div style={{display:"flex",justifyContent:"flex-end",marginTop:16}}>
+          <Btn onClick={changePassword} disabled={savingPw} size="md" icon={savingPw?<Loader2 size={12}/>:<Lock size={12}/>}>{savingPw?"Alterando...":"Alterar Senha"}</Btn>
+        </div>
+      </Card>
     </div>
   );
 };
 
-/* ═══════════════════════════════════════════════════════════
-   TAB SECTIONS
-═══════════════════════════════════════════════════════════ */
-const OnboardingCard = () => {
-  const navigate = useNavigate();
-  const saved = (() => { try { return JSON.parse(localStorage.getItem("vantari_onboarding") || "{}"); } catch { return {}; } })();
-  const phases = [
-    { key:"empresa",     label:"Conta e Identidade",    fields:["companyName","cnpj","segment","teamSize","timezone","currency","respName","respRole","respEmail"] },
-    { key:"equipe",      label:"Equipe e Acessos",       fields:["inviteEmail","inviteRole"] },
-    { key:"tecnico",     label:"Configuração Técnica",   fields:["sendDomain","senderEmail"] },
-    { key:"negocios",    label:"Regras de Negócio",      fields:["stage0","stage1","stage2","stage3","stage4"] },
-  ];
-  const total = phases.reduce((acc, p) => acc + p.fields.length, 0);
-  const done  = phases.reduce((acc, p) => acc + p.fields.filter(f => saved[f] && String(saved[f]).trim()).length, 0);
-  const pct = Math.round((done / total) * 100);
-  const isComplete = pct === 100;
-
-  return (
-    <Card style={{borderLeft:`4px solid ${isComplete ? T.green : T.teal}`,background: isComplete ? "#f0fdf8" : "#EEF9FC"}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-        <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-            {isComplete
-              ? <CheckCircle size={20} color={T.green}/>
-              : <Settings size={20} color={T.teal}/>
-            }
-            <span style={{fontFamily:T.head,fontWeight:700,fontSize:15,color:T.ink}}>
-              {isComplete ? "Onboarding concluído!" : "Configure sua conta"}
-            </span>
-            <span style={{background: isComplete ? T.green : T.teal,color:"#fff",borderRadius:20,padding:"2px 10px",fontSize:12,fontWeight:700}}>
-              {pct}%
-            </span>
-          </div>
-          <div style={{fontSize:13,color:T.muted,fontFamily:T.font,marginBottom:10}}>
-            {isComplete
-              ? "Todos os passos do onboarding foram concluídos."
-              : "Complete os passos iniciais para ativar todos os recursos da plataforma."}
-          </div>
-          <div style={{background:T.border,borderRadius:99,height:6,width:"100%",maxWidth:360}}>
-            <div style={{background: isComplete ? T.green : T.teal,borderRadius:99,height:6,width:`${pct}%`,transition:"width 0.4s"}}/>
-          </div>
-          <div style={{display:"flex",gap:16,marginTop:8}}>
-            {phases.map(p => {
-              const phaseDone = p.fields.filter(f => saved[f] && String(saved[f]).trim()).length;
-              const ok = phaseDone === p.fields.length;
-              return (
-                <span key={p.key} style={{fontSize:12,color: ok ? T.green : T.muted,fontFamily:T.font}}>
-                  {ok ? "+" : "·"} {p.label}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-        <button
-          onClick={() => navigate("/onboarding")}
-          style={{background:T.gradient,color:"#fff",border:"none",borderRadius:10,padding:"10px 20px",fontFamily:T.head,fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}
-        >
-          {isComplete ? "Ver resumo" : pct > 0 ? "Continuar configuração" : "Iniciar configuração"}
-        </button>
-      </div>
-    </Card>
-  );
+const GERAL_KEY = "vantari_geral";
+const GERAL_DEFAULTS = {
+  companyName: "Vantari",
+  timezone:    "America/Sao_Paulo",
+  dateFormat:  "DD/MM/YYYY",
+  senderName:  "Vantari",
+  senderEmail: "contato@vantari.com.br",
 };
 
-const WorkspaceTab = ({toast}) => {
-  const [f,setF] = useState({companyName:"Empresa LTDA",domain:"empresa.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491"});
+const GeralTab = ({toast}) => {
+  const [f,setF] = useState(GERAL_DEFAULTS);
   const [saving,setSaving] = useState(false);
-  const fileRef = useRef();
   const u=(k,v)=>setF(x=>({...x,[k]:v}));
-  const save=async()=>{setSaving(true);await new Promise(r=>setTimeout(r,900));setSaving(false);toast("Configurações salvas!","success");};
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GERAL_KEY) || "{}");
+      setF({ ...GERAL_DEFAULTS, ...saved });
+    } catch { /* mantém defaults */ }
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try { localStorage.setItem(GERAL_KEY, JSON.stringify(f)); } catch { /* ignore */ }
+    setSaving(false);
+    toast("Configurações salvas!", "success");
+  };
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <OnboardingCard />
       <Card>
-        <SectionTitle sub="Nome, logo e domínio customizado">Identidade da Empresa</SectionTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
-          <Input label="Nome da Empresa"    value={f.companyName} onChange={e=>u("companyName",e.target.value)}/>
-          <Input label="Domínio Customizado" value={f.domain}     onChange={e=>u("domain",e.target.value)} hint="Ex: crm.suaempresa.com.br"/>
-        </div>
-        <FL>Logotipo</FL>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <div style={{width:56,height:56,borderRadius:12,background:T.faint,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Building2 size={22} color={T.muted}/></div>
-          <div>
-            <Btn variant="outline" size="sm" onClick={()=>fileRef.current?.click()} icon={<FolderOpen size={12}/>}>Escolher arquivo</Btn>
-            <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}/>
-            <div style={{fontSize:11,color:T.muted,marginTop:4,fontFamily:T.font}}>PNG, SVG ou JPG — máx. 2 MB</div>
-          </div>
-        </div>
+        <SectionTitle sub="Identificação usada nos relatórios e comunicações">Empresa</SectionTitle>
+        <Input label="Nome da Empresa" value={f.companyName} onChange={e=>u("companyName",e.target.value)}/>
       </Card>
 
       <Card>
-        <SectionTitle sub="Cor primária da plataforma">Branding</SectionTitle>
-        <div style={{display:"grid",gridTemplateColumns:"200px 1fr",gap:16,alignItems:"end"}}>
-          <div>
-            <FL>Cor Primária</FL>
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              <input type="color" value={f.primaryColor} onChange={e=>u("primaryColor",e.target.value)} style={{width:38,height:38,borderRadius:8,border:`1.5px solid ${T.border}`,cursor:"pointer",padding:2}}/>
-              <Input value={f.primaryColor} onChange={e=>u("primaryColor",e.target.value)}/>
-            </div>
-          </div>
-          <div>
-            <FL>Predefinidos</FL>
-            <div style={{display:"flex",gap:6}}>
-              {["#0D7491","#14A273","#7C5CFF","#E91E8C","#F59E0B","#FF6B5E"].map(c=>(
-                <div key={c} onClick={()=>u("primaryColor",c)} style={{width:30,height:30,borderRadius:8,background:c,cursor:"pointer",border:`3px solid ${f.primaryColor===c?T.text:"transparent"}`,transition:"border 0.15s"}}/>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle sub="Fuso horário e formatação regional">Região e Idioma</SectionTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-          <Sel label="Idioma"          value={f.language}   onChange={e=>u("language",e.target.value)}   options={[{value:"pt-BR",label:"Português (Brasil)"},{value:"en-US",label:"English (US)"},{value:"es-ES",label:"Español"}]}/>
+        <SectionTitle sub="Fuso horário e formato de data usados na interface">Região</SectionTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
           <Sel label="Fuso Horário"    value={f.timezone}   onChange={e=>u("timezone",e.target.value)}   options={[{value:"America/Sao_Paulo",label:"Brasília (UTC-3)"},{value:"America/Manaus",label:"Manaus (UTC-4)"},{value:"America/Recife",label:"Recife (UTC-3)"}]}/>
-          <Sel label="Formato de Data" value={f.dateFormat} onChange={e=>u("dateFormat",e.target.value)} options={[{value:"DD/MM/YYYY",label:"DD/MM/AAAA"},{value:"MM/DD/YYYY",label:"MM/DD/AAAA"},{value:"YYYY-MM-DD",label:"AAAA-MM-DD"}]}/>
+          <Sel label="Formato de Data" value={f.dateFormat} onChange={e=>u("dateFormat",e.target.value)} options={[{value:"DD/MM/YYYY",label:"DD/MM/AAAA"},{value:"YYYY-MM-DD",label:"AAAA-MM-DD"}]}/>
+        </div>
+      </Card>
+
+      <Card>
+        <SectionTitle sub="Quem aparece como remetente nos emails enviados">Remetente de Email</SectionTitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+          <Input label="Nome do Remetente" value={f.senderName}  onChange={e=>u("senderName",e.target.value)}/>
+          <Input label="Email Remetente"   value={f.senderEmail} onChange={e=>u("senderEmail",e.target.value)}/>
         </div>
       </Card>
 
@@ -445,8 +400,7 @@ const WorkspaceTab = ({toast}) => {
 const TeamTab = ({toast}) => {
   const [members,setMembers] = useState([]);
   const [loading,setLoading] = useState(true);
-  const [invEmail,setInvEmail] = useState(""); const [invRole,setInvRole] = useState("user"); const [inviting,setInviting] = useState(false);
-  const [permTarget,setPermTarget] = useState(null); const [perms,setPerms] = useState({});
+  const [invEmail,setInvEmail] = useState(""); const [invRole,setInvRole] = useState("member"); const [inviting,setInviting] = useState(false);
 
   const fetchMembers = useCallback(async () => {
     setLoading(true);
@@ -480,21 +434,18 @@ const TeamTab = ({toast}) => {
     else { toast("Membro removido","success"); fetchMembers(); }
   };
 
-  const openPerms=m=>{setPerms(ROLE_DEFAULTS[m.role]||{});setPermTarget(m);};
-  const toggleAction=(res,action)=>setPerms(p=>{const cur=p[res]||[];return{...p,[res]:cur.includes(action)?cur.filter(a=>a!==action):[...cur,action]};});
-
   const statusS={active:{color:T.green,bg:`${T.green}14`},invited:{color:T.amber,bg:`${T.amber}18`},suspended:{color:T.coral,bg:`${T.coral}14`}};
-  const roleC={admin:T.violet,manager:T.teal,user:T.muted};
-  const roleL={admin:"Admin",manager:"Gerente",user:"Usuário"};
+  const roleC={admin:T.violet,manager:T.teal,member:T.muted,user:T.muted};
+  const roleL={admin:"Admin",manager:"Gerente",member:"Membro",user:"Membro"};
   const statusL={active:"Ativo",invited:"Convidado",suspended:"Suspenso"};
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Card>
-        <SectionTitle sub="O novo usuário receberá email de onboarding automático">Convidar Membro</SectionTitle>
+        <SectionTitle sub="Admin tem acesso total; Membro acessa os módulos do dia a dia">Convidar Membro</SectionTitle>
         <div style={{display:"flex",gap:10,alignItems:"flex-end"}}>
-          <div style={{flex:1}}><Input label="Email" value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="usuario@empresa.com.br"/></div>
-          <Sel label="Papel" value={invRole} onChange={e=>setInvRole(e.target.value)} options={[{value:"admin",label:"Admin"},{value:"manager",label:"Gerente"},{value:"user",label:"Usuário"}]}/>
+          <div style={{flex:1}}><Input label="Email" value={invEmail} onChange={e=>setInvEmail(e.target.value)} placeholder="usuario@vantari.com.br"/></div>
+          <Sel label="Papel" value={invRole} onChange={e=>setInvRole(e.target.value)} options={[{value:"admin",label:"Admin"},{value:"member",label:"Membro"}]}/>
           <Btn onClick={invite} disabled={inviting} icon={inviting?<Loader2 size={12}/>:<Send size={12}/>} size="md">{inviting?"Enviando...":"Convidar"}</Btn>
         </div>
       </Card>
@@ -533,7 +484,6 @@ const TeamTab = ({toast}) => {
                 <td style={{padding:"13px 18px"}}><Badge color={(statusS[m.status]||statusS.active).color} bg={(statusS[m.status]||statusS.active).bg}>{statusL[m.status]||m.status}</Badge></td>
                 <td style={{padding:"13px 18px"}}>
                   <div style={{display:"flex",gap:6}}>
-                    <Btn variant="outline" size="xs" onClick={()=>openPerms(m)}>Permissões</Btn>
                     {m.role!=="admin"&&<Btn variant="danger" size="xs" onClick={()=>removeMember(m.id)}>Remover</Btn>}
                   </div>
                 </td>
@@ -542,358 +492,6 @@ const TeamTab = ({toast}) => {
           </tbody>
         </table>
         )}
-      </Card>
-
-      {permTarget&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000}}>
-          <div style={{background:"#fff",borderRadius:16,width:540,maxHeight:"78vh",overflow:"auto",boxShadow:"0 20px 60px rgba(0,0,0,0.2)"}}>
-            <div style={{padding:"18px 22px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>Permissões — {permTarget.name}</div>
-                <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Controle granular por recurso</div>
-              </div>
-              <button onClick={()=>setPermTarget(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><Plus size={16} style={{transform:"rotate(45deg)"}}/></button>
-            </div>
-            <div style={{padding:22}}>
-              {Object.entries(PERMISSIONS).map(([res,label])=>(
-                <div key={res} style={{marginBottom:12,padding:12,background:T.faint,borderRadius:10}}>
-                  <div style={{fontSize:12,fontWeight:700,color:T.text,fontFamily:T.font,marginBottom:8}}>{label}</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {["view","create","edit","delete","manage"].map(action=>{
-                      const has=(perms[res]||[]).includes(action);
-                      return <button key={action} onClick={()=>toggleAction(res,action)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.teal:T.border}`,background:has?T.teal+"15":"#fff",color:has?T.teal:T.muted,fontFamily:T.font,transition:"all 0.15s"}}>{action}</button>;
-                    })}
-                  </div>
-                </div>
-              ))}
-              <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:8}}>
-                <Btn variant="outline" onClick={()=>setPermTarget(null)}>Cancelar</Btn>
-                <Btn onClick={()=>{setPermTarget(null);toast("Permissões atualizadas!","success");}}>Salvar</Btn>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const EmailTab = ({toast}) => {
-  const [useSmtp,setUseSmtp]=useState(false);
-  const [smtp,setSmtp]=useState({host:"",port:"587",user:"",pass:"",fromName:"Empresa LTDA",fromEmail:"noreply@empresa.com.br"});
-  const [bounce,setBounce]=useState(true);
-  const [unsub,setUnsub]=useState("https://empresa.com.br/unsubscribe");
-  const [testing,setTesting]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const su=(k,v)=>setSmtp(s=>({...s,[k]:v}));
-
-  const dnsRecords=[
-    {label:"SPF Record",  value:"v=spf1 include:_spf.vantari.com.br ~all",               status:"verified"},
-    {label:"DKIM Record", value:"vantari._domainkey.empresa.com.br",                     status:"verified"},
-    {label:"DMARC Record",value:"v=DMARC1; p=quarantine; rua=mailto:dmarc@empresa.com.br",status:"pending"},
-  ];
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Card>
-        <SectionTitle sub="SMTP customizado ou padrão Supabase">Servidor de Email</SectionTitle>
-        <Toggle checked={useSmtp} onChange={setUseSmtp} label="Usar SMTP próprio"/>
-        {useSmtp&&(
-          <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-            <Input label="Host SMTP" value={smtp.host} onChange={e=>su("host",e.target.value)} placeholder="smtp.gmail.com"/>
-            <Input label="Porta"     value={smtp.port} onChange={e=>su("port",e.target.value)}/>
-            <Input label="Usuário"   value={smtp.user} onChange={e=>su("user",e.target.value)} placeholder="usuario@empresa.com.br"/>
-            <Input label="Senha"     value={smtp.pass} onChange={e=>su("pass",e.target.value)} type="password"/>
-            <Btn variant="outline" onClick={async()=>{setTesting(true);await new Promise(r=>setTimeout(r,1100));setTesting(false);toast("SMTP conectado!","success");}} disabled={testing} icon={testing?<Loader2 size={12}/>:<Plug size={12}/>}>{testing?"Testando...":"Testar Conexão"}</Btn>
-          </div>
-        )}
-      </Card>
-
-      <Card>
-        <SectionTitle sub="Configuração SPF, DKIM e DMARC">Domínio de Envio Verificado</SectionTitle>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-          <Input label="Nome do Remetente" value={smtp.fromName}  onChange={e=>su("fromName",e.target.value)}/>
-          <Input label="Email Remetente"   value={smtp.fromEmail} onChange={e=>su("fromEmail",e.target.value)}/>
-        </div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {dnsRecords.map(r=>(
-            <div key={r.label} style={{padding:12,background:T.faint,borderRadius:8,border:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}>
-              <div style={{flex:1}}>
-                <div style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font,marginBottom:2}}>{r.label}</div>
-                <code style={{fontSize:11,color:T.text,fontFamily:"monospace",wordBreak:"break-all"}}>{r.value}</code>
-              </div>
-              <Badge color={r.status==="verified"?T.green:T.amber} bg={r.status==="verified"?`${T.green}14`:`${T.amber}18`}>{r.status==="verified"?"Verificado":"Pendente"}</Badge>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle>Configurações Avançadas</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <Toggle checked={bounce} onChange={setBounce} label="Bounce handling automático — remove endereços inválidos"/>
-          <Input label="URL de Descadastro" value={unsub} onChange={e=>setUnsub(e.target.value)} hint="Página de unsubscribe personalizada exibida nos emails"/>
-        </div>
-      </Card>
-
-      <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={async()=>{setSaving(true);await new Promise(r=>setTimeout(r,800));setSaving(false);toast("Email Config salvo!","success");}} disabled={saving} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Email Config"}</Btn>
-      </div>
-    </div>
-  );
-};
-
-const BillingTab = ({toast}) => {
-  const plan={name:"Growth",price:"R$ 497/mês",nextBilling:"01/06/2025",card:"**** **** **** 4242"};
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-          <div>
-            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.font,marginBottom:4}}>Plano Atual</div>
-            <div style={{fontSize:26,fontWeight:800,color:T.text,fontFamily:T.font,letterSpacing:"-0.03em"}}>{plan.name}</div>
-            <div style={{fontSize:15,color:T.muted,fontFamily:T.font}}>{plan.price}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>Próxima cobrança</div>
-            <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>{plan.nextBilling}</div>
-            <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:2}}>{plan.card}</div>
-          </div>
-        </div>
-        <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="md" icon={<ArrowUp size={12}/>}>Fazer Upgrade</Btn>
-          <Btn variant="outline"   size="md" icon={<CreditCard size={12}/>}>Atualizar Cartão</Btn>
-          <Btn variant="danger"    size="sm">Cancelar Plano</Btn>
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle sub="Maio 2025 · Atualizado em tempo real">Uso do Período</SectionTitle>
-        {Object.values(MOCK_USAGE).map((d,i)=><UsageBar key={i} data={d}/>)}
-      </Card>
-
-      <Card style={{padding:0,overflow:"hidden"}}>
-        <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>Histórico de Faturas</div>
-          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Todas</Btn>
-        </div>
-        <table style={{width:"100%",borderCollapse:"collapse"}}>
-          <thead><tr style={{background:T.faint}}>
-            {["Período","Valor","Status","Data",""].map((h,i)=>(
-              <th key={i} style={{padding:"9px 18px",textAlign:"left",fontSize:11,fontWeight:700,color:T.muted,letterSpacing:"0.06em",textTransform:"uppercase",fontFamily:T.font}}>{h}</th>
-            ))}
-          </tr></thead>
-          <tbody>
-            {MOCK_INVOICES.map(inv=>(
-              <tr key={inv.id} style={{borderTop:`1px solid ${T.border}`}}>
-                <td style={{padding:"13px 18px",fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{inv.period}</td>
-                <td style={{padding:"13px 18px",fontSize:13,color:T.text,fontFamily:T.font}}>{inv.amount}</td>
-                <td style={{padding:"13px 18px"}}><Badge color={T.green} bg="#ecfdf5">Pago</Badge></td>
-                <td style={{padding:"13px 18px",fontSize:13,color:T.muted,fontFamily:T.font}}>{inv.date}</td>
-                <td style={{padding:"13px 18px"}}><Btn variant="outline" size="xs" onClick={()=>toast("Fatura baixada!","success")} icon={<FileText size={10}/>}>PDF</Btn></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Card>
-    </div>
-  );
-};
-
-const AdvancedTab = ({toast}) => {
-  const [keys,setKeys]=useState(MOCK_KEYS);
-  const [hooks,setHooks]=useState(MOCK_WEBHOOKS);
-  const [nk,setNk]=useState({name:"",scopes:[]});
-  const [createdKey,setCreatedKey]=useState(null);
-  const [creating,setCreating]=useState(false);
-  const [retention,setRetention]=useState("365");
-  const [lgpd,setLgpd]=useState(true);
-  const [flags,setFlags]=useState({ai_assistant:true,beta_scoring:false,dark_mode:false,bulk_import:true});
-
-  const createKey=async()=>{
-    if(!nk.name)return toast("Nome obrigatório","error");
-    setCreating(true);await new Promise(r=>setTimeout(r,700));
-    const full="vnt_live_"+Math.random().toString(36).substring(2,34);
-    setCreatedKey(full);
-    setKeys(k=>[...k,{id:"k"+Date.now(),name:nk.name,prefix:"vnt_live",scopes:nk.scopes,lastUsed:"Nunca",created:new Date().toLocaleDateString("pt-BR")}]);
-    setNk({name:"",scopes:[]});setCreating(false);
-  };
-
-  const tScope=s=>setNk(k=>({...k,scopes:k.scopes.includes(s)?k.scopes.filter(x=>x!==s):[...k.scopes,s]}));
-  const flagLabels={ai_assistant:"Assistente IA (beta)",beta_scoring:"Novo Scoring Engine",dark_mode:"Dark Mode",bulk_import:"Importação em Massa"};
-
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      {/* API Keys */}
-      <Card>
-        <SectionTitle sub="Autorize integrações externas com escopos granulares">Chaves de API</SectionTitle>
-        <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"flex-end"}}>
-          <div style={{flex:1}}><Input label="Nome da Chave" value={nk.name} onChange={e=>setNk(k=>({...k,name:e.target.value}))} placeholder="Ex: Integração HubSpot"/></div>
-          <Btn onClick={createKey} disabled={creating} size="md" icon={creating?<Loader2 size={12}/>:<Key size={12}/>}>{creating?"Gerando...":"Nova Chave"}</Btn>
-        </div>
-        <FL>Escopos</FL>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}}>
-          {SCOPE_OPTIONS.map(s=>{const has=nk.scopes.includes(s);return <button key={s} onClick={()=>tScope(s)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.teal:T.border}`,background:has?T.teal+"15":"#fff",color:has?T.teal:T.muted,fontFamily:T.font}}>{s}</button>;})}
-        </div>
-        {createdKey&&(
-          <div style={{padding:14,background:"#ecfdf5",border:`1px solid #6ee7b7`,borderRadius:10,marginBottom:12}}>
-            <div style={{fontSize:12,fontWeight:700,color:T.green,marginBottom:6,fontFamily:T.font,display:"flex",alignItems:"center",gap:6}}><Key size={12}/>Copie agora — não será exibida novamente</div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <code style={{fontSize:11,fontFamily:"monospace",color:T.text,flex:1,wordBreak:"break-all"}}>{createdKey}</code>
-              <Btn variant="success" size="xs" onClick={()=>{navigator.clipboard?.writeText(createdKey);toast("Copiado!","success");setCreatedKey(null);}}>Copiar</Btn>
-            </div>
-          </div>
-        )}
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {keys.map(k=>(
-            <div key={k.id} style={{padding:14,background:T.faint,borderRadius:10,border:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div>
-                <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{k.name}</div>
-                <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{k.prefix}_••••••••••••••••</code>
-                <div style={{display:"flex",gap:4,marginTop:4}}>{k.scopes.map(s=><Badge key={s} color={T.muted}>{s}</Badge>)}</div>
-              </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-                <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>Usado: {k.lastUsed}</div>
-                <Btn variant="danger" size="xs" onClick={()=>{setKeys(ks=>ks.filter(x=>x.id!==k.id));toast("Chave revogada","success");}}>Revogar</Btn>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Webhooks */}
-      <Card>
-        <SectionTitle sub="Endpoints para eventos em tempo real">Webhooks</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:10}}>
-          {hooks.map(w=>(
-            <div key={w.id} style={{padding:14,background:T.faint,borderRadius:10,border:`1px solid ${T.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                <div>
-                  <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font,display:"flex",alignItems:"center",gap:8}}>
-                    {w.name}{w.failCount>0&&<Badge color={T.red} bg="#fee2e2">{w.failCount} falhas</Badge>}
-                  </div>
-                  <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{w.url}</code>
-                  <div style={{display:"flex",gap:4,marginTop:6}}>{w.events.map(e=><Badge key={e} color={T.teal}>{e}</Badge>)}</div>
-                </div>
-                <Toggle checked={w.enabled} onChange={()=>setHooks(h=>h.map(x=>x.id===w.id?{...x,enabled:!x.enabled}:x))}/>
-              </div>
-              <div style={{fontSize:11,color:T.muted,marginTop:6,fontFamily:T.font}}>Último disparo: {w.lastTriggered}</div>
-            </div>
-          ))}
-          <Btn variant="outline" size="sm" icon={<Plus size={12}/>}>Adicionar Webhook</Btn>
-        </div>
-      </Card>
-
-      {/* LGPD */}
-      <Card>
-        <SectionTitle sub="Conformidade com a Lei Geral de Proteção de Dados">LGPD & Retenção de Dados</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <Toggle checked={lgpd} onChange={setLgpd} label="Modo LGPD ativo — anonimiza dados ao excluir"/>
-          <Sel label="Retenção de Dados" value={retention} onChange={e=>setRetention(e.target.value)} options={[{value:"90",label:"90 dias"},{value:"180",label:"180 dias"},{value:"365",label:"1 ano"},{value:"730",label:"2 anos"},{value:"never",label:"Indefinido"}]}/>
-          <div style={{display:"flex",gap:8}}>
-            <Btn variant="outline" size="sm" icon={<Package size={12}/>} onClick={()=>toast("Backup iniciado!","success")}>Exportar Backup</Btn>
-            <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={()=>toast("Restauração iniciada","success")}>Restaurar Config</Btn>
-          </div>
-        </div>
-      </Card>
-
-      {/* Feature Flags */}
-      <Card>
-        <SectionTitle sub="Funcionalidades em beta">Feature Flags</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:13}}>
-          {Object.entries(flags).map(([k,v])=><Toggle key={k} checked={v} onChange={val=>setFlags(f=>({...f,[k]:val}))} label={flagLabels[k]}/>)}
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const AuditTab = () => {
-  const [filter,setFilter]=useState("all");
-  const actionColor={updated:T.teal,created:T.green,deleted:T.coral,invited:T.amber,revoked:T.coral};
-  const filterOptions=[{id:"all",label:"Todos"},{id:"created",label:"Criou"},{id:"updated",label:"Atualizou"},{id:"deleted",label:"Deletou"},{id:"invited",label:"Convidou"}];
-  const filtered=filter==="all"?MOCK_AUDIT:MOCK_AUDIT.filter(a=>a.action===filter);
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <Card>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-          <SectionTitle sub="Registro completo de ações no workspace">Activity Log</SectionTitle>
-          <div style={{display:"flex",gap:5}}>
-            {filterOptions.map(fo=>(
-              <button key={fo.id} onClick={()=>setFilter(fo.id)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,border:`1.5px solid ${filter===fo.id?T.teal:T.border}`,background:filter===fo.id?T.teal:"#fff",color:filter===fo.id?"#fff":T.muted,transition:"all 0.15s"}}>{fo.label}</button>
-            ))}
-          </div>
-        </div>
-        {filtered.map((log,i)=>(
-          <div key={log.id} style={{display:"flex",gap:12,padding:"14px 0",borderBottom:i<filtered.length-1?`1px solid ${T.border}`:"none",alignItems:"flex-start"}}>
-            <div style={{width:34,height:34,borderRadius:10,background:T.faint,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{log.icon}</div>
-            <div style={{flex:1}}>
-              <div style={{fontSize:13,color:T.text,fontFamily:T.font}}>
-                <strong>{log.user}</strong>{" "}<span style={{color:actionColor[log.action]||T.muted,fontWeight:600}}>{log.action}</span>{" "}{log.detail}
-              </div>
-              <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>{log.resource} · {log.time} atrás</div>
-            </div>
-          </div>
-        ))}
-        <div style={{marginTop:14,textAlign:"center"}}>
-          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Logs CSV</Btn>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-const SupportTab = ({toast}) => {
-  const [ticket,setTicket]=useState({subject:"",body:"",priority:"normal"});
-  const [submitting,setSubmitting]=useState(false);
-  const changelog=[
-    {version:"v2.4.0",date:"Mai 2025",desc:"AI Marketing Assistant com geração automática de copy"},
-    {version:"v2.3.0",date:"Abr 2025",desc:"Lead Scoring com modelo preditivo de machine learning"},
-    {version:"v2.2.0",date:"Mar 2025",desc:"Integrations Hub com 40+ conectores nativos"},
-    {version:"v2.1.0",date:"Fev 2025",desc:"Analytics Dashboard com relatórios customizados"},
-    {version:"v2.0.0",date:"Jan 2025",desc:"Redesign completo da plataforma — Vantari 2.0"},
-  ];
-  return (
-    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
-        {[{Icon:BookOpen,title:"Documentação",desc:"Guides e tutoriais completos",action:"Acessar Docs"},{Icon:Play,title:"Vídeo Tutoriais",desc:"Aprenda no YouTube",action:"Ver Vídeos"},{Icon:MessageSquare,title:"Comunidade",desc:"Tire dúvidas com outros usuários",action:"Acessar"}].map(r=>(
-          <Card key={r.title} style={{textAlign:"center",cursor:"pointer"}}>
-            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><r.Icon size={28} color={T.teal}/></div>
-            <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font}}>{r.title}</div>
-            <div style={{fontSize:12,color:T.muted,fontFamily:T.font,margin:"4px 0 12px"}}>{r.desc}</div>
-            <Btn variant="outline" size="sm">{r.action}</Btn>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <SectionTitle sub="Nossa equipe responde em até 24 horas úteis">Abrir Ticket de Suporte</SectionTitle>
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12}}>
-            <Input label="Assunto" value={ticket.subject} onChange={e=>setTicket(t=>({...t,subject:e.target.value}))} placeholder="Descreva o problema brevemente"/>
-            <Sel label="Prioridade" value={ticket.priority} onChange={e=>setTicket(t=>({...t,priority:e.target.value}))} options={[{value:"low",label:"Baixa"},{value:"normal",label:"Normal"},{value:"high",label:"Alta"}]}/>
-          </div>
-          <div>
-            <FL>Descrição</FL>
-            <textarea value={ticket.body} onChange={e=>setTicket(t=>({...t,body:e.target.value}))} rows={4} placeholder="Descreva em detalhes — inclua passos para reproduzir o problema..."
-              style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,fontFamily:T.font,resize:"vertical",outline:"none",boxSizing:"border-box"}}
-              onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
-          </div>
-          <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <Btn onClick={async()=>{if(!ticket.subject||!ticket.body)return toast("Preencha assunto e descrição","error");setSubmitting(true);await new Promise(r=>setTimeout(r,900));setTicket({subject:"",body:"",priority:"normal"});setSubmitting(false);toast("Ticket enviado! Resposta em até 24h.","success");}} disabled={submitting} size="md" icon={submitting?<Loader2 size={12}/>:<Send size={12}/>}>{submitting?"Enviando...":"Enviar Ticket"}</Btn>
-          </div>
-        </div>
-      </Card>
-
-      <Card>
-        <SectionTitle sub="Últimas atualizações da plataforma">Changelog</SectionTitle>
-        {changelog.map((c,i)=>(
-          <div key={c.version} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:i<changelog.length-1?`1px solid ${T.border}`:"none",alignItems:"center"}}>
-            <span style={{fontSize:11,fontWeight:700,color:"#fff",background:T.teal,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap",fontFamily:T.font}}>{c.version}</span>
-            <span style={{fontSize:13,color:T.text,fontFamily:T.font,flex:1}}>{c.desc}</span>
-            <span style={{fontSize:11,color:T.muted,fontFamily:T.font,whiteSpace:"nowrap"}}>{c.date}</span>
-          </div>
-        ))}
       </Card>
     </div>
   );
@@ -1447,7 +1045,7 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
 };
 
 export default function VantariSettingsAdmin() {
-  const [activeTab,setActiveTab] = useState("workspace");
+  const [activeTab,setActiveTab] = useState("account");
   const {toasts,push:toast} = useToast();
 
   return (
@@ -1526,15 +1124,11 @@ export default function VantariSettingsAdmin() {
       </div>
 
       <div style={{flex:1,overflowY:"auto",background:T.bg}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
-        {activeTab==="workspace"   &&<WorkspaceTab    toast={toast}/>}
+        {activeTab==="account"     &&<AccountTab      toast={toast}/>}
+        {activeTab==="geral"       &&<GeralTab        toast={toast}/>}
         {activeTab==="team"        &&<TeamTab         toast={toast}/>}
         {activeTab==="customfields"&&<CustomFieldsTab toast={toast}/>}
         {activeTab==="tracking"    &&<TrackingTab     toast={toast}/>}
-        {activeTab==="email"       &&<EmailTab        toast={toast}/>}
-        {activeTab==="billing"     &&<BillingTab      toast={toast}/>}
-        {activeTab==="advanced"    &&<AdvancedTab     toast={toast}/>}
-        {activeTab==="audit"       &&<AuditTab/>}
-        {activeTab==="support"     &&<SupportTab      toast={toast}/>}
       </div></div>
 
       <Toasts toasts={toasts}/>

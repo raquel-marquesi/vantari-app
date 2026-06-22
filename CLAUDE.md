@@ -39,7 +39,7 @@ src/
   vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions) + aba "Biblioteca" com 3 LPs (LibraryLPCard, LibraryView, MODULAR_BLOCKS, LP_PREVIEW_BODIES)
   vantari-ai-marketing.jsx         # /ai-marketing  ← leads reais via Supabase
   vantari-integrations-hub.jsx     # /integrations
-  vantari-settings-admin.jsx       # /settings      ← 8 abas: Workspace / Equipe / Campos Personalizados / Lead Tracking / Email / Billing / Avançado / Audit / Suporte
+  vantari-settings-admin.jsx       # /settings      ← 5 abas: Minha Conta (perfil + troca de senha via Supabase Auth) / Geral (empresa, região, remetente — persiste em localStorage) / Equipe / Campos Personalizados / Lead Tracking
   vantari-onboarding-wizard.jsx    # /onboarding    ← localStorage
   vantari-workflow-builder.jsx     # /workflow
   vantari-segments.jsx             # /segments      ← HeroKpiCard + sparklines + filtro "visitou página"

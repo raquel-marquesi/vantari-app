@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
@@ -9,7 +9,7 @@ import {
   Monitor, Tablet, Smartphone, Tag, Newspaper, FileText,
   CornerDownRight, Lightbulb, TrendingUp, MailOpen, Link2,
   AlertTriangle, XCircle, ArrowUp, ArrowDown, X,
-  Loader2, AlertCircle, Upload
+  Loader2, AlertCircle, Upload, Bold, Italic, Underline, Palette
 } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -284,19 +284,24 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
       </div>
     );
     case "text": return (
-      <div style={{padding:"24px 40px",textAlign:b.align||"left"}}>
-        {b.text?.split("\n").map((line,i)=>(
-          <p key={i} style={{margin:"0 0 10px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.7,color:T.ink}}>
-            {line.replace("{{lead.name}}",leadName)||"\u00a0"}
-          </p>
-        ))}
+      <div style={{padding:"20px 40px",textAlign:b.align||"left"}}>
+        {b.html
+          ? <div style={{fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.45,color:T.ink}}
+              dangerouslySetInnerHTML={{__html:(b.html||"").replace(/\{\{lead\.name\}\}/g,leadName)}}/>
+          : (b.text?.split("\n").map((line,i)=>(
+              <p key={i} style={{margin:"0 0 6px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.45,color:T.ink}}>
+                {line.replace("{{lead.name}}",leadName)||"\u00a0"}
+              </p>
+            )))}
       </div>
     );
     case "image": return (
-      <div style={{padding:"0 40px"}}>
-        <div style={{background:T.border2,borderRadius:8,height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600,gap:8}}>
-          {b.src?<img src={b.src} style={{width:"100%",borderRadius:8}} alt=""/>:<><Image size={20} color={T.muted} aria-hidden="true"/> Imagem</>}
-        </div>
+      <div style={{padding:"0 40px",textAlign:"center"}}>
+        {b.src
+          ? <img src={b.src} alt={b.caption||""} style={{width:b.width||"100%",maxWidth:"100%",height:"auto",borderRadius:8,display:"inline-block"}}/>
+          : <div style={{background:T.border2,borderRadius:8,height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600,gap:8}}>
+              <Image size={20} color={T.muted} aria-hidden="true"/> Imagem
+            </div>}
         {b.caption&&<p style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,textAlign:"center",marginTop:6}}>{b.caption}</p>}
       </div>
     );
@@ -329,6 +334,110 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
 };
 
 /* ═══════════════════════════════════════════════════
+   RICH TEXT EDITOR (sem dependência — contentEditable)
+═══════════════════════════════════════════════════ */
+const RT_COLORS = ["#0E1A24","#0D7491","#14A273","#F59E0B","#FF6B5E","#7C5CFF","#5A6B7A","#FFFFFF"];
+const RichTextEditor = ({ value, onChange }) => {
+  const ref = useRef(null);
+  const [showColors, setShowColors] = useState(false);
+  // semeia o HTML inicial só na montagem (RichTextEditor é remontado por key={block.id})
+  useEffect(() => { if (ref.current) ref.current.innerHTML = value || ""; }, []);
+  const exec = (cmd, val) => {
+    document.execCommand(cmd, false, val);
+    if (ref.current) onChange(ref.current.innerHTML);
+  };
+  const btn = (active=false) => ({
+    width:28,height:26,border:`1px solid ${T.border}`,borderRadius:6,background:T.white,
+    color:T.ink,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,
+  });
+  return (
+    <div>
+      <div style={{display:"flex",gap:4,marginBottom:6,position:"relative",flexWrap:"wrap"}}>
+        <button onMouseDown={e=>{e.preventDefault();exec("bold");}}      style={btn()} title="Negrito"><Bold size={13}/></button>
+        <button onMouseDown={e=>{e.preventDefault();exec("italic");}}    style={btn()} title="Itálico"><Italic size={13}/></button>
+        <button onMouseDown={e=>{e.preventDefault();exec("underline");}} style={btn()} title="Sublinhado"><Underline size={13}/></button>
+        <button onMouseDown={e=>{e.preventDefault();setShowColors(s=>!s);}} style={btn()} title="Cor do texto"><Palette size={13}/></button>
+        {showColors && (
+          <div style={{position:"absolute",top:30,left:90,zIndex:30,background:T.white,border:`1px solid ${T.border}`,borderRadius:8,padding:6,display:"flex",gap:5,boxShadow:"0 8px 24px -10px rgba(14,26,36,.25)"}}>
+            {RT_COLORS.map(c=>(
+              <div key={c} onMouseDown={e=>{e.preventDefault();exec("foreColor",c);setShowColors(false);}}
+                style={{width:18,height:18,borderRadius:"50%",background:c,cursor:"pointer",border:`1px solid ${T.border}`}}/>
+            ))}
+          </div>
+        )}
+      </div>
+      <div ref={ref} contentEditable suppressContentEditableWarning
+        onInput={e=>onChange(e.currentTarget.innerHTML)}
+        style={{minHeight:90,border:`1px solid ${T.border}`,borderRadius:7,padding:"8px 10px",fontFamily:T.font,fontSize:13,fontWeight:600,lineHeight:1.45,color:T.ink,outline:"none",background:T.white,overflowWrap:"anywhere"}}/>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
+   IMAGE UPLOAD (Supabase Storage: bucket email-assets)
+═══════════════════════════════════════════════════ */
+const ImageUploadField = ({ onUploaded }) => {
+  const inputRef = useRef(null);
+  const [busy, setBusy]   = useState(false);
+  const [error, setError] = useState(null);
+  const handleFile = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setError("Selecione um arquivo de imagem."); return; }
+    if (file.size > 5 * 1024 * 1024)     { setError("Máximo 5 MB."); return; }
+    setBusy(true); setError(null);
+    try {
+      const ext  = (file.name.split(".").pop() || "png").toLowerCase();
+      const path = `campaigns/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+      const { error: upErr } = await supabase.storage.from("email-assets").upload(path, file, { cacheControl:"31536000", upsert:false });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from("email-assets").getPublicUrl(path);
+      onUploaded(data.publicUrl);
+    } catch (e) {
+      setError(e.message?.includes("Bucket not found") ? "Bucket 'email-assets' não existe — rode a migration." : (e.message || "Falha no upload."));
+    }
+    setBusy(false);
+  };
+  return (
+    <div style={{marginBottom:10}}>
+      <input ref={inputRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleFile(e.target.files?.[0])}/>
+      <button onClick={()=>inputRef.current?.click()} disabled={busy}
+        style={{width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"9px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`1px dashed ${T.blue}`,borderRadius:8,background:T.blueL,color:T.blue,cursor:busy?"default":"pointer"}}>
+        {busy ? <><Loader2 size={13} style={{animation:"spin 0.7s linear infinite"}}/> Enviando...</> : <><Upload size={13}/> Enviar imagem do computador</>}
+      </button>
+      {error && <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.red,marginTop:5}}>{error}</div>}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════
+   BLOCKS → HTML (e-mail seguro, corpo de 600px)
+═══════════════════════════════════════════════════ */
+const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const blockToHtml = (block) => {
+  const b = block.content || {};
+  switch (block.type) {
+    case "header": return `<div style="background:linear-gradient(135deg,${T.blue},${T.teal});padding:32px 40px;text-align:center;">${b.logo?`<div style="font-family:'Sora',sans-serif;font-size:18px;font-weight:700;color:#fff;letter-spacing:0.1em;margin-bottom:${b.headline?"12px":"0"};">VANTARI</div>`:""}${b.headline?`<div style="font-family:'Sora',sans-serif;font-size:24px;font-weight:700;color:#fff;">${esc(b.headline)}</div>`:""}${b.subline?`<div style="font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:rgba(255,255,255,0.78);margin-top:6px;">${esc(b.subline)}</div>`:""}</div>`;
+    case "text": {
+      const align = b.align || "left";
+      const inner = b.html
+        ? b.html
+        : (b.text || "").split("\n").map(l => `<p style="margin:0 0 6px;">${esc(l) || "&nbsp;"}</p>`).join("");
+      return `<div style="padding:20px 40px;text-align:${align};font-family:Arial,sans-serif;font-size:14px;font-weight:600;line-height:1.45;color:#0E1A24;">${inner}</div>`;
+    }
+    case "image": return b.src
+      ? `<div style="padding:0 40px;text-align:center;"><img src="${esc(b.src)}" alt="${esc(b.caption)}" style="width:${b.width||"100%"};max-width:100%;height:auto;border-radius:8px;display:inline-block;"/>${b.caption?`<p style="font-family:Arial,sans-serif;font-size:11px;font-weight:600;color:#5A6B7A;text-align:center;margin:6px 0 0;">${esc(b.caption)}</p>`:""}</div>`
+      : "";
+    case "button": return `<div style="padding:20px 40px;text-align:${b.align||"center"};"><a href="${esc(b.url||"#")}" style="display:inline-block;padding:13px 30px;background:${b.color||T.blue};color:#ffffff;border-radius:8px;font-family:Arial,sans-serif;font-weight:700;font-size:14px;text-decoration:none;">${esc(b.text||"Clique aqui")}</a></div>`;
+    case "divider": return `<div style="padding:8px 40px;"><div style="height:1px;background:#E8EEF3;line-height:1px;font-size:0;">&nbsp;</div></div>`;
+    case "spacer":  return `<div style="height:${b.height||24}px;line-height:${b.height||24}px;font-size:0;">&nbsp;</div>`;
+    case "columns": return `<table width="100%" cellpadding="0" cellspacing="0" style="padding:16px 40px;"><tr><td valign="top" width="50%" style="padding-right:8px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#0E1A24;line-height:1.45;">${esc(b.col1||"")}</td><td valign="top" width="50%" style="padding-left:8px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;color:#0E1A24;line-height:1.45;">${esc(b.col2||"")}</td></tr></table>`;
+    case "footer": return `<div style="background:#F5F8FB;padding:20px 40px;text-align:center;border-top:1px solid #E8EEF3;"><p style="font-family:Arial,sans-serif;font-size:11px;font-weight:600;color:#5A6B7A;margin:0;">${esc(b.text||"© Vantari · Todos os direitos reservados")}</p></div>`;
+    default: return "";
+  }
+};
+const blocksToHtml = (blocks) => (blocks || []).map(blockToHtml).join("\n");
+
+/* ═══════════════════════════════════════════════════
    WYSIWYG EMAIL EDITOR
 ═══════════════════════════════════════════════════ */
 const BLOCK_PALETTE = [
@@ -344,8 +453,8 @@ const BLOCK_PALETTE = [
 
 const DEFAULT_BLOCK_CONTENT = {
   header:  { logo:true, headline:"Seu Título Aqui", subline:"Subtítulo opcional" },
-  text:    { text:"Escreva seu texto aqui. Use {{lead.name}} para personalizar.", align:"left" },
-  image:   { src:"", caption:"" },
+  text:    { text:"Escreva seu texto aqui. Use {{lead.name}} para personalizar.", html:"", align:"left" },
+  image:   { src:"", caption:"", width:"100%" },
   button:  { text:"Clique Aqui", url:"#", align:"center", color:T.blue },
   divider: {},
   spacer:  { height:24 },
@@ -374,7 +483,12 @@ const BlockEditor = ({ block, onChange }) => {
     case "text": return (
       <div>
         <label style={labelStyle}>Texto</label>
-        <textarea value={b.text||""} onChange={e=>upd("text",e.target.value)} rows={5} style={{...inputStyle,resize:"vertical",lineHeight:1.5}}/>
+        <RichTextEditor
+          key={block.id}
+          value={b.html || (b.text ? b.text.split("\n").map(l=>`<p style="margin:0 0 6px;">${l||"&nbsp;"}</p>`).join("") : "")}
+          onChange={(html)=>upd("html",html)}
+        />
+        <div style={{height:10}}/>
         <label style={labelStyle}>Alinhamento</label>
         <div style={{display:"flex",gap:4,marginBottom:10}}>
           {["left","center","right"].map(a=>(
@@ -407,10 +521,23 @@ const BlockEditor = ({ block, onChange }) => {
     );
     case "image": return (
       <div>
-        <label style={labelStyle}>URL da Imagem</label>
+        <ImageUploadField onUploaded={(url)=>upd("src",url)}/>
+        <label style={labelStyle}>ou cole uma URL</label>
         <input style={inputStyle} value={b.src||""} onChange={e=>upd("src",e.target.value)} placeholder="https://..."/>
+        <label style={labelStyle}>Largura</label>
+        <div style={{display:"flex",gap:4,marginBottom:10}}>
+          {[["100%","Cheia"],["75%","Média"],["50%","Pequena"]].map(([w,lbl])=>(
+            <button key={w} onClick={()=>upd("width",w)}
+              style={{flex:1,padding:"5px",fontFamily:T.font,fontSize:11,fontWeight:700,border:`1px solid ${(b.width||"100%")===w?T.blue:T.border}`,borderRadius:6,background:(b.width||"100%")===w?T.blueL:T.white,color:(b.width||"100%")===w?T.blue:T.muted,cursor:"pointer"}}>
+              {lbl}
+            </button>
+          ))}
+        </div>
         <label style={labelStyle}>Legenda</label>
         <input style={inputStyle} value={b.caption||""} onChange={e=>upd("caption",e.target.value)} placeholder="Opcional"/>
+        <div style={{fontFamily:T.font,fontSize:10,fontWeight:600,color:T.muted,background:T.bg,borderRadius:7,padding:"7px 10px",lineHeight:1.5}}>
+          O e-mail tem <b>600px</b> de largura. Exporte imagens com <b>1200px</b> (2× para telas retina), proporção livre — hero full-width fica bem em <b>2:1</b> (ex.: 1200×600). A imagem é limitada automaticamente à largura escolhida.
+        </div>
       </div>
     );
     case "spacer": return (
@@ -438,7 +565,7 @@ const BlockEditor = ({ block, onChange }) => {
 };
 
 const EmailEditor = ({ campaign, onSave, onClose }) => {
-  const [blocks,       setBlocks]      = useState(campaign?.emailBlocks||TEMPLATES[0].blocks.map(b=>({...b,id:`b${Date.now()}_${Math.random()}`})));
+  const [blocks,       setBlocks]      = useState((campaign?.emailBlocks?.length ? campaign.emailBlocks : TEMPLATES[0].blocks).map(b=>({...b,id:b.id||`b${Date.now()}_${Math.random()}`})));
   const [selectedId,   setSelectedId]  = useState(null);
   const [preview,      setPreview]     = useState("desktop");
   const [subjectLine,  setSubjectLine] = useState(campaign?.subject||"");
@@ -495,7 +622,7 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
             );
           })}
         </div>
-        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks})} variant="ink" size="md" icon={Save}>Salvar</Btn>
+        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks,htmlContent:blocksToHtml(blocks)})} variant="ink" size="md" icon={Save}>Salvar</Btn>
       </div>
 
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>
@@ -629,6 +756,10 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     timezone:   "America/Sao_Paulo",
     throttle:   "1000",
     type:       campaign?.type       ||"newsletter",
+    htmlContent:campaign?.htmlContent||"",
+    emailBlocks:campaign?.emailBlocks||[],
+    fromName:   campaign?.fromName   ||"Vantari",
+    fromEmail:  campaign?.fromEmail  ||"",
   });
   const upd = (k,v)=>setForm(p=>({...p,[k]:v}));
   const audienceCount = {"Todos os leads":6284,"Newsletter":3820,"Demo Solicitada":91,"Inativos 30d":840,"MQL + SQL":2460,"Alto Valor B2B":420,"Leads Quentes":1200}[form.audience]||0;
@@ -646,7 +777,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={onBack} variant="ghost" size="md">Cancelar</Btn>
-          <Btn onClick={onEdit} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
+          <Btn onClick={()=>onEdit(form)} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
           <Btn onClick={()=>onSave(form)} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
         </div>
       </div>
@@ -1918,7 +2049,7 @@ export default function VantariEmailMarketing() {
     try {
       const { data, error: err } = await supabase
         .from("campaigns")
-        .select(`id, name, subject, sender, html_content, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+        .select(`id, name, subject, sender, html_content, blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at,
                  campaign_sends(delivered, opened, clicked, bounced, unsubscribed)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
@@ -1936,6 +2067,7 @@ export default function VantariEmailMarketing() {
           subject:       c.subject || "",
           sender:        c.sender || "marketing@vantari.com.br",
           htmlContent:   c.html_content || "",
+          emailBlocks:   Array.isArray(c.blocks) ? c.blocks : [],
           fromName:      c.from_name  || "Vantari",
           fromEmail:     c.from_email || "onboarding@resend.dev",
           status:        c.status || "draft",
@@ -1971,7 +2103,8 @@ export default function VantariEmailMarketing() {
       name:           data.name,
       subject:        data.subject,
       sender:         data.sender,
-      html_content:   data.htmlContent || null,
+      html_content:   data.htmlContent ?? null,
+      blocks:         Array.isArray(data.emailBlocks) ? data.emailBlocks : [],
       from_name:      data.fromName  || "Vantari",
       from_email:     data.fromEmail || null,
       status:         data.status || "draft",
@@ -2102,7 +2235,7 @@ export default function VantariEmailMarketing() {
           ) : (
             <>
               {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete} onSend={handleSend}/>}
-              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
+              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={(formData)=>handleOpenEditor({...editCamp,...formData})} onBack={()=>setView("list")}/>}
               {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
               {view==="templates"&&<TemplatesView onUseTemplate={(blocks)=>{setEditCamp({emailBlocks:blocks});setView("editor");}}/>}
             </>

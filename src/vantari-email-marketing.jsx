@@ -734,7 +734,6 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
 /* ═══════════════════════════════════════════════════
    CAMPAIGN FORM
 ═══════════════════════════════════════════════════ */
-const SEGMENTS = ["Todos os leads","Newsletter","Demo Solicitada","Inativos 30d","MQL + SQL","Alto Valor B2B","Leads Quentes"];
 
 const CAMPAIGN_TYPES = [
   { val:"newsletter",  Icon:Newspaper,       label:"Newsletter"  },
@@ -760,9 +759,21 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     emailBlocks:campaign?.emailBlocks||[],
     fromName:   campaign?.fromName   ||"Vantari",
     fromEmail:  campaign?.fromEmail  ||"",
+    audienceType: campaign?.audienceType || "all",
+    segmentId:    campaign?.segmentId    || null,
   });
-  const upd = (k,v)=>setForm(p=>({...p,[k]:v}));
-  const audienceCount = {"Todos os leads":6284,"Newsletter":3820,"Demo Solicitada":91,"Inativos 30d":840,"MQL + SQL":2460,"Alto Valor B2B":420,"Leads Quentes":1200}[form.audience]||0;
+  const upd  = (k,v)=>setForm(p=>({...p,[k]:v}));
+  const upd2 = (obj)=>setForm(p=>({...p,...obj}));
+
+  const [segments,   setSegments]   = useState([]);
+  const [totalLeads, setTotalLeads] = useState(0);
+  useEffect(()=>{
+    supabase.from("segments").select("id,name,lead_count").order("name").then(({data})=>setSegments(data||[]));
+    supabase.from("leads").select("id",{count:"exact",head:true}).eq("unsubscribed",false).then(({count})=>setTotalLeads(count||0));
+  },[]);
+  const audienceCount = form.audienceType==="segment"
+    ? (segments.find(s=>s.id===form.segmentId)?.lead_count ?? form.audienceCount ?? 0)
+    : totalLeads;
 
   const SectionTitle = ({children}) => (
     <div style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,letterSpacing:"-0.01em",marginBottom:16,paddingBottom:8,borderBottom:`0.5px solid ${T.border}`}}>{children}</div>
@@ -778,7 +789,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={onBack} variant="ghost" size="md">Cancelar</Btn>
           <Btn onClick={()=>onEdit(form)} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
-          <Btn onClick={()=>onSave(form)} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
+          <Btn onClick={()=>onSave({...form,audienceCount})} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
         </div>
       </div>
 
@@ -810,19 +821,32 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
           <div style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,padding:"22px"}}>
             <SectionTitle>Audiência</SectionTitle>
             <div style={{marginBottom:12}}>
-              <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Segmento</label>
-              <select value={form.audience} onChange={e=>upd("audience",e.target.value)}
+              <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Lista / Segmento</label>
+              <select value={form.audienceType==="segment"?(form.segmentId||""):"all"}
+                onChange={e=>{
+                  const v=e.target.value;
+                  if(v==="all") upd2({audienceType:"all",segmentId:null,audience:"Todos os leads"});
+                  else { const s=segments.find(x=>x.id===v); upd2({audienceType:"segment",segmentId:v,audience:s?.name||"Segmento",audienceCount:s?.lead_count||0}); }
+                }}
                 style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
-                {SEGMENTS.map(s=><option key={s}>{s}</option>)}
+                <option value="all">Todos os leads ativos</option>
+                {segments.length>0 && <optgroup label="Segmentos">
+                  {segments.map(s=><option key={s.id} value={s.id}>{s.name} · {(s.lead_count||0).toLocaleString("pt-BR")}</option>)}
+                </optgroup>}
               </select>
+              {segments.length===0 && (
+                <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,marginTop:6}}>
+                  Nenhum segmento ainda — crie em <b>Segmentos</b> no menu lateral.
+                </div>
+              )}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:T.bg,borderRadius:8,border:`0.5px solid ${T.border}`}}>
               <div style={{width:34,height:34,borderRadius:8,background:`${T.blue}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <Users size={16} color={T.blue} aria-hidden="true"/>
               </div>
               <div>
-                <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink}}>{audienceCount.toLocaleString("pt-BR")} leads</div>
-                <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted}}>receberão este email</div>
+                <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink}}>{(audienceCount||0).toLocaleString("pt-BR")} leads</div>
+                <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted}}>{form.audienceType==="segment"?"no segmento selecionado":"receberão este email"}</div>
               </div>
             </div>
           </div>
@@ -898,7 +922,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
             </div>
           </div>
 
-          <Btn onClick={()=>onSave({...form,status:form.schedule==="immediate"?"sending":"scheduled"})} variant="ink" size="lg" full icon={Send}>
+          <Btn onClick={()=>onSave({...form,audienceCount,status:form.schedule==="immediate"?"sending":"scheduled"})} variant="ink" size="lg" full icon={Send}>
             {form.schedule==="immediate"?"Enviar Agora":"Agendar Envio"}
           </Btn>
         </div>
@@ -1287,7 +1311,8 @@ const SendModal = ({ campaign, onClose, onDone }) => {
               {mode==="confirm" && (
                 <div>
                   <div style={{background:"#fff4e6",border:`0.5px solid ${T.amber}`,borderRadius:8,padding:"12px 14px",marginBottom:18,fontFamily:T.font,fontSize:13,fontWeight:600,color:"#92400e"}}>
-                    Isso enviará o email para <strong>todos os leads ativos</strong> (não descadastrados). Esta ação não pode ser desfeita.
+                    Isso enviará o email para <strong>{campaign.audienceType==="segment" ? `o segmento "${campaign.audience}"` : "todos os leads ativos"}</strong>
+                    {campaign.audienceCount ? ` (~${campaign.audienceCount.toLocaleString("pt-BR")} leads)` : ""} (não descadastrados). Esta ação não pode ser desfeita.
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={onClose} variant="ghost" size="md" sx={{flex:1,justifyContent:"center"}}>Cancelar</Btn>
@@ -2049,7 +2074,7 @@ export default function VantariEmailMarketing() {
     try {
       const { data, error: err } = await supabase
         .from("campaigns")
-        .select(`id, name, subject, sender, html_content, blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+        .select(`id, name, subject, sender, html_content, blocks, from_name, from_email, status, type, audience, audience_count, audience_type, segment_id, scheduled_at,
                  campaign_sends(delivered, opened, clicked, bounced, unsubscribed)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
@@ -2074,6 +2099,8 @@ export default function VantariEmailMarketing() {
           type:          c.type || "newsletter",
           audience:      c.audience || "Todos os leads",
           audienceCount: c.audience_count || 0,
+          audienceType:  c.audience_type || "all",
+          segmentId:     c.segment_id || null,
           scheduledAt:   c.scheduled_at,
           thumbnail:     c.type || "newsletter",
           metrics: {
@@ -2111,6 +2138,8 @@ export default function VantariEmailMarketing() {
       type:           data.type   || "newsletter",
       audience:       data.audience || "Todos os leads",
       audience_count: data.audienceCount || 0,
+      audience_type:  data.audienceType || "all",
+      segment_id:     data.audienceType === "segment" ? (data.segmentId || null) : null,
       scheduled_at:   data.schedule === "scheduled" && data.scheduledAt
                         ? new Date(data.scheduledAt).toISOString()
                         : null,

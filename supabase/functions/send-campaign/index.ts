@@ -40,17 +40,19 @@ Deno.serve(async (req) => {
       await supabase.from("campaigns").update({ status: "sending" }).eq("id", campaign_id);
     }
 
-    /* ── fetch recipients ── */
+    /* ── fetch recipients ──
+       Resolve via RPC get_campaign_recipients(), que respeita
+       audience_type da campanha (all | segment | manual) e o workspace. */
     let leads: Array<{ id: string; email: string; name: string | null; company: string | null }>;
     if (test_email) {
       leads = [{ id: "test", email: test_email, name: "Teste", company: null }];
     } else {
-      const { data } = await supabase
-        .from("leads")
-        .select("id, email, name, company")
-        .eq("unsubscribed", false)
-        .not("email", "is", null);
-      leads = (data || []).filter(l => !!l.email);
+      const { data, error: rpcErr } = await supabase.rpc("get_campaign_recipients", { _campaign_id: campaign_id });
+      if (rpcErr) {
+        await supabase.from("campaigns").update({ status: "draft" }).eq("id", campaign_id);
+        return new Response(JSON.stringify({ error: "Erro ao resolver destinatários: " + rpcErr.message }), { status: 500, headers: CORS });
+      }
+      leads = (data || []).filter((l: { email?: string }) => !!l.email);
     }
 
     if (leads.length === 0) {

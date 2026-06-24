@@ -743,7 +743,7 @@ const CAMPAIGN_TYPES = [
   { val:"reactivation",Icon:RefreshCw,       label:"Reativação"  },
 ];
 
-const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
+const CampaignForm = ({ campaign, onSave, onEdit, onTest, onBack }) => {
   const [form,setForm] = useState({
     name:       campaign?.name       ||"",
     subject:    campaign?.subject    ||"",
@@ -789,6 +789,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={onBack} variant="ghost" size="md">Cancelar</Btn>
           <Btn onClick={()=>onEdit(form)} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
+          <Btn onClick={()=>onTest({...form,audienceCount})} variant="secondary" size="md" icon={FlaskConical}>Enviar teste</Btn>
           <Btn onClick={()=>onSave({...form,audienceCount})} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
         </div>
       </div>
@@ -1218,7 +1219,7 @@ const SendModal = ({ campaign, onClose, onDone }) => {
   const [testEmail, setTestEmail]   = useState("");
   const [sending,   setSending]     = useState(false);
   const [result,    setResult]      = useState(null); // {sent, total, test, error}
-  const [mode,      setMode]        = useState("confirm"); // confirm | test | done
+  const [mode,      setMode]        = useState(campaign.openTest ? "test" : "confirm"); // confirm | test | done
 
   const invoke = async (isTest) => {
     setSending(true); setResult(null);
@@ -2125,7 +2126,7 @@ export default function VantariEmailMarketing() {
   const handleOpenEditor = (c) => { setEditCamp(c);    setView("editor"); };
   const handleSend       = (c) => setSendModal(c);
 
-  const handleSaveCampaign = useCallback(async (data) => {
+  const persistCampaign = useCallback(async (data) => {
     const payload = {
       name:           data.name,
       subject:        data.subject,
@@ -2144,13 +2145,33 @@ export default function VantariEmailMarketing() {
                         ? new Date(data.scheduledAt).toISOString()
                         : null,
     };
-    const { error: err } = editCamp?.id
-      ? await supabase.from("campaigns").update(payload).eq("id", editCamp.id)
-      : await supabase.from("campaigns").insert(payload);
-    if (err) { setError(err.message); return; }
+    if (editCamp?.id) {
+      const { error } = await supabase.from("campaigns").update(payload).eq("id", editCamp.id);
+      return { id: editCamp.id, error };
+    }
+    const { data: row, error } = await supabase.from("campaigns").insert(payload).select("id").single();
+    return { id: row?.id, error };
+  }, [editCamp]);
+
+  const handleSaveCampaign = useCallback(async (data) => {
+    const { error } = await persistCampaign(data);
+    if (error) { setError(error.message); return; }
     await fetchCampaigns();
     setView("list"); setEditCamp(null);
-  }, [editCamp, fetchCampaigns]);
+  }, [persistCampaign, fetchCampaigns]);
+
+  // Salva a campanha (cria se nova) e abre o modal já na aba de teste
+  const handleTestSend = useCallback(async (data) => {
+    const { id, error } = await persistCampaign(data);
+    if (error) { setError(error.message); return; }
+    if (!id) { setError("Não consegui salvar a campanha para o teste."); return; }
+    setEditCamp(p => ({ ...(p || {}), ...data, id }));
+    setSendModal({
+      id, name: data.name, subject: data.subject, htmlContent: data.htmlContent,
+      fromEmail: data.fromEmail, sender: data.sender, audience: data.audience,
+      audienceType: data.audienceType, audienceCount: data.audienceCount, openTest: true,
+    });
+  }, [persistCampaign]);
 
   const handleDuplicate = useCallback(async (c) => {
     const { error: err } = await supabase.from("campaigns").insert({
@@ -2264,7 +2285,7 @@ export default function VantariEmailMarketing() {
           ) : (
             <>
               {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete} onSend={handleSend}/>}
-              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={(formData)=>handleOpenEditor({...editCamp,...formData})} onBack={()=>setView("list")}/>}
+              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={(formData)=>handleOpenEditor({...editCamp,...formData})} onTest={handleTestSend} onBack={()=>setView("list")}/>}
               {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
               {view==="templates"&&<TemplatesView onUseTemplate={(blocks)=>{setEditCamp({emailBlocks:blocks});setView("editor");}}/>}
             </>

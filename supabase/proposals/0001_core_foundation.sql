@@ -272,7 +272,7 @@ begin
   -- (service_role tem auth.uid() NULL → liberado para as Edge Functions.)
   if auth.uid() is not null
      and p_workspace not in (
-        select workspace_id from core.workspace_members where user_id = auth.uid())
+        select workspace_id from public.workspace_members where user_id = auth.uid())
   then
     raise exception 'sem acesso ao workspace %', p_workspace;
   end if;

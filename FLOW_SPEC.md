@@ -45,7 +45,10 @@ Gráficos: **Receita Mensal** (12 meses, barras), **Meta do Mês**.
 Filtros: período ("Este mês") + equipe ("Toda equipe") + refresh.
 → Fonte: `crm.deals` (valor, stage, won/lost, datas), `core.persons` (contatos).
 
-### 2. Negócios (pipeline) — `/deals`  ⭐ coração
+### 2. Negócios (pipeline) — `/deals`  ⭐ coração  — ✅ RECRIADO no Next (`/crm`, 2026-06-25)
+> Slice 1 entregue: `src/vantari-crm.jsx`, board Kanban lendo `crm.*` via `supabase.schema('crm')`,
+> 6 estágios reais, totais por coluna. Falta: criar negócio (depende do fluxo de Processo),
+> visões Lista/Previsão, detalhe do negócio, drag-and-drop entre estágios.
 - 3 visões: **Kanban** / **Lista** / **Previsão** (forecast).
 - Kanban: colunas = estágios, cada coluna mostra **total R$ + nº negócios**.
   Card do negócio: nome, contato vinculado, **valor R$**, avatar do responsável.

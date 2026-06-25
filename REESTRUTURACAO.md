@@ -78,10 +78,12 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 
 ## Roadmap — próxima fase (outro tipo de trabalho: banco vivo + frontend)
 
-1. **Decidir onde o core mora** e **aplicar** os schemas (de preferência testar numa branch do Supabase antes — schema vivo é multi-tenant).
-2. **Migrar dados reais** para o core: ⚠️ os 108 leads do Next eram TESTE e foram apagados (slate limpo, backup em `~/vantari-backups/`). Não há dado de marketing legado a migrar. Dado real virá da **Nina** (via `ingest`) e do **FlowCRM**. Deduplicar via `resolve_person`/`merge_persons`.
-3. **Ponte da Nina** — guardar o `person_id` que a `ingest` devolve.
-4. **App único** — Flow + Next convergem num app só (Nina à parte). Recomendação: **recriar limpo sobre o core, não migrar código Lovable** (carrega cenografia/lixo). Antes: inventariar telas do FlowCRM como spec.
+1. ✅ **Core aplicado** em produção (mesmo projeto). Ver seção do core.
+2. ✅ **Migração de leads:** os 108 eram TESTE e foram apagados (slate limpo, backup em `~/vantari-backups/`). Dado real virá da **Nina** (via `ingest`). FlowCRM está VAZIO/fora de produção — não há nada a migrar dele.
+3. **Ponte da Nina** — guardar o `person_id` que a `ingest` devolve. (pendente: deploy da `ingest`.)
+4. **App único = Next.** Decidido (Flow vazio → abandonado). Construir o **CRM como módulo novo no Next sobre o core**, depois migrar marketing. Telas do Flow inventariadas em [FLOW_SPEC.md](FLOW_SPEC.md).
+   - ✅ Slice 1: tela **Negócios** (pipeline Kanban) em `/crm` (`src/vantari-crm.jsx`), lendo `crm.*`. Pré-reqs aplicados: pipeline "Esteira de Aquisição" semeado + schemas `core`/`crm` expostos na API.
+   - ⏳ Próximas slices: cadastro de **Processo → Negócio** (deal exige processo_id), detalhe do negócio, Contatos, Empresas, Atividades, Tarefas, Em Risco.
 5. **Worker `deal_won → fin.criar_antecipacao`** (Edge Function escutando eventos).
 
 ## Decisões fechadas (2026-06-25)

@@ -1,5 +1,8 @@
 -- =============================================================================
--- BACKFILL — public.leads  ->  core.persons   (one-off, JÁ EXECUTADO 2026-06-25)
+-- BACKFILL — public.leads  ->  core.persons   (one-off)
+-- EXECUTADO 2026-06-25 e DEPOIS REVERTIDO: os 108 leads eram dados de teste
+-- (fictícios + amigos) e foram apagados (slate limpo). Mantido como MECANISMO
+-- reutilizável para dado real futuro (Nina/FlowCRM) — não é histórico vivo.
 -- -----------------------------------------------------------------------------
 -- Reprocessa os leads existentes (já atribuídos à sala Vantari) pelo
 -- core.resolve_person, criando as pessoas canônicas + identificadores.

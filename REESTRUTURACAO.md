@@ -51,7 +51,7 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 
 **Smoke test passou** (em `begin/rollback`, sem deixar dado): `core.resolve_person` chamado 2× com a sala Vantari (1ª como Nina: telefone+email; 2ª como form: mesmo telefone em outro formato + CPF) resolveu para **1 única pessoa** — normalização de telefone/email/CPF ok, status virou `identificado` quando o CPF chegou, 3 identificadores ligados. Bug corrigido no caminho: o guard de `resolve_person` ainda citava `core.workspace_members` (commit b1671c5).
 
-**Backfill dos 108 leads → `core.persons` executado (2026-06-25):** script `supabase/proposals/backfill_leads_to_core_persons.sql` (one-off, idempotente). Resultado: **108 leads → 108 pessoas** (6 identificadas / 102 pendentes), 211 identificadores. Mapeamento 1:1 por email (0 sobra dos dois lados). Sem dedup porque a origem não tinha email/telefone repetido. `public.leads` permanece intacta (link recuperável por email; coluna `person_id` em leads não foi adicionada — passo futuro se preciso pra migrar eventos/scores).
+**Backfill dos 108 leads → `core.persons` executado e depois REVERTIDO (2026-06-25):** o backfill (script `supabase/proposals/backfill_leads_to_core_persons.sql`, one-off idempotente) criou 108 pessoas / 211 identificadores com mapeamento 1:1 — provando a máquina. **Mas os 108 leads eram dados de teste** (fictícios + amigos testando o cadastro; `lead_events`/`scores`/`interactions` = 0). Decisão: **slate limpo.** Backup salvo fora do git em `~/vantari-backups/2026-06-25_*.json` (leads, form_submissions, core_persons, identifiers). Depois apagados: 108 leads (cascata limpa) + 11 form_submissions + 108 core.persons. **Core e public.leads agora vazios na sala Vantari** — estruturas de pé, esperando dado REAL da Nina + FlowCRM (não há mais dado de marketing legado a migrar).
 
 ## Artefatos do core (status individual)
 
@@ -66,7 +66,7 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 ## O que JÁ foi aplicado em produção
 
 - **`supabase/proposals/0003_rls_hardening.sql`** — fechou o vazamento anon (leads/CPF). **Aplicado e verificado** em 2026-06-25. Fase 1 = "exige login" (não escopa por workspace ainda).
-- **Workspace canônico "Vantari" criado + dados migrados** — **aplicado em 2026-06-25**. O banco vivo tinha 3 workspaces pessoais vazios (Raquel/Catarina/Gustavo) e 108 leads soltos (workspace_id NULL = origem do vazamento). Decisão: renomeei "Raquel's workspace" → **Vantari** (id `53092199-7b75-4342-a897-f589d6f34922`), adicionei Catarina e Gustavo como membros, e atribuí à sala todos os dados órfãos: **108 leads + 11 form_submissions + 5 forms + 10 email_templates + 1 campaign**. `scoring_rules` ficou de fora (config misturada, 11 soltas + 4 por workspace — limpeza dedicada pendente). Reversível (campos eram NULL).
+- **Workspace canônico "Vantari" criado + dados migrados** — **aplicado em 2026-06-25**. O banco vivo tinha 3 workspaces pessoais vazios (Raquel/Catarina/Gustavo) e 108 leads soltos (workspace_id NULL = origem do vazamento). Decisão: renomeei "Raquel's workspace" → **Vantari** (id `53092199-7b75-4342-a897-f589d6f34922`), adicionei Catarina e Gustavo como membros, e atribuí à sala todos os dados órfãos: **108 leads + 11 form_submissions + 5 forms + 10 email_templates + 1 campaign**. `scoring_rules` ficou de fora (config misturada, 11 soltas + 4 por workspace — limpeza dedicada pendente). Reversível (campos eram NULL). **Nota:** os 108 leads + 11 form_submissions foram depois apagados (eram teste — ver seção do core). Restam na sala: 5 forms, 10 email_templates, 1 campaign.
 
 ## Deferido (camadas, não fundação)
 
@@ -79,7 +79,7 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 ## Roadmap — próxima fase (outro tipo de trabalho: banco vivo + frontend)
 
 1. **Decidir onde o core mora** e **aplicar** os schemas (de preferência testar numa branch do Supabase antes — schema vivo é multi-tenant).
-2. **Migrar dados reais** para o core: ✅ os 108 leads do Next viraram `core.persons` (backfill 2026-06-25). Falta: contatos do FlowCRM + migrar eventos/scores/form_submissions pra referenciar `person_id`. Deduplicar via `resolve_person`/`merge_persons`.
+2. **Migrar dados reais** para o core: ⚠️ os 108 leads do Next eram TESTE e foram apagados (slate limpo, backup em `~/vantari-backups/`). Não há dado de marketing legado a migrar. Dado real virá da **Nina** (via `ingest`) e do **FlowCRM**. Deduplicar via `resolve_person`/`merge_persons`.
 3. **Ponte da Nina** — guardar o `person_id` que a `ingest` devolve.
 4. **App único** — Flow + Next convergem num app só (Nina à parte). Recomendação: **recriar limpo sobre o core, não migrar código Lovable** (carrega cenografia/lixo). Antes: inventariar telas do FlowCRM como spec.
 5. **Worker `deal_won → fin.criar_antecipacao`** (Edge Function escutando eventos).

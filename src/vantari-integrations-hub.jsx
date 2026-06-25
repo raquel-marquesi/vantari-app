@@ -6,6 +6,7 @@ import {
   AlertTriangle, Pencil, CheckCircle2, XCircle, Download,
   ArrowLeftRight, Plus, Play, Pause, X, Settings2, Loader2
 } from "lucide-react";
+import { Briefcase } from "lucide-react";
 import { supabase } from "./supabase";
 
 /* ═══════════════════════════════════════════════════════════
@@ -1123,6 +1124,8 @@ export default function VantariIntegrationsHub() {
           <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"          path="/leads"        />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
+          <NavSection label="CRM"/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
           <NavSection label="Ferramentas"/>
           <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />

@@ -11,6 +11,7 @@ import {
   Activity, Globe,
 } from "lucide-react";
 
+import { Briefcase } from "lucide-react";
 /* ═══════════════════════════════════════════════════════════
    DATABASE SCHEMA (Supabase-compatible)
    ─────────────────────────────────────────────────────────
@@ -1482,6 +1483,8 @@ export default function VantariSettingsAdmin() {
           <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"     />
           <NavItem icon={Users}          label="Leads"          path="/leads"         />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
+          <NavSection label="CRM"/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
           <NavSection label="Ferramentas"/>
           <NavItem icon={Star}           label="Scoring"        path="/scoring"       />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"       />

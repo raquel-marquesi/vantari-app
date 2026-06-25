@@ -7,6 +7,7 @@ import {
   Filter, Layers, ChevronRight, Trash2, Copy, Edit2,
 } from "lucide-react";
 
+import { Briefcase } from "lucide-react";
 /* ───── DESIGN TOKENS ───── */
 const T = {
   // Brand
@@ -741,6 +742,8 @@ export default function VantariSegments() {
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"           path="/leads"        />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
+          <NavSection label="CRM" />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
           <NavSection label="Ferramentas" />
           <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
           <NavItem icon={Filter}         label="Segmentação"     path="/segments"     active />

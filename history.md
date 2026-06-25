@@ -434,3 +434,21 @@ Plataforma preparada para receber dados reais — todos os mocks removidos.
 - `vantari-segments.jsx`: flat stat tiles → HeroKpiCard + sparklines de `segments` + `leads` (total, leads, dinâmicos, estáticos)
 
 **Deploy:** commit `d1e32cb` → push → Vercel auto-deploy → https://vantari-app.vercel.app
+
+---
+
+## 2026-06-25 — Auditoria, correção de RLS e reestruturação para core canônico
+
+Sessão longa, branch `claude/funny-ramanujan-9d11e5`. (Detalhes e arquitetura em [REESTRUTURACAO.md](REESTRUTURACAO.md); riscos em [feedback.md](feedback.md).)
+
+### Auditoria de prontidão para produção
+- Varredura do repo + banco vivo (`ejhrlrasepowdcdnggmv`). Provado empiricamente que a **chave anon lia E escrevia** tabelas de negócio sem login — `leads` (107 reais, com CPF) retornou 200; insert retornou 201. Vazamento ativo de PII (LGPD).
+- Achados: AI Marketing 100% cenográfico (fetch a api.anthropic.com sem auth → cai em mock disfarçado), dashboard com gráficos vazios, ~13 botões fantasma em Integrations; envio de email (Resend/`send-campaign`) é REAL e operacional.
+
+### Correção de segurança (APLICADA em produção)
+- `supabase/proposals/0003_rls_hardening.sql` — fechou o acesso anon (lockdown "exige login" + exceções p/ form público + `integration_credentials` só service_role + revoga anon de views como `leads_pending`). **Aplicado e verificado**: anon agora vê 0 leads, form público intacto.
+
+### Reestruturação: core canônico (PROPOSTAS, não aplicadas)
+- Decidido consolidar Nina/Flow/Next num **core canônico** (1 banco); Nina federada via Edge Function `ingest`. Domínio confirmado: **cessão/antecipação de crédito trabalhista**.
+- Criados e validados em Postgres 16 local: `0001_core_foundation` (identidade CPF/telefone + merge dinâmico + RLS), `0002_crm_flow` (processos + elegibilidade + deals por crédito), `0004_mkt_marketing` (score/forms/campanhas), `0005_fin_receivables` (antecipações + tranches), `supabase/functions/ingest`.
+- Docs: `REESTRUTURACAO.md` (mestre), `feedback.md` (diário de auditor). `plan.md` marcado como fase anterior.

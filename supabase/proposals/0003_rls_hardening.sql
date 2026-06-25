@@ -32,8 +32,9 @@
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  t   text;
-  pol record;
+  t      text;
+  v_kind text;
+  pol    record;
   lockdown text[] := array[
     'leads', 'leads_pending', 'companies', 'lead_events', 'custom_fields',
     'lead_custom_values', 'page_visits', 'tracked_pages', 'email_templates',
@@ -44,8 +45,15 @@ declare
   ];
 begin
   foreach t in array lockdown loop
-    if to_regclass('public.' || t) is null then
+    -- só tabela base (relkind 'r'); views/matviews são tratadas no bloco 1b
+    select c.relkind into v_kind
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relname = t;
+    if v_kind is null then
       raise notice 'pulando %, não existe', t;
+      continue;
+    elsif v_kind <> 'r' then
+      raise notice 'pulando % (não é tabela base, relkind=%) — vai no bloco de views', t, v_kind;
       continue;
     end if;
     execute format('alter table public.%I enable row level security', t);
@@ -62,6 +70,30 @@ begin
     raise notice 'trancada: %', t;
   end loop;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 1b) VIEWS — fecham o BYPASS de RLS
+--     Uma view roda com os privilégios do dono (security-definer por padrão),
+--     então anon lendo a view ignora a RLS da tabela base. leads_pending é uma
+--     dessas (a auditoria leu 102 linhas por ela). Revogar anon de TODAS as
+--     views fecha esse caminho — o anon não precisa de view nenhuma (o form
+--     público lê a TABELA forms direto).
+-- ---------------------------------------------------------------------------
+do $$
+declare v record;
+begin
+  for v in
+    select c.relname
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('v', 'm')   -- view, matview
+  loop
+    execute format('revoke all on public.%I from anon', v.relname);
+    raise notice 'anon revogado da view %', v.relname;
+  end loop;
+end $$;
+-- Obs: em Postgres 15+ dá pra, em vez de revogar, fazer a view respeitar a RLS
+-- da base com  alter view public.<v> set (security_invoker = on);  — mas revogar
+-- o anon é à prova de versão e suficiente aqui.
 
 -- ---------------------------------------------------------------------------
 -- helper local: limpa todas as policies de uma tabela (para as exceções abaixo)

@@ -81,6 +81,19 @@ const maskPhone = (raw) => {
   if (d.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
   return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
 };
+// moeda BR: agrupa milhar com ponto, decimal opcional com vírgula (máx 2 casas)
+const maskMoney = (raw) => {
+  let s = String(raw).replace(/[^\d,]/g, "");
+  const c = s.indexOf(",");
+  let intp, decp = null;
+  if (c >= 0) { intp = s.slice(0, c).replace(/\D/g, ""); decp = s.slice(c + 1).replace(/\D/g, "").slice(0, 2); }
+  else { intp = s.replace(/\D/g, ""); }
+  intp = intp.replace(/^0+(?=\d)/, "");
+  const grouped = intp.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  let out = grouped || (decp != null ? "0" : "");
+  if (decp != null) out += "," + decp;
+  return out;
+};
 const maskCnj = (raw) => {
   const d = onlyDigits(raw).slice(0, 20);
   let r = d.slice(0, 7);
@@ -402,6 +415,12 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
         placeholder={ph} style={inputStyle} />
     </div>
   );
+  const moneyField = (label, k, full = false) => (
+    <div style={{ marginBottom: 12, gridColumn: full ? "1 / -1" : "auto" }}>
+      <label style={labelStyle}>{label}</label>
+      <input inputMode="decimal" value={f[k]} onChange={(e) => set(k, maskMoney(e.target.value))} placeholder="0,00" style={inputStyle} />
+    </div>
+  );
   const sectionTitle = (Icon, children) => (
     <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "18px 0 10px", color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
       <Icon size={15} color={T.teal} /> {children}
@@ -468,8 +487,8 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
             {field("Vara", "vara", "text", "1ª Vara do Trabalho")}
             {field("UF", "uf", "text", "SP")}
             {field("Fase", "fase", "text", "Acórdão de RO")}
-            {field("Valor da causa (R$)", "valor_causa", "text", "0,00")}
-            {field("Valor estimado líquido (R$)", "valor_liquido", "text", "0,00")}
+            {moneyField("Valor da causa (R$)", "valor_causa")}
+            {moneyField("Valor estimado líquido (R$)", "valor_liquido")}
             {field("Teses restritivas (separadas por vírgula)", "teses", "text", "ex: vínculo, grupo econômico", true)}
           </div>
 
@@ -489,7 +508,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
                 <option value="kicker">Kicker</option>
               </select>
             </div>
-            {field("Valor de face (R$)", "valor_face", "text", "0,00")}
+            {moneyField("Valor de face (R$)", "valor_face")}
             {field("Deságio (%)", "desagio", "text", "ex: 45")}
             <div style={{ marginBottom: 12, gridColumn: "1 / -1" }}>
               <label style={labelStyle}>Captador/a (distribuir para)</label>

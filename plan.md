@@ -1,5 +1,12 @@
 # Vantari — Plano de Desenvolvimento
 
+> 📌 **Este documento descreve a FASE ANTERIOR** (replicar o RD Station Marketing em
+> 11 etapas, sobre as tabelas `public.*`). A partir de jun/2026 o projeto foi
+> reenquadrado para uma arquitetura de **core canônico** e o domínio real
+> (**crédito trabalhista**). A direção atual está em **[REESTRUTURACAO.md](REESTRUTURACAO.md)**.
+> Itens daqui ainda válidos (ex.: validação de email, cutover) foram marcados como
+> "reavaliar" no roadmap novo. Mantido como histórico — não apagar.
+
 ## Stack
 - **Frontend:** React 19 + Vite 8, hospedado na Vercel
 - **Backend:** Supabase (PostgreSQL + Auth + RLS)

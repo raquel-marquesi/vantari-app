@@ -1,5 +1,14 @@
 # Vantari — CLAUDE.md
 
+> ⚠️ **REESTRUTURAÇÃO EM ANDAMENTO (jun/2026).** Está sendo construída uma nova
+> arquitetura de **core canônico** (schemas `core`/`crm`/`mkt`/`fin` em
+> `supabase/proposals/`) e o domínio real foi confirmado: **cessão/antecipação de
+> crédito trabalhista**. Os schemas novos ainda **não foram aplicados ao banco**.
+> A descrição abaixo reflete o app de marketing **atual** (Vite SPA, tabelas
+> `public.*`). Para a direção nova, ver **[REESTRUTURACAO.md](REESTRUTURACAO.md)**.
+> Nota de segurança: a RLS de produção foi fechada (anon não lê mais leads/CPF) —
+> ver `supabase/proposals/0003_rls_hardening.sql`.
+
 ## Visão geral do projeto
 
 Vantari é uma plataforma de marketing SaaS equivalente ao RD Station Marketing — gestão de leads, email marketing, automação de fluxos, scoring e landing pages. Interface React + Vite, tema claro, sidebar fixa por página, roteamento client-side via React Router. Cada página é um componente independente que gerencia seu próprio layout (sidebar + conteúdo).

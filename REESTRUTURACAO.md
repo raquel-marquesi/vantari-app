@@ -30,6 +30,7 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 
 - **Identidade:** CPF (primário) + telefone (fallback, normalizado p/ BR). `core.resolve_person()` é a porta idempotente; `core.merge_persons()` repontua FKs dinamicamente (qualquer schema novo funciona sem alterá-la).
 - **Segurança:** anon nunca toca o core; authenticated escopado por workspace; service_role (Edge Functions) para entradas públicas.
+- **Tenancy (decidido 2026-06-25):** o core **REUSA** a tenancy do banco vivo (`public.workspaces` / `public.workspace_members` / `is_workspace_member()`), **não cria a sua**. O banco vivo já tinha multi-tenant — duas tenancies paralelas seriam o mesmo erro de drift. ⚠️ **TODO antes de aplicar o core:** reescrever `0001_core_foundation.sql` para dropar `core.workspaces`/`core.workspace_members`/`core.current_workspace_ids()` e apontar todos os FKs `workspace_id` para `public.workspaces(id)`, com policies usando `public.is_workspace_member()`.
 
 ## Domínio: cessão/antecipação de crédito trabalhista
 
@@ -56,7 +57,8 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 
 ## O que JÁ foi aplicado em produção
 
-- **`supabase/proposals/0003_rls_hardening.sql`** — fechou o vazamento anon (leads/CPF). **Aplicado e verificado** em 2026-06-25. Fase 1 = "exige login" (não escopa por workspace ainda — os 107 leads têm workspace_id NULL).
+- **`supabase/proposals/0003_rls_hardening.sql`** — fechou o vazamento anon (leads/CPF). **Aplicado e verificado** em 2026-06-25. Fase 1 = "exige login" (não escopa por workspace ainda).
+- **Workspace canônico "Vantari" criado + dados migrados** — **aplicado em 2026-06-25**. O banco vivo tinha 3 workspaces pessoais vazios (Raquel/Catarina/Gustavo) e 108 leads soltos (workspace_id NULL = origem do vazamento). Decisão: renomeei "Raquel's workspace" → **Vantari** (id `53092199-7b75-4342-a897-f589d6f34922`), adicionei Catarina e Gustavo como membros, e atribuí à sala todos os dados órfãos: **108 leads + 11 form_submissions + 5 forms + 10 email_templates + 1 campaign**. `scoring_rules` ficou de fora (config misturada, 11 soltas + 4 por workspace — limpeza dedicada pendente). Reversível (campos eram NULL).
 
 ## Deferido (camadas, não fundação)
 
@@ -69,16 +71,23 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 ## Roadmap — próxima fase (outro tipo de trabalho: banco vivo + frontend)
 
 1. **Decidir onde o core mora** e **aplicar** os schemas (de preferência testar numa branch do Supabase antes — schema vivo é multi-tenant).
-2. **Migrar dados reais** para o core: 107 leads do Next (workspace_id NULL → definir workspace canônico) + contatos do FlowCRM. Deduplicar via `resolve_person`/`merge_persons`.
+2. **Migrar dados reais** para o core: os 108 leads do Next (✅ já estão na sala Vantari) → reprocessar via `resolve_person` pra virar `core.persons` + contatos do FlowCRM. Deduplicar via `resolve_person`/`merge_persons`.
 3. **Ponte da Nina** — guardar o `person_id` que a `ingest` devolve.
 4. **App único** — Flow + Next convergem num app só (Nina à parte). Recomendação: **recriar limpo sobre o core, não migrar código Lovable** (carrega cenografia/lixo). Antes: inventariar telas do FlowCRM como spec.
 5. **Worker `deal_won → fin.criar_antecipacao`** (Edge Function escutando eventos).
+
+## Decisões fechadas (2026-06-25)
+
+- **Onde o core mora:** mesmo projeto Supabase (`ejhrlrasepowdcdnggmv`) como schemas novos. FK cross-schema exige mesmo banco; projeto novo recriaria o dual-DB. Não há escolha real.
+- **Tenancy:** core reusa `public.workspaces` (ver seção Decisão de arquitetura).
+- **Workspace canônico:** sala **Vantari** (`53092199-7b75-4342-a897-f589d6f34922`), 3 membros, dados órfãos migrados (ver "O que JÁ foi aplicado").
 
 ## Decisões em aberto
 
 - **Qual codebase vira o app único?** FlowCRM tem o funil real; Next tem o módulo de marketing (e muita cenografia). Recomendação: construir novo sobre o core, usar Flow como referência visual. Depende de olhar o repo do Flow (não está aqui).
 - **A fase RD (plan.md) ainda é meta** ou foi subsumida pela reestruturação? Decidir.
-- **Workspace canônico** para a migração dos leads existentes.
+- **Limpeza de `scoring_rules`:** 11 regras soltas + 4 duplicadas por workspace pessoal. Decidir qual conjunto é o verdadeiro e deduplicar.
+- **Apertar RLS de `public.leads`** de `using(true)` para `is_workspace_member(workspace_id)` agora que os leads têm sala — só depois de garantir que o app seta o workspace nas queries.
 
 ## Referências
 

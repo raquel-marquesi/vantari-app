@@ -55,6 +55,51 @@ const reaisToCents = (v) => {
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
 };
 
+/* ─── Máscaras (estado guarda só dígitos; exibe formatado) ─── */
+const maskCpf = (raw) => {
+  const d = onlyDigits(raw).slice(0, 11);
+  if (d.length > 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (d.length > 6) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  if (d.length > 3) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  return d;
+};
+const maskCnpj = (raw) => {
+  const d = onlyDigits(raw).slice(0, 14);
+  if (d.length > 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+  if (d.length > 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  if (d.length > 5) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`;
+  if (d.length > 2) return `${d.slice(0, 2)}.${d.slice(2)}`;
+  return d;
+};
+const maskCnj = (raw) => {
+  const d = onlyDigits(raw).slice(0, 20);
+  let r = d.slice(0, 7);
+  if (d.length > 7) r += `-${d.slice(7, 9)}`;
+  if (d.length > 9) r += `.${d.slice(9, 13)}`;
+  if (d.length > 13) r += `.${d.slice(13, 14)}`;
+  if (d.length > 14) r += `.${d.slice(14, 16)}`;
+  if (d.length > 16) r += `.${d.slice(16, 20)}`;
+  return r;
+};
+
+// TRT (Justiça do Trabalho, segmento J=5) → UF
+const TRT_UF = {
+  1: "RJ", 2: "SP", 3: "MG", 4: "RS", 5: "BA", 6: "PE", 7: "CE", 8: "PA",
+  9: "PR", 10: "DF", 11: "AM", 12: "SC", 13: "PB", 14: "RO", 15: "SP",
+  16: "MA", 17: "ES", 18: "GO", 19: "AL", 20: "SE", 21: "RN", 22: "PI",
+  23: "MT", 24: "MS",
+};
+// extrai tribunal/UF/vara do CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO)
+const parseCnj = (raw) => {
+  const d = onlyDigits(raw);
+  if (d.length < 16) return null;
+  const J = d[13], TR = parseInt(d.slice(14, 16), 10);
+  const out = { tribunal: null, uf: null, vara: null };
+  if (J === "5" && TR > 0) { out.tribunal = `TRT-${TR}`; out.uf = TRT_UF[TR] || null; }
+  if (d.length >= 20) { const o = parseInt(d.slice(16, 20), 10); if (o > 0) out.vara = `${o}ª Vara do Trabalho`; }
+  return out;
+};
+
 // espelha crm.avaliar_elegibilidade — só para feedback de UI
 const elegibilidadeMotivos = (f) => {
   const m = [];
@@ -193,6 +238,7 @@ const EMPTY_PROC = {
   numero_cnj: "", tribunal: "", vara: "", uf: "", fase: "Acórdão de RO",
   valor_causa: "", valor_liquido: "", teses: "",
   credit_type: "reclamante", modalidade: "tradicional", valor_face: "", desagio: "",
+  _autoTribunal: "", _autoVara: "", _autoUf: "",
 };
 
 const CNDT_OPTS = [
@@ -207,6 +253,21 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+
+  // CNJ: guarda dígitos e auto-preenche Tribunal/Vara/UF (sem sobrescrever edição manual)
+  const onCnj = (raw) => {
+    const d = onlyDigits(raw).slice(0, 20);
+    setF((s) => {
+      const next = { ...s, numero_cnj: d };
+      const p = parseCnj(d);
+      if (p) {
+        if (p.tribunal && (!s.tribunal || s.tribunal === s._autoTribunal)) { next.tribunal = p.tribunal; next._autoTribunal = p.tribunal; }
+        if (p.uf && (!s.uf || s.uf === s._autoUf)) { next.uf = p.uf; next._autoUf = p.uf; }
+        if (p.vara && (!s.vara || s.vara === s._autoVara)) { next.vara = p.vara; next._autoVara = p.vara; }
+      }
+      return next;
+    });
+  };
 
   const motivos = elegibilidadeMotivos(f);
   const elegivelPreview = motivos.length === 0;
@@ -228,7 +289,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
       setError("Reclamante precisa de CPF, e-mail ou telefone.");
       return;
     }
-    if (!f.numero_cnj.trim()) { setError("Informe o número CNJ do processo."); return; }
+    if (!f.numero_cnj || f.numero_cnj.length < 20) { setError("Informe o número CNJ completo (20 dígitos)."); return; }
     if (!firstStage) { setError("Pipeline sem estágios."); return; }
 
     setSaving(true);
@@ -269,7 +330,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
       const teses = f.teses.split(",").map((t) => t.trim()).filter(Boolean);
       const { data: proc, error: epr } = await crm.from("processos").insert({
         workspace_id: workspaceId,
-        numero_cnj: f.numero_cnj.trim(),
+        numero_cnj: maskCnj(f.numero_cnj),
         reclamante_person_id: personId,
         reclamada_company_id: companyId,
         tribunal: f.tribunal || null,
@@ -312,13 +373,17 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
 
   const inputStyle = { width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
   const labelStyle = { fontSize: 11.5, fontWeight: 600, color: T.text, display: "block", marginBottom: 4, fontFamily: T.font };
-  const Field = ({ label, k, type = "text", ph = "", full = false }) => (
+  // funções (NÃO componentes) — retornam host elements direto, sem remount/perda de foco
+  const field = (label, k, type = "text", ph = "", full = false, mask = null) => (
     <div style={{ marginBottom: 12, gridColumn: full ? "1 / -1" : "auto" }}>
       <label style={labelStyle}>{label}</label>
-      <input type={type} value={f[k]} onChange={(e) => set(k, e.target.value)} placeholder={ph} style={inputStyle} />
+      <input type={type} inputMode={mask ? "numeric" : undefined}
+        value={mask ? mask(f[k]) : f[k]}
+        onChange={(e) => set(k, mask ? onlyDigits(e.target.value) : e.target.value)}
+        placeholder={ph} style={inputStyle} />
     </div>
   );
-  const SectionTitle = ({ icon: Icon, children }) => (
+  const sectionTitle = (Icon, children) => (
     <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "18px 0 10px", color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
       <Icon size={15} color={T.teal} /> {children}
     </div>
@@ -333,18 +398,18 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
         </div>
 
         <div style={{ padding: "8px 24px 20px", overflowY: "auto" }}>
-          <SectionTitle icon={UserPlus}>Reclamante (titular do crédito)</SectionTitle>
+          {sectionTitle(UserPlus, "Reclamante (titular do crédito)")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Nome *" k="rcl_nome" ph="Nome completo" />
-            <Field label="CPF" k="rcl_cpf" ph="000.000.000-00" />
-            <Field label="Telefone" k="rcl_phone" ph="(11) 9...." />
-            <Field label="E-mail" k="rcl_email" type="email" ph="email@exemplo.com" />
+            {field("Nome *", "rcl_nome", "text", "Nome completo")}
+            {field("CPF", "rcl_cpf", "text", "000.000.000-00", false, maskCpf)}
+            {field("Telefone", "rcl_phone", "text", "(11) 9....")}
+            {field("E-mail", "rcl_email", "email", "email@exemplo.com")}
           </div>
 
-          <SectionTitle icon={Building2}>Reclamada (empresa)</SectionTitle>
+          {sectionTitle(Building2, "Reclamada (empresa)")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Razão social" k="rda_nome" ph="Empresa reclamada" />
-            <Field label="CNPJ" k="rda_cnpj" ph="00.000.000/0000-00" />
+            {field("Razão social", "rda_nome", "text", "Empresa reclamada")}
+            {field("CNPJ", "rda_cnpj", "text", "00.000.000/0000-00", false, maskCnpj)}
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>CNDT</label>
               <select value={f.rda_cndt} onChange={(e) => set("rda_cndt", e.target.value)} style={inputStyle}>
@@ -370,19 +435,26 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
             ))}
           </div>
 
-          <SectionTitle icon={Scale}>Processo</SectionTitle>
+          {sectionTitle(Scale, "Processo")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Número CNJ *" k="numero_cnj" ph="0000000-00.0000.5.00.0000" full />
-            <Field label="Tribunal" k="tribunal" ph="TRT-2" />
-            <Field label="Vara" k="vara" ph="1ª Vara do Trabalho" />
-            <Field label="UF" k="uf" ph="SP" />
-            <Field label="Fase" k="fase" ph="Acórdão de RO" />
-            <Field label="Valor da causa (R$)" k="valor_causa" ph="0,00" />
-            <Field label="Valor estimado líquido (R$)" k="valor_liquido" ph="0,00" />
-            <Field label="Teses restritivas (separadas por vírgula)" k="teses" ph="ex: vínculo, grupo econômico" full />
+            <div style={{ marginBottom: 12, gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Número CNJ *</label>
+              <input inputMode="numeric" value={maskCnj(f.numero_cnj)} onChange={(e) => onCnj(e.target.value)}
+                placeholder="0000000-00.0000.5.00.0000" style={inputStyle} />
+              <div style={{ fontSize: 10.5, color: T.faint3, marginTop: 3, fontFamily: T.font }}>
+                Só números — Tribunal, Vara e UF preenchem sozinhos.
+              </div>
+            </div>
+            {field("Tribunal", "tribunal", "text", "TRT-2")}
+            {field("Vara", "vara", "text", "1ª Vara do Trabalho")}
+            {field("UF", "uf", "text", "SP")}
+            {field("Fase", "fase", "text", "Acórdão de RO")}
+            {field("Valor da causa (R$)", "valor_causa", "text", "0,00")}
+            {field("Valor estimado líquido (R$)", "valor_liquido", "text", "0,00")}
+            {field("Teses restritivas (separadas por vírgula)", "teses", "text", "ex: vínculo, grupo econômico", true)}
           </div>
 
-          <SectionTitle icon={Briefcase}>Negócio inicial</SectionTitle>
+          {sectionTitle(Briefcase, "Negócio inicial")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Tipo de crédito</label>
@@ -398,8 +470,8 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
                 <option value="kicker">Kicker</option>
               </select>
             </div>
-            <Field label="Valor de face (R$)" k="valor_face" ph="0,00" />
-            <Field label="Deságio (%)" k="desagio" ph="ex: 45" />
+            {field("Valor de face (R$)", "valor_face", "text", "0,00")}
+            {field("Deságio (%)", "desagio", "text", "ex: 45")}
           </div>
           {ofertadoC != null && faceC > 0 && (
             <div style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, marginTop: -4 }}>

@@ -319,9 +319,12 @@ export default function DealDetail() {
       </select>
     </div>
   );
-  const echeck = (label, k) => (
+  const echeck = (label, k, exclusive) => (
     <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.text, fontFamily: T.font, cursor: "pointer", marginBottom: 6 }}>
-      <input type="checkbox" checked={!!form[k]} onChange={(e) => setF(k, e.target.checked)} /> {label}
+      <input type="checkbox" checked={!!form[k]} onChange={(e) => {
+        const v = e.target.checked;
+        setForm((s) => { const n = { ...s, [k]: v }; if (v && exclusive) n[exclusive] = false; return n; });
+      }} /> {label}
     </label>
   );
 
@@ -449,9 +452,9 @@ export default function DealDetail() {
                           {eselect("Porte", "reclamada_porte", PORTE_OPTS)}
                         </div>
                         <div style={{ marginTop: 4 }}>
-                          {echeck("Em recuperação judicial", "reclamada_em_rj")}
+                          {echeck("Em recuperação judicial", "reclamada_em_rj", "reclamada_solvente")}
                           {echeck("Paga por precatório", "reclamada_paga_precatorio")}
-                          {echeck("Solvente", "reclamada_solvente")}
+                          {echeck("Solvente", "reclamada_solvente", "reclamada_em_rj")}
                         </div>
                         {efield("Teses restritivas (vírgula)", "teses", { full: true })}
                         <div style={{ fontSize: 11, color: T.faint3, marginTop: 2 }}>A elegibilidade recalcula ao salvar.</div>

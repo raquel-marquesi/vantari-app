@@ -465,12 +465,15 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
           </div>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "2px 0 4px" }}>
             {[
-              { k: "rda_rj", l: "Em recuperação judicial" },
+              { k: "rda_rj", l: "Em recuperação judicial", x: "rda_solvente" },
               { k: "rda_precatorio", l: "Paga por precatório" },
-              { k: "rda_solvente", l: "Solvente" },
+              { k: "rda_solvente", l: "Solvente", x: "rda_rj" },
             ].map((c) => (
               <label key={c.k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.text, fontFamily: T.font, cursor: "pointer" }}>
-                <input type="checkbox" checked={f[c.k]} onChange={(e) => set(c.k, e.target.checked)} /> {c.l}
+                <input type="checkbox" checked={f[c.k]} onChange={(e) => {
+                  const v = e.target.checked;
+                  setF((s) => { const n = { ...s, [c.k]: v }; if (v && c.x) n[c.x] = false; return n; });
+                }} /> {c.l}
               </label>
             ))}
           </div>

@@ -71,6 +71,16 @@ const maskCnpj = (raw) => {
   if (d.length > 2) return `${d.slice(0, 2)}.${d.slice(2)}`;
   return d;
 };
+const maskPhone = (raw) => {
+  const d = onlyDigits(raw).slice(0, 11);
+  if (d.length === 0) return "";
+  if (d.length <= 2) return `(${d}`;
+  const ddd = d.slice(0, 2);
+  const rest = d.slice(2);
+  if (rest.length <= 4) return `(${ddd}) ${rest}`;
+  if (d.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`;
+  return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`;
+};
 const maskCnj = (raw) => {
   const d = onlyDigits(raw).slice(0, 20);
   let r = d.slice(0, 7);
@@ -246,8 +256,8 @@ const EMPTY_PROC = {
   _autoTribunal: "", _autoVara: "", _autoUf: "",
 };
 
-// Lista fixa de captadores (provisória — vira cadastro/roles depois). Preencher com a Raquel.
-const CAPTADORES = [];
+// Lista fixa de captadores (provisória — vira cadastro/roles depois).
+const CAPTADORES = ["Alexandra", "Vanessa", "Camila"];
 
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },
@@ -411,7 +421,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {field("Nome *", "rcl_nome", "text", "Nome completo")}
             {field("CPF", "rcl_cpf", "text", "000.000.000-00", false, maskCpf)}
-            {field("Telefone", "rcl_phone", "text", "(11) 9....")}
+            {field("Telefone", "rcl_phone", "text", "(11) 90000-0000", false, maskPhone)}
             {field("E-mail", "rcl_email", "email", "email@exemplo.com")}
           </div>
 

@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   ArrowLeft, Loader2, AlertCircle, Scale, Building2, User, Trophy, XCircle,
-  CheckCircle2, Phone, StickyNote, CalendarClock, Send, Clock,
+  CheckCircle2, Phone, StickyNote, CalendarClock, Send, Clock, Pencil, Check, X,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS ───── */
@@ -18,6 +18,32 @@ const T = {
   font: "'Inter', system-ui, sans-serif", head: "'Sora', system-ui, sans-serif", mono: "'JetBrains Mono', monospace",
 };
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+const CAPTADORES = ["Alexandra", "Vanessa", "Camila"];
+const CNDT_OPTS = [
+  { v: "negativa", l: "Negativa (ok)" },
+  { v: "positiva_efeito_negativa", l: "Positiva c/ efeito negativo (ok)" },
+  { v: "positiva", l: "Positiva (veta)" },
+];
+const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
+
+/* ─── helpers (duplicados do form, padrão self-contained) ─── */
+const onlyDigits = (s) => (s || "").replace(/\D/g, "");
+const cleanCpf = (raw) => {
+  const v = onlyDigits(raw);
+  if (v.length !== 11) return null;
+  if (/^(\d)\1{10}$/.test(v)) return null;
+  const dv = (base, fs) => { let s = 0; for (let i = 0; i < base.length; i++) s += Number(base[i]) * (fs - i); const r = 11 - (s % 11); return r >= 10 ? 0 : r; };
+  if (dv(v.slice(0, 9), 10) !== Number(v[9])) return null;
+  if (dv(v.slice(0, 10), 11) !== Number(v[10])) return null;
+  return v;
+};
+const reaisToCents = (v) => { if (v == null || v === "") return 0; const n = parseFloat(String(v).replace(/\./g, "").replace(",", ".")); return Number.isFinite(n) ? Math.round(n * 100) : 0; };
+const centsToInput = (c) => c == null ? "" : (c / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const maskCpf = (raw) => { const d = onlyDigits(raw).slice(0, 11); if (d.length > 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`; if (d.length > 6) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`; if (d.length > 3) return `${d.slice(0, 3)}.${d.slice(3)}`; return d; };
+const maskCnpj = (raw) => { const d = onlyDigits(raw).slice(0, 14); if (d.length > 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`; if (d.length > 8) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`; if (d.length > 5) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5)}`; if (d.length > 2) return `${d.slice(0, 2)}.${d.slice(2)}`; return d; };
+const maskPhone = (raw) => { const d = onlyDigits(raw).slice(0, 11); if (!d) return ""; if (d.length <= 2) return `(${d}`; const ddd = d.slice(0, 2), rest = d.slice(2); if (rest.length <= 4) return `(${ddd}) ${rest}`; if (d.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`; return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`; };
+const maskCnj = (raw) => { const d = onlyDigits(raw).slice(0, 20); let r = d.slice(0, 7); if (d.length > 7) r += `-${d.slice(7, 9)}`; if (d.length > 9) r += `.${d.slice(9, 13)}`; if (d.length > 13) r += `.${d.slice(13, 14)}`; if (d.length > 14) r += `.${d.slice(14, 16)}`; if (d.length > 16) r += `.${d.slice(16, 20)}`; return r; };
+const maskMoney = (raw) => { let s = String(raw).replace(/[^\d,]/g, ""); const c = s.indexOf(","); let intp, decp = null; if (c >= 0) { intp = s.slice(0, c).replace(/\D/g, ""); decp = s.slice(c + 1).replace(/\D/g, "").slice(0, 2); } else { intp = s.replace(/\D/g, ""); } intp = intp.replace(/^0+(?=\d)/, ""); const g = intp.replace(/\B(?=(\d{3})+(?!\d))/g, "."); let out = g || (decp != null ? "0" : ""); if (decp != null) out += "," + decp; return out; };
 
 const fmtBRL = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const creditTypeLabel = (t) => t === "advogado_honorario" ? "Honorário (adv.)" : t === "reclamante" ? "Reclamante" : t || "—";
@@ -31,11 +57,9 @@ const ACT_TYPES = [
 ];
 const actMeta = (t) => ACT_TYPES.find((a) => a.v === t) || { v: t, l: t, icon: StickyNote };
 
-const elegBadge = (proc) => {
-  if (!proc) return null;
-  const ok = proc.elegivel;
-  return { label: ok ? "Elegível" : "Inelegível", color: ok ? T.green : T.coral, bg: ok ? "#F0FDF7" : "#FFF1F0", border: ok ? "#6EE7B7" : T.coral };
-};
+/* ─── estilos de input compartilhados ─── */
+const inputSt = { width: "100%", padding: "7px 9px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 12.5, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
+const labelSt = { fontSize: 11, fontWeight: 600, color: T.muted, display: "block", marginBottom: 3, fontFamily: T.font };
 
 /* ─── Sidebar ─── */
 const NavSection = ({ label }) => (
@@ -90,20 +114,37 @@ function Sidebar() {
   );
 }
 
-const Card = ({ title, icon: Icon, children }) => (
-  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", boxShadow: "0 1px 0 rgba(14,26,36,.03)" }}>
-    {title && (
-      <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
-        {Icon && <Icon size={15} color={T.teal} />} {title}
-      </div>
-    )}
-    {children}
-  </div>
-);
 const Row = ({ label, value }) => (
   <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "5px 0", fontSize: 12.5, fontFamily: T.font, borderBottom: `1px solid ${T.bg}` }}>
     <span style={{ color: T.muted }}>{label}</span>
     <span style={{ color: T.ink, fontWeight: 600, textAlign: "right" }}>{value ?? "—"}</span>
+  </div>
+);
+
+/* Card com edição: header tem Editar; em modo edição mostra Salvar/Cancelar */
+const EditCard = ({ title, icon: Icon, editing, onEdit, onSave, onCancel, saving, canEdit = true, children }) => (
+  <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px", boxShadow: "0 1px 0 rgba(14,26,36,.03)" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 7, color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
+        {Icon && <Icon size={15} color={T.teal} />} {title}
+      </div>
+      {canEdit && !editing && (
+        <button onClick={onEdit} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: T.teal, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+          <Pencil size={13} /> Editar
+        </button>
+      )}
+      {editing && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={onCancel} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 4, background: T.surface, border: `1px solid ${T.border}`, color: T.muted, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font, borderRadius: 7, padding: "4px 9px" }}>
+            <X size={13} /> Cancelar
+          </button>
+          <button onClick={onSave} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 4, background: T.teal, border: "none", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font, borderRadius: 7, padding: "4px 10px" }}>
+            {saving ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Check size={13} />} Salvar
+          </button>
+        </div>
+      )}
+    </div>
+    {children}
   </div>
 );
 
@@ -123,6 +164,11 @@ export default function DealDetail() {
   const [posting, setPosting] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  const [editing, setEditing] = useState(null); // 'deal' | 'processo' | 'person' | 'company'
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -130,21 +176,18 @@ export default function DealDetail() {
       const { data: d, error: e1 } = await crm.from("deals").select("*").eq("id", dealId).single();
       if (e1) throw e1;
       setDeal(d);
-
       const [{ data: st }, { data: ac }] = await Promise.all([
         crm.from("stages").select("id,name,position,kind").eq("pipeline_id", d.pipeline_id).order("position"),
         crm.from("activities").select("*").eq("deal_id", dealId).order("created_at", { ascending: false }),
       ]);
-      setStages(st || []);
-      setActs(ac || []);
-
+      setStages(st || []); setActs(ac || []);
       if (d.processo_id) {
         const { data: p } = await crm.from("processos").select("*").eq("id", d.processo_id).single();
         setProcesso(p || null);
         if (p?.reclamada_company_id) {
           const { data: co } = await supabase.schema("core").from("companies").select("*").eq("id", p.reclamada_company_id).single();
           setCompany(co || null);
-        }
+        } else setCompany(null);
       }
       if (d.person_id) {
         const { data: pe } = await supabase.schema("core").from("persons").select("*").eq("id", d.person_id).single();
@@ -170,11 +213,7 @@ export default function DealDetail() {
     if (e) { setError(e.message); return; }
     load();
   };
-
-  const setOutcome = async (kind) => {
-    const target = stages.find((s) => s.kind === kind);
-    if (target) moveStage(target.id);
-  };
+  const setOutcome = async (kind) => { const t = stages.find((s) => s.kind === kind); if (t) moveStage(t.id); };
 
   const addActivity = async () => {
     if (!actContent.trim()) return;
@@ -182,22 +221,112 @@ export default function DealDetail() {
     let owner = null;
     try { const { data: u } = await supabase.auth.getUser(); owner = u?.user?.id || null; } catch { /* ignore */ }
     const { error: e } = await supabase.schema("crm").from("activities").insert({
-      workspace_id: WORKSPACE_VANTARI,
-      deal_id: deal.id,
-      processo_id: deal.processo_id,
-      person_id: deal.person_id,
-      type: actType,
-      content: actContent.trim(),
-      owner_id: owner,
+      workspace_id: WORKSPACE_VANTARI, deal_id: deal.id, processo_id: deal.processo_id, person_id: deal.person_id,
+      type: actType, content: actContent.trim(), owner_id: owner,
     });
     setPosting(false);
     if (e) { setError(e.message); return; }
-    setActContent("");
-    load();
+    setActContent(""); load();
   };
 
+  /* ─── edição ─── */
+  const startEdit = (card) => {
+    setError(null);
+    if (card === "deal") setForm({
+      credit_type: deal.credit_type || "reclamante", modalidade: deal.modalidade || "",
+      valor_face: centsToInput(deal.valor_face_cents), valor_ofertado: centsToInput(deal.valor_ofertado_cents),
+      desagio: deal.desagio_pct != null ? String(deal.desagio_pct) : "", captador: deal.captador || "",
+    });
+    if (card === "processo") setForm({
+      numero_cnj: onlyDigits(processo.numero_cnj), tribunal: processo.tribunal || "", vara: processo.vara || "",
+      uf: processo.uf || "", fase: processo.fase || "", valor_causa: centsToInput(processo.valor_causa_cents),
+      valor_liquido: centsToInput(processo.valor_estimado_liquido_cents), reclamada_cndt: processo.reclamada_cndt || "negativa",
+      reclamada_porte: processo.reclamada_porte || "Grande", reclamada_em_rj: !!processo.reclamada_em_rj,
+      reclamada_paga_precatorio: !!processo.reclamada_paga_precatorio, reclamada_solvente: !!processo.reclamada_solvente,
+      teses: (processo.teses_restritivas || []).join(", "),
+    });
+    if (card === "person") setForm({
+      full_name: person.full_name || "", cpf: onlyDigits(person.cpf), primary_phone: onlyDigits(person.primary_phone), primary_email: person.primary_email || "",
+    });
+    if (card === "company") setForm({ name: company?.name || "", cnpj: onlyDigits(company?.cnpj) });
+    setEditing(card);
+  };
+  const cancelEdit = () => { setEditing(null); setForm({}); };
+
+  const saveDeal = async () => {
+    setSaving(true); setError(null);
+    const { error: e } = await supabase.schema("crm").from("deals").update({
+      credit_type: form.credit_type, modalidade: form.modalidade || null,
+      valor_face_cents: reaisToCents(form.valor_face), valor_ofertado_cents: form.valor_ofertado === "" ? null : reaisToCents(form.valor_ofertado),
+      desagio_pct: form.desagio === "" ? null : parseFloat(String(form.desagio).replace(",", ".")), captador: form.captador || null,
+    }).eq("id", deal.id);
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    cancelEdit(); load();
+  };
+  const saveProcesso = async () => {
+    setSaving(true); setError(null);
+    const { error: e } = await supabase.schema("crm").from("processos").update({
+      numero_cnj: maskCnj(form.numero_cnj), tribunal: form.tribunal || null, vara: form.vara || null,
+      uf: form.uf ? form.uf.toUpperCase().slice(0, 2) : null, fase: form.fase || null,
+      valor_causa_cents: reaisToCents(form.valor_causa), valor_estimado_liquido_cents: reaisToCents(form.valor_liquido),
+      reclamada_cndt: form.reclamada_cndt, reclamada_porte: form.reclamada_porte,
+      reclamada_em_rj: form.reclamada_em_rj, reclamada_paga_precatorio: form.reclamada_paga_precatorio, reclamada_solvente: form.reclamada_solvente,
+      teses_restritivas: form.teses.split(",").map((t) => t.trim()).filter(Boolean),
+    }).eq("id", processo.id);
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    cancelEdit(); load();
+  };
+  const savePerson = async () => {
+    setError(null);
+    let cpfClean = null;
+    if (form.cpf) { cpfClean = cleanCpf(form.cpf); if (!cpfClean) { setError("CPF inválido (11 dígitos)."); return; } }
+    setSaving(true);
+    const { error: e } = await supabase.schema("core").from("persons").update({
+      full_name: form.full_name || null, cpf: cpfClean, primary_phone: form.primary_phone || null,
+      primary_email: form.primary_email ? form.primary_email.trim().toLowerCase() : null,
+      status: cpfClean ? "identificado" : (person.status || "pendente"),
+    }).eq("id", person.id);
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    cancelEdit(); load();
+  };
+  const saveCompany = async () => {
+    setSaving(true); setError(null);
+    const cnpjDigits = onlyDigits(form.cnpj) || null;
+    const { error: e } = await supabase.schema("core").from("companies").update({ name: form.name || null, cnpj: cnpjDigits }).eq("id", company.id);
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    cancelEdit(); load();
+  };
+
+  /* inputs de edição */
+  const efield = (label, k, { mask, type = "text", full } = {}) => (
+    <div style={{ marginBottom: 9, gridColumn: full ? "1 / -1" : "auto" }}>
+      <label style={labelSt}>{label}</label>
+      <input type={type} inputMode={mask ? (mask === maskMoney ? "decimal" : "numeric") : undefined}
+        value={mask ? mask(form[k]) : (form[k] ?? "")}
+        onChange={(e) => setF(k, mask ? (mask === maskMoney ? maskMoney(e.target.value) : onlyDigits(e.target.value)) : e.target.value)}
+        style={inputSt} />
+    </div>
+  );
+  const eselect = (label, k, opts) => (
+    <div style={{ marginBottom: 9 }}>
+      <label style={labelSt}>{label}</label>
+      <select value={form[k] ?? ""} onChange={(e) => setF(k, e.target.value)} style={inputSt}>
+        {opts.map((o) => typeof o === "string" ? <option key={o} value={o}>{o}</option> : <option key={o.v} value={o.v}>{o.l}</option>)}
+      </select>
+    </div>
+  );
+  const echeck = (label, k) => (
+    <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.text, fontFamily: T.font, cursor: "pointer", marginBottom: 6 }}>
+      <input type="checkbox" checked={!!form[k]} onChange={(e) => setF(k, e.target.checked)} /> {label}
+    </label>
+  );
+
   const valor = deal ? (deal.valor_ofertado_cents ?? deal.valor_face_cents) : 0;
-  const eb = elegBadge(processo);
+  const eb = processo ? { ok: processo.elegivel } : null;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
@@ -220,7 +349,6 @@ export default function DealDetail() {
 
         {!loading && deal && (
           <>
-            {/* Cabeçalho */}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
               <div>
                 <h1 style={{ fontSize: 24, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>
@@ -233,7 +361,6 @@ export default function DealDetail() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                {/* Estágio */}
                 <select value={deal.stage_id} disabled={busy} onChange={(e) => moveStage(e.target.value)}
                   style={{ padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, fontWeight: 600, color: T.ink, background: T.surface, fontFamily: T.font, cursor: "pointer" }}>
                   {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -243,17 +370,19 @@ export default function DealDetail() {
                   <Trophy size={14} /> Ganho
                 </button>
                 <button onClick={() => setOutcome("lost")} disabled={busy} title="Marcar como Perdido"
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: curStage?.kind === "lost" ? T.coral : T.surface, border: `1px solid ${curStage?.kind === "lost" ? T.coral : T.coral}`, borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: curStage?.kind === "lost" ? "#fff" : T.coral, fontFamily: T.font }}>
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: curStage?.kind === "lost" ? T.coral : T.surface, border: `1px solid ${T.coral}`, borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: curStage?.kind === "lost" ? "#fff" : T.coral, fontFamily: T.font }}>
                   <XCircle size={14} /> Perdido
                 </button>
               </div>
             </div>
 
-            {/* Grid principal */}
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(280px, 1fr)", gap: 20, alignItems: "start" }}>
-              {/* Coluna esquerda: atividades */}
+            <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.4fr) minmax(300px, 1fr)", gap: 20, alignItems: "start" }}>
+              {/* Esquerda: atividades */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <Card title="Registrar atividade" icon={StickyNote}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
+                    <StickyNote size={15} color={T.teal} /> Registrar atividade
+                  </div>
                   <div style={{ display: "flex", gap: 6, marginBottom: 10, flexWrap: "wrap" }}>
                     {ACT_TYPES.map((a) => (
                       <button key={a.v} onClick={() => setActType(a.v)}
@@ -272,9 +401,12 @@ export default function DealDetail() {
                       {posting ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />} Adicionar
                     </button>
                   </div>
-                </Card>
+                </div>
 
-                <Card title={`Timeline (${acts.length})`} icon={Clock}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 12, color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
+                    <Clock size={15} color={T.teal} /> Timeline ({acts.length})
+                  </div>
                   {acts.length === 0 && <div style={{ color: T.muted, fontSize: 13, padding: "8px 0" }}>Nenhuma atividade registrada ainda.</div>}
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     {acts.map((a) => {
@@ -295,61 +427,115 @@ export default function DealDetail() {
                       );
                     })}
                   </div>
-                </Card>
+                </div>
               </div>
 
-              {/* Coluna direita: processo / contato / negócio */}
+              {/* Direita: blocos editáveis */}
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                <Card title="Processo" icon={Scale}>
-                  {processo ? (
-                    <>
-                      {eb && (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 10, background: eb.bg, border: `1px solid ${eb.border}`, color: eb.color, fontSize: 12, fontWeight: 700, fontFamily: T.font }}>
-                          {processo.elegivel ? <CheckCircle2 size={13} /> : <XCircle size={13} />} {eb.label}
+                <EditCard title="Processo" icon={Scale} canEdit={!!processo} editing={editing === "processo"} saving={saving}
+                  onEdit={() => startEdit("processo")} onCancel={cancelEdit} onSave={saveProcesso}>
+                  {!processo ? <div style={{ color: T.muted, fontSize: 13 }}>Sem processo vinculado.</div>
+                    : editing === "processo" ? (
+                      <div>
+                        {efield("Número CNJ", "numero_cnj", { mask: maskCnj, full: true })}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                          {efield("Tribunal", "tribunal")}
+                          {efield("Vara", "vara")}
+                          {efield("UF", "uf")}
+                          {efield("Fase", "fase")}
+                          {efield("Valor da causa (R$)", "valor_causa", { mask: maskMoney })}
+                          {efield("Estimado líquido (R$)", "valor_liquido", { mask: maskMoney })}
+                          {eselect("CNDT", "reclamada_cndt", CNDT_OPTS)}
+                          {eselect("Porte", "reclamada_porte", PORTE_OPTS)}
                         </div>
-                      )}
-                      <Row label="CNJ" value={processo.numero_cnj} />
-                      <Row label="Tribunal" value={processo.tribunal} />
-                      <Row label="Vara" value={processo.vara} />
-                      <Row label="UF" value={processo.uf} />
-                      <Row label="Fase" value={processo.fase} />
-                      <Row label="Valor da causa" value={processo.valor_causa_cents ? fmtBRL(processo.valor_causa_cents) : "—"} />
-                      <Row label="Estimado líquido" value={processo.valor_estimado_liquido_cents ? fmtBRL(processo.valor_estimado_liquido_cents) : "—"} />
-                    </>
-                  ) : <div style={{ color: T.muted, fontSize: 13 }}>Sem processo vinculado.</div>}
-                </Card>
+                        <div style={{ marginTop: 4 }}>
+                          {echeck("Em recuperação judicial", "reclamada_em_rj")}
+                          {echeck("Paga por precatório", "reclamada_paga_precatorio")}
+                          {echeck("Solvente", "reclamada_solvente")}
+                        </div>
+                        {efield("Teses restritivas (vírgula)", "teses", { full: true })}
+                        <div style={{ fontSize: 11, color: T.faint3, marginTop: 2 }}>A elegibilidade recalcula ao salvar.</div>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 10, background: eb.ok ? "#F0FDF7" : "#FFF1F0", border: `1px solid ${eb.ok ? "#6EE7B7" : T.coral}`, color: eb.ok ? T.green : T.coral, fontSize: 12, fontWeight: 700 }}>
+                          {eb.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />} {eb.ok ? "Elegível" : "Inelegível"}
+                        </div>
+                        <Row label="CNJ" value={processo.numero_cnj} />
+                        <Row label="Tribunal" value={processo.tribunal} />
+                        <Row label="Vara" value={processo.vara} />
+                        <Row label="UF" value={processo.uf} />
+                        <Row label="Fase" value={processo.fase} />
+                        <Row label="Valor da causa" value={processo.valor_causa_cents ? fmtBRL(processo.valor_causa_cents) : "—"} />
+                        <Row label="Estimado líquido" value={processo.valor_estimado_liquido_cents ? fmtBRL(processo.valor_estimado_liquido_cents) : "—"} />
+                        <Row label="CNDT" value={processo.reclamada_cndt} />
+                        <Row label="Porte reclamada" value={processo.reclamada_porte} />
+                        <Row label="Teses restritivas" value={(processo.teses_restritivas || []).join(", ") || "nenhuma"} />
+                      </>
+                    )}
+                </EditCard>
 
-                <Card title="Reclamada" icon={Building2}>
-                  {company ? (
+                <EditCard title="Reclamada" icon={Building2} canEdit={!!company} editing={editing === "company"} saving={saving}
+                  onEdit={() => startEdit("company")} onCancel={cancelEdit} onSave={saveCompany}>
+                  {!company ? <div style={{ color: T.muted, fontSize: 13 }}>Sem reclamada vinculada.</div>
+                    : editing === "company" ? (
+                      <div>
+                        {efield("Razão social", "name")}
+                        {efield("CNPJ", "cnpj", { mask: maskCnpj })}
+                      </div>
+                    ) : (
+                      <>
+                        <Row label="Razão social" value={company.name} />
+                        <Row label="CNPJ" value={company.cnpj ? maskCnpj(company.cnpj) : "—"} />
+                      </>
+                    )}
+                </EditCard>
+
+                <EditCard title="Contato (titular)" icon={User} canEdit={!!person} editing={editing === "person"} saving={saving}
+                  onEdit={() => startEdit("person")} onCancel={cancelEdit} onSave={savePerson}>
+                  {!person ? <div style={{ color: T.muted, fontSize: 13 }}>Sem contato vinculado.</div>
+                    : editing === "person" ? (
+                      <div>
+                        {efield("Nome", "full_name")}
+                        {efield("CPF", "cpf", { mask: maskCpf })}
+                        {efield("Telefone", "primary_phone", { mask: maskPhone })}
+                        {efield("E-mail", "primary_email", { type: "email" })}
+                      </div>
+                    ) : (
+                      <>
+                        <Row label="Nome" value={person.full_name} />
+                        <Row label="CPF" value={person.cpf ? maskCpf(person.cpf) : "—"} />
+                        <Row label="Telefone" value={person.primary_phone ? maskPhone(person.primary_phone) : "—"} />
+                        <Row label="E-mail" value={person.primary_email} />
+                        <Row label="Status" value={person.status} />
+                      </>
+                    )}
+                </EditCard>
+
+                <EditCard title="Negócio" icon={Briefcase} editing={editing === "deal"} saving={saving}
+                  onEdit={() => startEdit("deal")} onCancel={cancelEdit} onSave={saveDeal}>
+                  {editing === "deal" ? (
+                    <div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        {eselect("Tipo de crédito", "credit_type", [{ v: "reclamante", l: "Reclamante" }, { v: "advogado_honorario", l: "Honorário (adv.)" }])}
+                        {eselect("Modalidade", "modalidade", [{ v: "", l: "—" }, { v: "tradicional", l: "Tradicional" }, { v: "kicker", l: "Kicker" }])}
+                        {efield("Valor de face (R$)", "valor_face", { mask: maskMoney })}
+                        {efield("Valor ofertado (R$)", "valor_ofertado", { mask: maskMoney })}
+                        {efield("Deságio (%)", "desagio")}
+                        {eselect("Captador/a", "captador", [{ v: "", l: "— selecionar —" }, ...CAPTADORES.map((c) => ({ v: c, l: c }))])}
+                      </div>
+                    </div>
+                  ) : (
                     <>
-                      <Row label="Razão social" value={company.name} />
-                      <Row label="CNPJ" value={company.cnpj} />
-                      {processo && <Row label="CNDT" value={processo.reclamada_cndt} />}
-                      {processo && <Row label="Porte" value={processo.reclamada_porte} />}
+                      <Row label="Tipo de crédito" value={creditTypeLabel(deal.credit_type)} />
+                      <Row label="Modalidade" value={deal.modalidade} />
+                      <Row label="Valor de face" value={fmtBRL(deal.valor_face_cents)} />
+                      <Row label="Valor ofertado" value={deal.valor_ofertado_cents != null ? fmtBRL(deal.valor_ofertado_cents) : "—"} />
+                      <Row label="Deságio" value={deal.desagio_pct != null ? `${Number(deal.desagio_pct).toFixed(0)}%` : "—"} />
+                      <Row label="Captador/a" value={deal.captador} />
                     </>
-                  ) : <div style={{ color: T.muted, fontSize: 13 }}>Sem reclamada vinculada.</div>}
-                </Card>
-
-                <Card title="Contato (titular)" icon={User}>
-                  {person ? (
-                    <>
-                      <Row label="Nome" value={person.full_name} />
-                      <Row label="CPF" value={person.cpf} />
-                      <Row label="Telefone" value={person.primary_phone} />
-                      <Row label="E-mail" value={person.primary_email} />
-                      <Row label="Status" value={person.status} />
-                    </>
-                  ) : <div style={{ color: T.muted, fontSize: 13 }}>Sem contato vinculado.</div>}
-                </Card>
-
-                <Card title="Negócio" icon={Briefcase}>
-                  <Row label="Tipo de crédito" value={creditTypeLabel(deal.credit_type)} />
-                  <Row label="Modalidade" value={deal.modalidade} />
-                  <Row label="Valor de face" value={fmtBRL(deal.valor_face_cents)} />
-                  <Row label="Valor ofertado" value={deal.valor_ofertado_cents != null ? fmtBRL(deal.valor_ofertado_cents) : "—"} />
-                  <Row label="Deságio" value={deal.desagio_pct != null ? `${Number(deal.desagio_pct).toFixed(0)}%` : "—"} />
-                  <Row label="Captador/a" value={deal.captador} />
-                </Card>
+                  )}
+                </EditCard>
               </div>
             </div>
           </>

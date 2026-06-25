@@ -203,6 +203,11 @@ function DealCard({ deal, personName }) {
           </span>
         )}
       </div>
+      {deal.captador && (
+        <div style={{ fontSize: 10.5, color: T.muted, fontFamily: T.font, marginTop: 7, display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ color: T.faint3 }}>captador:</span> <strong style={{ color: T.text }}>{deal.captador}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -237,9 +242,12 @@ const EMPTY_PROC = {
   rda_rj: false, rda_precatorio: false, rda_solvente: true,
   numero_cnj: "", tribunal: "", vara: "", uf: "", fase: "Acórdão de RO",
   valor_causa: "", valor_liquido: "", teses: "",
-  credit_type: "reclamante", modalidade: "tradicional", valor_face: "", desagio: "",
+  credit_type: "reclamante", modalidade: "tradicional", valor_face: "", desagio: "", captador: "",
   _autoTribunal: "", _autoVara: "", _autoUf: "",
 };
+
+// Lista fixa de captadores (provisória — vira cadastro/roles depois). Preencher com a Raquel.
+const CAPTADORES = [];
 
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },
@@ -361,6 +369,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         source: "crm",
+        captador: f.captador || null,
       });
       if (ed) throw ed;
 
@@ -472,6 +481,18 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
             </div>
             {field("Valor de face (R$)", "valor_face", "text", "0,00")}
             {field("Deságio (%)", "desagio", "text", "ex: 45")}
+            <div style={{ marginBottom: 12, gridColumn: "1 / -1" }}>
+              <label style={labelStyle}>Captador/a (distribuir para)</label>
+              <select value={f.captador} onChange={(e) => set("captador", e.target.value)} style={inputStyle}>
+                <option value="">— selecionar —</option>
+                {CAPTADORES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              {CAPTADORES.length === 0 && (
+                <div style={{ fontSize: 10.5, color: T.amber, marginTop: 3, fontFamily: T.font }}>
+                  Lista de captadores ainda vazia — me passe os nomes para preencher.
+                </div>
+              )}
+            </div>
           </div>
           {ofertadoC != null && faceC > 0 && (
             <div style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, marginTop: -4 }}>
@@ -536,7 +557,7 @@ export default function CRM() {
 
       const { data: dl, error: e3 } = await crm
         .from("deals")
-        .select("id,person_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status")
+        .select("id,person_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status,captador")
         .eq("pipeline_id", pipe.id);
       if (e3) throw e3;
       setDeals(dl || []);

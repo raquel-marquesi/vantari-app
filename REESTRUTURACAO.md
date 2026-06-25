@@ -92,6 +92,10 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 - **Tenancy:** core reusa `public.workspaces` (ver seção Decisão de arquitetura).
 - **Workspace canônico:** sala **Vantari** (`53092199-7b75-4342-a897-f589d6f34922`), 3 membros, dados órfãos migrados (ver "O que JÁ foi aplicado").
 
+## Pendências de fase futura (apontadas pela Raquel)
+
+- **Estrutura de papéis & permissões + cadastro de captadores.** Captadores (quem traz o processo) ainda não existem no sistema. Por ora: coluna `crm.deals.captador` (texto) + lista fixa no form (`CAPTADORES` em `vantari-crm.jsx`). Evoluir para cadastro gerenciável + roles/permissões (talvez login do captador, comissão). Quando houver cadastro, `captador` vira FK.
+
 ## Decisões em aberto
 
 - **Qual codebase vira o app único?** FlowCRM tem o funil real; Next tem o módulo de marketing (e muita cenografia). Recomendação: construir novo sobre o core, usar Flow como referência visual. Depende de olhar o repo do Flow (não está aqui).

@@ -102,6 +102,7 @@ create table if not exists crm.deals (
   status             text not null default 'open' check (status in ('open', 'won', 'lost')),
   owner_id           uuid references auth.users(id) on delete set null,
   source             text,
+  captador           text,                       -- nome do captador/a (lista fixa por ora; vira FK qdo houver cadastro)
   aprovado_por       uuid references auth.users(id) on delete set null,  -- governança (Leandro/Rodrigo)
   aprovado_em        timestamptz,
   created_at         timestamptz not null default now(),

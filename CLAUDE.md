@@ -268,6 +268,9 @@ Auditoria do RD em `auditoria rd/Auditoria_RDStation_Vantari.docx` + `Auditoria_
 |---|---|
 | `raquel@vantari.com.br` | Admin (acesso total) |
 | `catarina.quartucci@vantari.com.br` | Membro |
+| `gustavo@vantari.com.br` | Membro |
+
+Todos membros da sala canônica **Vantari** (`53092199-7b75-4342-a897-f589d6f34922`).
 
 Senhas gerenciadas via Supabase Auth. Para redefinir: `UPDATE auth.users SET encrypted_password = crypt('NovaSenha', gen_salt('bf')) WHERE email = '...'`
 

@@ -30,7 +30,7 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 
 - **Identidade:** CPF (primário) + telefone (fallback, normalizado p/ BR). `core.resolve_person()` é a porta idempotente; `core.merge_persons()` repontua FKs dinamicamente (qualquer schema novo funciona sem alterá-la).
 - **Segurança:** anon nunca toca o core; authenticated escopado por workspace; service_role (Edge Functions) para entradas públicas.
-- **Tenancy (decidido 2026-06-25):** o core **REUSA** a tenancy do banco vivo (`public.workspaces` / `public.workspace_members` / `is_workspace_member()`), **não cria a sua**. O banco vivo já tinha multi-tenant — duas tenancies paralelas seriam o mesmo erro de drift. ⚠️ **TODO antes de aplicar o core:** reescrever `0001_core_foundation.sql` para dropar `core.workspaces`/`core.workspace_members`/`core.current_workspace_ids()` e apontar todos os FKs `workspace_id` para `public.workspaces(id)`, com policies usando `public.is_workspace_member()`.
+- **Tenancy (decidido 2026-06-25):** o core **REUSA** a tenancy do banco vivo (`public.workspaces` / `public.workspace_members` / `is_workspace_member()`), **não cria a sua**. O banco vivo já tinha multi-tenant — duas tenancies paralelas seriam o mesmo erro de drift. ✅ **`0001_core_foundation.sql` reescrito (2026-06-25):** removidas `core.workspaces`/`core.workspace_members`; todos os FKs `workspace_id` apontam para `public.workspaces(id)`; `core.current_workspace_ids()` lê de `public.workspace_members`. **Validado** rodando o arquivo inteiro num `begin/rollback` contra o banco vivo (sem deixar rastro: `schema core` não persistiu).
 
 ## Domínio: cessão/antecipação de crédito trabalhista
 
@@ -49,7 +49,7 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 
 | Artefato | Conteúdo |
 |---|---|
-| `supabase/proposals/0001_core_foundation.sql` | core: persons, identifiers, companies, events, consents, resolve_person, merge_persons, RLS |
+| `supabase/proposals/0001_core_foundation.sql` | core: persons, identifiers, companies, events, consents, resolve_person, merge_persons, RLS. **Reusa `public.workspaces` (não cria tenancy própria) — revisado 2026-06-25** |
 | `supabase/proposals/0002_crm_flow.sql` | crm domínio: processos (+elegibilidade), deals por crédito, advogados, funil real |
 | `supabase/proposals/0004_mkt_marketing.sql` | mkt: scoring_rules + lead_scores (recálculo via evento), forms, campanhas, can_email (LGPD) |
 | `supabase/proposals/0005_fin_receivables.sql` | fin: antecipações (deságio auto) + recebimentos em tranches + ciclo de status |

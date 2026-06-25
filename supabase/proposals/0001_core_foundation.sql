@@ -73,32 +73,19 @@ returns trigger language plpgsql as $$
 begin new.updated_at := now(); return new; end $$;
 
 -- =============================================================================
--- 1. TENANCY
+-- 1. TENANCY  (REUSA a do banco vivo — NÃO cria a sua; decisão 2026-06-25)
 -- =============================================================================
+-- O banco já tem public.workspaces / public.workspace_members / is_workspace_member().
+-- O core apenas REFERENCIA public.workspaces(id). Criar core.workspaces seria uma
+-- segunda fonte de verdade de tenancy = drift garantido. Por isso não existe aqui.
 
-create table if not exists core.workspaces (
-  id         uuid primary key default gen_random_uuid(),
-  name       text not null,
-  slug       text unique,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create table if not exists core.workspace_members (
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
-  user_id      uuid not null references auth.users(id)      on delete cascade,
-  role         text not null default 'member'
-               check (role in ('owner', 'admin', 'member', 'viewer')),
-  created_at   timestamptz not null default now(),
-  primary key (workspace_id, user_id)
-);
-
--- workspaces do usuário logado. SECURITY DEFINER = roda como dono e ignora RLS,
--- evitando recursão quando as policies abaixo consultam workspace_members.
+-- workspaces do usuário logado, lidos da tenancy do banco vivo. SECURITY DEFINER
+-- = roda como dono e ignora RLS, evitando recursão quando as policies abaixo
+-- consultam workspace_members. (Alternativa equivalente: public.is_workspace_member.)
 create or replace function core.current_workspace_ids()
 returns setof uuid
 language sql stable security definer set search_path = core, public as $$
-  select workspace_id from core.workspace_members where user_id = auth.uid()
+  select workspace_id from public.workspace_members where user_id = auth.uid()
 $$;
 
 -- =============================================================================
@@ -107,7 +94,7 @@ $$;
 
 create table if not exists core.companies (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   cnpj         text,
   name         text,
   created_at   timestamptz not null default now(),
@@ -117,7 +104,7 @@ create table if not exists core.companies (
 
 create table if not exists core.persons (
   id            uuid primary key default gen_random_uuid(),
-  workspace_id  uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id  uuid not null references public.workspaces(id) on delete cascade,
   company_id    uuid references core.companies(id) on delete set null,
   cpf           text,                       -- 11 dígitos, NULL = PENDENTE
   status        text not null default 'pendente'
@@ -137,7 +124,7 @@ create index if not exists persons_company_idx on core.persons (company_id);
 -- N identificadores por pessoa: resolve "telefone antes do CPF"
 create table if not exists core.person_identifiers (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   person_id    uuid not null references core.persons(id) on delete cascade,
   kind         text not null
                check (kind in ('cpf', 'phone', 'email', 'whatsapp_id',
@@ -152,7 +139,7 @@ create index if not exists identifiers_person_idx on core.person_identifiers (pe
 -- log append-only: trilha de auditoria + fonte de analytics + gatilho de fan-out
 create table if not exists core.events (
   id           bigint generated always as identity primary key,
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   person_id    uuid references core.persons(id)   on delete set null,
   company_id   uuid references core.companies(id) on delete set null,
   source       text not null,    -- meta | google | form | nina | email | manual | system
@@ -168,7 +155,7 @@ create index if not exists events_type_idx   on core.events (workspace_id, type,
 -- consentimento LGPD: estado atual por canal (histórico fica em core.events)
 create table if not exists core.consents (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   person_id    uuid not null references core.persons(id) on delete cascade,
   channel      text not null
                check (channel in ('email', 'whatsapp', 'sms', 'phone', 'data_processing')),
@@ -180,9 +167,6 @@ create table if not exists core.consents (
 );
 
 -- updated_at triggers
-drop trigger if exists trg_ws_touch on core.workspaces;
-create trigger trg_ws_touch before update on core.workspaces
-  for each row execute function core.touch_updated_at();
 drop trigger if exists trg_co_touch on core.companies;
 create trigger trg_co_touch before update on core.companies
   for each row execute function core.touch_updated_at();
@@ -380,20 +364,15 @@ grant execute on function core.resolve_person(uuid, text, text, text, text, text
 grant execute on function core.merge_persons(uuid, uuid) to service_role;
 grant execute on function core.current_workspace_ids() to authenticated, service_role;
 
--- habilitar RLS
-alter table core.workspaces         enable row level security;
-alter table core.workspace_members  enable row level security;
+-- habilitar RLS (workspaces/membership ficam em public, já têm RLS própria no banco vivo)
 alter table core.companies          enable row level security;
 alter table core.persons            enable row level security;
 alter table core.person_identifiers enable row level security;
 alter table core.events             enable row level security;
 alter table core.consents           enable row level security;
 
--- workspaces / membership: leitura escopada; criação/gestão via service_role
-create policy ws_select on core.workspaces for select to authenticated
-  using (id in (select core.current_workspace_ids()));
-create policy wm_select on core.workspace_members for select to authenticated
-  using (workspace_id in (select core.current_workspace_ids()));
+-- workspaces / membership NÃO são geridos aqui: vivem em public (tenancy do banco
+-- vivo) e já têm RLS própria. O core só os referencia via current_workspace_ids().
 
 -- entidades de negócio: CRUD restrito ao próprio workspace
 create policy companies_rw on core.companies for all to authenticated
@@ -423,7 +402,7 @@ create policy events_insert on core.events for insert to authenticated
 --  create schema crm;                       -- Flow (pipeline de vendas)
 --  create table crm.deals (
 --    id           uuid primary key default gen_random_uuid(),
---    workspace_id uuid not null references core.workspaces(id) on delete cascade,
+--    workspace_id uuid not null references public.workspaces(id) on delete cascade,
 --    person_id    uuid not null references core.persons(id)    on delete cascade,
 --    stage        text not null,
 --    value_cents  bigint,

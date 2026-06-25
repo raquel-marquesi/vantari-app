@@ -57,7 +57,11 @@ Filtros: período ("Este mês") + equipe ("Toda equipe") + refresh.
   FUTURO → NEGOCIAÇÃO/PROPOSTA ENVIADA → GANHO → (PERDIDO)**.
 → Fonte: `crm.deals` + `crm.stages` + `crm.pipelines`.
 
-### 3. Detalhe do negócio — `/deals/:id`
+### 3. Detalhe do negócio — `/deals/:id`  — ✅ RECRIADO no Next (`/crm/:dealId`, 2026-06-25)
+> `src/vantari-crm-deal.jsx` (página inteira, não modal). Cabeçalho c/ titular/valor/estágio
+> (mover no funil) + Ganho/Perdido; esquerda = registrar atividade (nota/ligação/reunião/tarefa)
+> + timeline (crm.activities); direita = Processo (CNJ/elegibilidade), Reclamada, Contato, Negócio.
+> Substitui o "BANT" genérico do Flow pelo domínio real. Falta: editar campos do processo/negócio inline.
 - Cabeçalho: nome, **valor R$**, dropdown de **estágio**, status (Ativo/Inativo),
   botões **Ganho** / **Perdido**.
 - Coluna esq.: **Adicionar Atividade** (tipo: Nota/Ligação/Reunião/Tarefa/Email + Título +

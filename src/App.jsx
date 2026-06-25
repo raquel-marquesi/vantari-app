@@ -15,6 +15,7 @@ const Onboarding       = lazy(() => import("./vantari-onboarding-wizard"));
 const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
 const Segments         = lazy(() => import("./vantari-segments"));
 const CRM              = lazy(() => import("./vantari-crm"));
+const DealDetail       = lazy(() => import("./vantari-crm-deal"));
 const PublicForm       = lazy(() => import("./vantari-public-form"));
 
 function PageLoader() {
@@ -92,6 +93,7 @@ export default function App() {
           <Route path="/workflow"       element={<ProtectedRoute><WorkflowBuilder /></ProtectedRoute>} />
           <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
           <Route path="/crm"           element={<ProtectedRoute><CRM /></ProtectedRoute>} />
+          <Route path="/crm/:dealId"   element={<ProtectedRoute><DealDetail /></ProtectedRoute>} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

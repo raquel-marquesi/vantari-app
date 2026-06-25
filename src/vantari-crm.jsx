@@ -204,9 +204,11 @@ function Sidebar() {
 /* ─── Card de negócio ─── */
 function DealCard({ deal, personName }) {
   const [hov, setHov] = useState(false);
+  const navigate = useNavigate();
   const valor = deal.valor_ofertado_cents ?? deal.valor_face_cents;
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => navigate(`/crm/${deal.id}`)}
       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
         padding: "11px 12px", cursor: "pointer", transition: "all 0.15s",
         boxShadow: hov ? "0 8px 20px -12px rgba(14,26,36,.18)" : "0 1px 0 rgba(14,26,36,.03)",

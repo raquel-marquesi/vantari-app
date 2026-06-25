@@ -45,15 +45,21 @@ Além disso, a auditoria provou um **vazamento de PII** (anon lia 107 leads com 
 - **Retorno em tranches** (RPV/acordo/execução), datas incertas.
 - **Aprovação:** Leandro/Rodrigo.
 
-## O que está PRONTO e validado (Postgres 16 local) — NÃO aplicado em banco
+## ✅ Core aplicado em PRODUÇÃO (2026-06-25)
 
-| Artefato | Conteúdo |
-|---|---|
-| `supabase/proposals/0001_core_foundation.sql` | core: persons, identifiers, companies, events, consents, resolve_person, merge_persons, RLS. **Reusa `public.workspaces` (não cria tenancy própria) — revisado 2026-06-25** |
-| `supabase/proposals/0002_crm_flow.sql` | crm domínio: processos (+elegibilidade), deals por crédito, advogados, funil real |
-| `supabase/proposals/0004_mkt_marketing.sql` | mkt: scoring_rules + lead_scores (recálculo via evento), forms, campanhas, can_email (LGPD) |
-| `supabase/proposals/0005_fin_receivables.sql` | fin: antecipações (deságio auto) + recebimentos em tranches + ciclo de status |
-| `supabase/functions/ingest/` | Edge Function porta-única (Nina/Meta/Google → resolve_person → evento) |
+A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepowdcdnggmv`) numa transação única. Branch do Supabase exigiria plano Pro pago (API recusou com HTTP 402) — como os schemas só **adicionam** (`core`/`crm`/`mkt`/`fin`) sem tocar `public` e são reversíveis (`drop schema ... cascade`), aplicamos direto. Resultado vivo: `core` 5 tabelas + 7 funções, `crm` 6, `mkt` 6, `fin` 2.
+
+**Smoke test passou** (em `begin/rollback`, sem deixar dado): `core.resolve_person` chamado 2× com a sala Vantari (1ª como Nina: telefone+email; 2ª como form: mesmo telefone em outro formato + CPF) resolveu para **1 única pessoa** — normalização de telefone/email/CPF ok, status virou `identificado` quando o CPF chegou, 3 identificadores ligados. Bug corrigido no caminho: o guard de `resolve_person` ainda citava `core.workspace_members` (commit b1671c5).
+
+## Artefatos do core (status individual)
+
+| Artefato | Conteúdo | Status |
+|---|---|---|
+| `supabase/proposals/0001_core_foundation.sql` | core: persons, identifiers, companies, events, consents, resolve_person, merge_persons, RLS. Reusa `public.workspaces` (não cria tenancy própria) | ✅ aplicado prod |
+| `supabase/proposals/0002_crm_flow.sql` | crm domínio: processos (+elegibilidade), deals por crédito, advogados, funil real | ✅ aplicado prod |
+| `supabase/proposals/0004_mkt_marketing.sql` | mkt: scoring_rules + lead_scores (recálculo via evento), forms, campanhas, can_email (LGPD) | ✅ aplicado prod |
+| `supabase/proposals/0005_fin_receivables.sql` | fin: antecipações (deságio auto) + recebimentos em tranches + ciclo de status | ✅ aplicado prod |
+| `supabase/functions/ingest/` | Edge Function porta-única (Nina/Meta/Google → resolve_person → evento) | ⏳ não deployada |
 
 ## O que JÁ foi aplicado em produção
 

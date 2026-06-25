@@ -10,6 +10,7 @@ import {
   MessageSquare, Sparkles, Send, ChevronRight, Copy
 } from "lucide-react";
 
+import { Briefcase } from "lucide-react";
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS — Vantari redesign
 ═══════════════════════════════════════════════════ */
@@ -1100,6 +1101,8 @@ export default function VantariAIMarketing() {
           <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
           <NavItem icon={Users}          label="Leads"          path="/leads"        />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
+          <NavSection label="CRM"/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
           <NavSection label="Ferramentas"/>
           <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />

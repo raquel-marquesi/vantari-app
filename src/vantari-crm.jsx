@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings,
   Briefcase, Plus, Filter, Loader2, AlertCircle, Kanban, List, TrendingUp,
-  X, Info,
+  X, Scale, Building2, UserPlus, CheckCircle2, XCircle,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
@@ -31,6 +31,41 @@ const fmtBRL = (cents) =>
 
 const creditTypeLabel = (t) =>
   t === "advogado_honorario" ? "Honorário (adv.)" : t === "reclamante" ? "Reclamante" : t || "—";
+
+const onlyDigits = (s) => (s || "").replace(/\D/g, "");
+
+const cleanCpf = (raw) => {
+  const v = onlyDigits(raw);
+  if (v.length !== 11) return null;
+  if (/^(\d)\1{10}$/.test(v)) return null;
+  const dv = (base, factorStart) => {
+    let s = 0;
+    for (let i = 0; i < base.length; i++) s += Number(base[i]) * (factorStart - i);
+    const r = 11 - (s % 11);
+    return r >= 10 ? 0 : r;
+  };
+  if (dv(v.slice(0, 9), 10) !== Number(v[9])) return null;
+  if (dv(v.slice(0, 10), 11) !== Number(v[10])) return null;
+  return v;
+};
+
+const reaisToCents = (v) => {
+  if (v == null || v === "") return 0;
+  const n = parseFloat(String(v).replace(/\./g, "").replace(",", "."));
+  return Number.isFinite(n) ? Math.round(n * 100) : 0;
+};
+
+// espelha crm.avaliar_elegibilidade — só para feedback de UI
+const elegibilidadeMotivos = (f) => {
+  const m = [];
+  if (f.teses && f.teses.trim()) m.push("tem tese restritiva");
+  if (!["negativa", "positiva_efeito_negativa"].includes(f.rda_cndt)) m.push("CNDT positiva");
+  if (f.rda_rj) m.push("reclamada em recuperação judicial");
+  if (["MEI", "ME"].includes(f.rda_porte)) m.push("reclamada MEI/ME");
+  if (f.rda_precatorio) m.push("paga por precatório");
+  if (!f.rda_solvente) m.push("reclamada insolvente");
+  return m;
+};
 
 /* ─── Sidebar (padrão do projeto: cada página tem a sua) ─── */
 const NavSection = ({ label }) => (
@@ -150,6 +185,256 @@ function StageColumn({ stage, accent, deals, personMap }) {
   );
 }
 
+/* ─── Modal: Novo Processo → Negócio ─── */
+const EMPTY_PROC = {
+  rcl_nome: "", rcl_cpf: "", rcl_phone: "", rcl_email: "",
+  rda_nome: "", rda_cnpj: "", rda_cndt: "negativa", rda_porte: "Grande",
+  rda_rj: false, rda_precatorio: false, rda_solvente: true,
+  numero_cnj: "", tribunal: "", vara: "", uf: "", fase: "Acórdão de RO",
+  valor_causa: "", valor_liquido: "", teses: "",
+  credit_type: "reclamante", modalidade: "tradicional", valor_face: "", desagio: "",
+};
+
+const CNDT_OPTS = [
+  { v: "negativa", l: "Negativa (ok)" },
+  { v: "positiva_efeito_negativa", l: "Positiva c/ efeito negativo (ok)" },
+  { v: "positiva", l: "Positiva (veta)" },
+];
+const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
+
+function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }) {
+  const [f, setF] = useState(EMPTY_PROC);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+
+  const motivos = elegibilidadeMotivos(f);
+  const elegivelPreview = motivos.length === 0;
+  const faceC = reaisToCents(f.valor_face);
+  const desagioN = f.desagio === "" ? null : parseFloat(String(f.desagio).replace(",", "."));
+  const ofertadoC = desagioN != null ? Math.round(faceC * (1 - desagioN / 100)) : null;
+
+  const firstStage = [...stages].sort((a, b) => a.position - b.position)[0];
+
+  const save = async () => {
+    setError(null);
+    if (!f.rcl_nome.trim()) { setError("Informe o nome do reclamante."); return; }
+    let cpfClean = null;
+    if (f.rcl_cpf.trim()) {
+      cpfClean = cleanCpf(f.rcl_cpf);
+      if (!cpfClean) { setError("CPF do reclamante inválido (11 dígitos)."); return; }
+    }
+    if (!cpfClean && !f.rcl_email.trim() && !f.rcl_phone.trim()) {
+      setError("Reclamante precisa de CPF, e-mail ou telefone.");
+      return;
+    }
+    if (!f.numero_cnj.trim()) { setError("Informe o número CNJ do processo."); return; }
+    if (!firstStage) { setError("Pipeline sem estágios."); return; }
+
+    setSaving(true);
+    try {
+      const core = supabase.schema("core");
+      const crm = supabase.schema("crm");
+
+      // 1) reclamante -> core.persons (idempotente)
+      const { data: personId, error: ep } = await core.rpc("resolve_person", {
+        p_workspace: workspaceId,
+        p_cpf: cpfClean,
+        p_phone: f.rcl_phone || null,
+        p_email: f.rcl_email || null,
+        p_name: f.rcl_nome || null,
+        p_source: "crm",
+      });
+      if (ep) throw ep;
+
+      // 2) reclamada -> core.companies (opcional)
+      let companyId = null;
+      const cnpjDigits = onlyDigits(f.rda_cnpj) || null;
+      if (f.rda_nome.trim() || cnpjDigits) {
+        if (cnpjDigits) {
+          const { data: ex } = await core.from("companies")
+            .select("id").eq("workspace_id", workspaceId).eq("cnpj", cnpjDigits).maybeSingle();
+          if (ex) companyId = ex.id;
+        }
+        if (!companyId) {
+          const { data: ins, error: ec } = await core.from("companies")
+            .insert({ workspace_id: workspaceId, cnpj: cnpjDigits, name: f.rda_nome || null })
+            .select("id").single();
+          if (ec) throw ec;
+          companyId = ins.id;
+        }
+      }
+
+      // 3) processo (trigger calcula elegibilidade)
+      const teses = f.teses.split(",").map((t) => t.trim()).filter(Boolean);
+      const { data: proc, error: epr } = await crm.from("processos").insert({
+        workspace_id: workspaceId,
+        numero_cnj: f.numero_cnj.trim(),
+        reclamante_person_id: personId,
+        reclamada_company_id: companyId,
+        tribunal: f.tribunal || null,
+        vara: f.vara || null,
+        uf: f.uf ? f.uf.toUpperCase().slice(0, 2) : null,
+        fase: f.fase || null,
+        valor_causa_cents: reaisToCents(f.valor_causa),
+        valor_estimado_liquido_cents: reaisToCents(f.valor_liquido),
+        reclamada_cndt: f.rda_cndt,
+        reclamada_em_rj: f.rda_rj,
+        reclamada_porte: f.rda_porte,
+        reclamada_paga_precatorio: f.rda_precatorio,
+        reclamada_solvente: f.rda_solvente,
+        teses_restritivas: teses,
+      }).select("id,elegivel,status").single();
+      if (epr) throw epr;
+
+      // 4) negócio inicial (entra em "Novos Leads")
+      const { error: ed } = await crm.from("deals").insert({
+        workspace_id: workspaceId,
+        processo_id: proc.id,
+        person_id: personId,
+        credit_type: f.credit_type,
+        modalidade: f.modalidade || null,
+        valor_face_cents: faceC,
+        valor_ofertado_cents: ofertadoC,
+        desagio_pct: desagioN,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        source: "crm",
+      });
+      if (ed) throw ed;
+
+      onCreated({ elegivel: proc.elegivel });
+    } catch (err) {
+      setError(err.message || String(err));
+      setSaving(false);
+    }
+  };
+
+  const inputStyle = { width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
+  const labelStyle = { fontSize: 11.5, fontWeight: 600, color: T.text, display: "block", marginBottom: 4, fontFamily: T.font };
+  const Field = ({ label, k, type = "text", ph = "", full = false }) => (
+    <div style={{ marginBottom: 12, gridColumn: full ? "1 / -1" : "auto" }}>
+      <label style={labelStyle}>{label}</label>
+      <input type={type} value={f[k]} onChange={(e) => set(k, e.target.value)} placeholder={ph} style={inputStyle} />
+    </div>
+  );
+  const SectionTitle = ({ icon: Icon, children }) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 7, margin: "18px 0 10px", color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
+      <Icon size={15} color={T.teal} /> {children}
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: T.surface, borderRadius: 16, width: 640, maxWidth: "95vw", maxHeight: "92vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.18)" }}>
+        <div style={{ padding: "18px 24px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 16, color: T.ink }}>Novo Processo → Negócio</span>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+        </div>
+
+        <div style={{ padding: "8px 24px 20px", overflowY: "auto" }}>
+          <SectionTitle icon={UserPlus}>Reclamante (titular do crédito)</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Nome *" k="rcl_nome" ph="Nome completo" />
+            <Field label="CPF" k="rcl_cpf" ph="000.000.000-00" />
+            <Field label="Telefone" k="rcl_phone" ph="(11) 9...." />
+            <Field label="E-mail" k="rcl_email" type="email" ph="email@exemplo.com" />
+          </div>
+
+          <SectionTitle icon={Building2}>Reclamada (empresa)</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Razão social" k="rda_nome" ph="Empresa reclamada" />
+            <Field label="CNPJ" k="rda_cnpj" ph="00.000.000/0000-00" />
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>CNDT</label>
+              <select value={f.rda_cndt} onChange={(e) => set("rda_cndt", e.target.value)} style={inputStyle}>
+                {CNDT_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Porte</label>
+              <select value={f.rda_porte} onChange={(e) => set("rda_porte", e.target.value)} style={inputStyle}>
+                {PORTE_OPTS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "2px 0 4px" }}>
+            {[
+              { k: "rda_rj", l: "Em recuperação judicial" },
+              { k: "rda_precatorio", l: "Paga por precatório" },
+              { k: "rda_solvente", l: "Solvente" },
+            ].map((c) => (
+              <label key={c.k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.text, fontFamily: T.font, cursor: "pointer" }}>
+                <input type="checkbox" checked={f[c.k]} onChange={(e) => set(c.k, e.target.checked)} /> {c.l}
+              </label>
+            ))}
+          </div>
+
+          <SectionTitle icon={Scale}>Processo</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Número CNJ *" k="numero_cnj" ph="0000000-00.0000.5.00.0000" full />
+            <Field label="Tribunal" k="tribunal" ph="TRT-2" />
+            <Field label="Vara" k="vara" ph="1ª Vara do Trabalho" />
+            <Field label="UF" k="uf" ph="SP" />
+            <Field label="Fase" k="fase" ph="Acórdão de RO" />
+            <Field label="Valor da causa (R$)" k="valor_causa" ph="0,00" />
+            <Field label="Valor estimado líquido (R$)" k="valor_liquido" ph="0,00" />
+            <Field label="Teses restritivas (separadas por vírgula)" k="teses" ph="ex: vínculo, grupo econômico" full />
+          </div>
+
+          <SectionTitle icon={Briefcase}>Negócio inicial</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Tipo de crédito</label>
+              <select value={f.credit_type} onChange={(e) => set("credit_type", e.target.value)} style={inputStyle}>
+                <option value="reclamante">Reclamante</option>
+                <option value="advogado_honorario">Honorário (advogado)</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Modalidade</label>
+              <select value={f.modalidade} onChange={(e) => set("modalidade", e.target.value)} style={inputStyle}>
+                <option value="tradicional">Tradicional</option>
+                <option value="kicker">Kicker</option>
+              </select>
+            </div>
+            <Field label="Valor de face (R$)" k="valor_face" ph="0,00" />
+            <Field label="Deságio (%)" k="desagio" ph="ex: 45" />
+          </div>
+          {ofertadoC != null && faceC > 0 && (
+            <div style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, marginTop: -4 }}>
+              Valor ofertado (calc.): <strong style={{ color: T.teal }}>{fmtBRL(ofertadoC)}</strong>
+            </div>
+          )}
+
+          {/* Prévia de elegibilidade */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, padding: "10px 12px", borderRadius: 10,
+            background: elegivelPreview ? "#F0FDF7" : "#FFF1F0", border: `1px solid ${elegivelPreview ? "#6EE7B7" : T.coral}` }}>
+            {elegivelPreview ? <CheckCircle2 size={16} color={T.green} /> : <XCircle size={16} color={T.coral} />}
+            <span style={{ fontSize: 12.5, color: elegivelPreview ? "#0F6E4E" : "#9B2C2C", fontFamily: T.font }}>
+              {elegivelPreview ? "Prévia: elegível pelos critérios informados." : `Prévia: inelegível — ${motivos.join(", ")}.`}
+            </span>
+          </div>
+
+          {error && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, color: "#9B2C2C", fontSize: 12.5, fontFamily: T.font }}>
+              <AlertCircle size={15} color={T.coral} /> {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "14px 24px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: "8px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>Cancelar</button>
+          <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", background: T.gradient, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: T.font, opacity: saving ? 0.7 : 1 }}>
+            {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+            {saving ? "Criando..." : "Criar processo e negócio"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CRM() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -158,7 +443,8 @@ export default function CRM() {
   const [deals, setDeals] = useState([]);
   const [personMap, setPersonMap] = useState({});
   const [view, setView] = useState("kanban");
-  const [showNewInfo, setShowNewInfo] = useState(false);
+  const [showNovo, setShowNovo] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -242,7 +528,7 @@ export default function CRM() {
               fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: T.font }}>
               <Filter size={14} /> Filtro
             </button>
-            <button onClick={() => setShowNewInfo(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+            <button onClick={() => pipeline && setShowNovo(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
               background: T.gradient, border: "none", borderRadius: 9, cursor: "pointer",
               fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: T.font }}>
               <Plus size={15} /> Negócio
@@ -281,27 +567,31 @@ export default function CRM() {
         )}
       </div>
 
-      {/* Modal informativo do "+ Negócio" (fluxo real depende de Processo) */}
-      {showNewInfo && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}
-          onClick={() => setShowNewInfo(false)}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: T.surface, borderRadius: 16, width: 440, maxWidth: "90vw", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.15)" }}>
-            <div style={{ padding: "18px 22px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 15, color: T.ink }}>Novo negócio</span>
-              <button onClick={() => setShowNewInfo(false)} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
-            </div>
-            <div style={{ padding: "20px 22px", fontSize: 13.5, color: T.text, lineHeight: 1.6, fontFamily: T.font }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "flex-start", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "12px 14px" }}>
-                <Info size={18} color={T.teal} style={{ flexShrink: 0, marginTop: 1 }} />
-                <span>No domínio da Vantari, um <strong>negócio nasce de um Processo</strong> (CNJ, reclamante, reclamada, elegibilidade). O cadastro de Processo → Negócio é a próxima etapa em construção.</span>
-              </div>
-            </div>
-            <div style={{ padding: "0 22px 20px", display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={() => setShowNewInfo(false)} style={{ padding: "8px 16px", background: T.teal, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font }}>
-                Entendi
-              </button>
-            </div>
-          </div>
+      {/* Modal Novo Processo → Negócio */}
+      {showNovo && pipeline && (
+        <NovoProcessoModal
+          workspaceId={WORKSPACE_VANTARI}
+          pipeline={pipeline}
+          stages={stages}
+          onClose={() => setShowNovo(false)}
+          onCreated={({ elegivel }) => {
+            setShowNovo(false);
+            setToast({ elegivel });
+            load();
+            setTimeout(() => setToast(null), 6000);
+          }}
+        />
+      )}
+
+      {/* Toast de veredito */}
+      {toast && (
+        <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, display: "flex", alignItems: "center", gap: 10,
+          background: T.surface, border: `1px solid ${toast.elegivel ? "#6EE7B7" : T.coral}`, borderRadius: 12,
+          padding: "12px 16px", boxShadow: "0 12px 32px -12px rgba(14,26,36,.25)", fontFamily: T.font, fontSize: 13 }}>
+          {toast.elegivel ? <CheckCircle2 size={18} color={T.green} /> : <XCircle size={18} color={T.coral} />}
+          <span style={{ color: T.ink, fontWeight: 600 }}>
+            Negócio criado — processo {toast.elegivel ? "ELEGÍVEL" : "INELEGÍVEL"}.
+          </span>
         </div>
       )}
     </div>

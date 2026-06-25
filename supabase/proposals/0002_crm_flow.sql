@@ -25,7 +25,7 @@ create schema if not exists crm;
 -- ---------- Funil (configurável) ----------
 create table if not exists crm.pipelines (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   name         text not null,
   is_default   boolean not null default false,
   created_at   timestamptz not null default now()
@@ -33,7 +33,7 @@ create table if not exists crm.pipelines (
 
 create table if not exists crm.stages (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   pipeline_id  uuid not null references crm.pipelines(id) on delete cascade,
   name         text not null,
   position     int  not null default 0,
@@ -45,7 +45,7 @@ create index if not exists stages_pipeline_idx on crm.stages (pipeline_id, posit
 -- ---------- PROCESSO (a peça central; onde mora a Análise) ----------
 create table if not exists crm.processos (
   id                      uuid primary key default gen_random_uuid(),
-  workspace_id            uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id            uuid not null references public.workspaces(id) on delete cascade,
   numero_cnj              text,
   reclamante_person_id    uuid references core.persons(id) on delete set null,
   reclamada_company_id    uuid references core.companies(id) on delete set null,
@@ -76,7 +76,7 @@ create index if not exists processos_reclamada_idx  on crm.processos (reclamada_
 -- advogados vinculados ao processo (podem ser alvo de captação do honorário)
 create table if not exists crm.processo_advogados (
   id               uuid primary key default gen_random_uuid(),
-  workspace_id     uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id     uuid not null references public.workspaces(id) on delete cascade,
   processo_id      uuid not null references crm.processos(id) on delete cascade,
   person_id        uuid not null references core.persons(id) on delete cascade,
   oab              text,
@@ -89,7 +89,7 @@ create table if not exists crm.processo_advogados (
 -- ---------- NEGÓCIO = crédito/aquisição (1 por crédito) ----------
 create table if not exists crm.deals (
   id                 uuid primary key default gen_random_uuid(),
-  workspace_id       uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id       uuid not null references public.workspaces(id) on delete cascade,
   processo_id        uuid not null references crm.processos(id) on delete cascade,
   person_id          uuid not null references core.persons(id) on delete cascade,  -- titular do crédito
   credit_type        text not null check (credit_type in ('reclamante', 'advogado_honorario')),
@@ -115,7 +115,7 @@ create index if not exists deals_person_idx    on crm.deals (person_id);
 -- ---------- Atividades ----------
 create table if not exists crm.activities (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   deal_id      uuid references crm.deals(id) on delete cascade,
   processo_id  uuid references crm.processos(id) on delete cascade,
   person_id    uuid references core.persons(id) on delete cascade,

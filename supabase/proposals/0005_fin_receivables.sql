@@ -22,7 +22,7 @@ create schema if not exists fin;
 -- ---------------------------------------------------------------------------
 create table if not exists fin.antecipacoes (
   id                   uuid primary key default gen_random_uuid(),
-  workspace_id         uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id         uuid not null references public.workspaces(id) on delete cascade,
   person_id            uuid not null references core.persons(id) on delete restrict,  -- titular do crédito
   deal_id              uuid,                       -- crm.deals (sem FK: fin não depende de crm)
   processo_id          uuid,                       -- crm.processos
@@ -46,7 +46,7 @@ create index if not exists antecip_status_idx  on fin.antecipacoes (workspace_id
 -- ---------------------------------------------------------------------------
 create table if not exists fin.recebimentos (
   id                  uuid primary key default gen_random_uuid(),
-  workspace_id        uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id        uuid not null references public.workspaces(id) on delete cascade,
   antecipacao_id      uuid not null references fin.antecipacoes(id) on delete cascade,
   person_id           uuid not null references core.persons(id) on delete restrict,
   descricao           text,                        -- RPV | acordo parcela N | execução | complemento...

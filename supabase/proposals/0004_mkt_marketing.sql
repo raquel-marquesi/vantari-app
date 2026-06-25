@@ -22,7 +22,7 @@ create schema if not exists mkt;
 -- ---------------------------------------------------------------------------
 create table if not exists mkt.scoring_rules (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   event_type   text not null,          -- casa com core.events.type (form_submit, page_visit, email_open...)
   points       int  not null default 0,
   active       boolean not null default true,
@@ -32,7 +32,7 @@ create table if not exists mkt.scoring_rules (
 
 -- Estado materializado do score por pessoa (1 linha por pessoa)
 create table if not exists mkt.lead_scores (
-  workspace_id    uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id    uuid not null references public.workspaces(id) on delete cascade,
   person_id       uuid primary key references core.persons(id) on delete cascade,
   interest_points int  not null default 0,
   interest_band   text not null default 'cold'
@@ -98,7 +98,7 @@ create trigger trg_event_score after insert on core.events
 -- ---------------------------------------------------------------------------
 create table if not exists mkt.forms (
   id              uuid primary key default gen_random_uuid(),
-  workspace_id    uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id    uuid not null references public.workspaces(id) on delete cascade,
   slug            text not null,
   name            text,
   fields          jsonb not null default '[]',
@@ -111,7 +111,7 @@ create table if not exists mkt.forms (
 
 create table if not exists mkt.form_submissions (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   form_id      uuid not null references mkt.forms(id) on delete cascade,
   person_id    uuid references core.persons(id) on delete set null,
   payload      jsonb not null default '{}',
@@ -157,7 +157,7 @@ create trigger trg_form_submission before insert on mkt.form_submissions
 -- ---------------------------------------------------------------------------
 create table if not exists mkt.campaigns (
   id            uuid primary key default gen_random_uuid(),
-  workspace_id  uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id  uuid not null references public.workspaces(id) on delete cascade,
   name          text not null,
   subject       text,
   from_email    text,
@@ -172,7 +172,7 @@ create table if not exists mkt.campaigns (
 
 create table if not exists mkt.campaign_sends (
   id           uuid primary key default gen_random_uuid(),
-  workspace_id uuid not null references core.workspaces(id) on delete cascade,
+  workspace_id uuid not null references public.workspaces(id) on delete cascade,
   campaign_id  uuid not null references mkt.campaigns(id) on delete cascade,
   person_id    uuid not null references core.persons(id) on delete cascade,
   status       text not null default 'queued'

@@ -51,6 +51,8 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 
 **Smoke test passou** (em `begin/rollback`, sem deixar dado): `core.resolve_person` chamado 2× com a sala Vantari (1ª como Nina: telefone+email; 2ª como form: mesmo telefone em outro formato + CPF) resolveu para **1 única pessoa** — normalização de telefone/email/CPF ok, status virou `identificado` quando o CPF chegou, 3 identificadores ligados. Bug corrigido no caminho: o guard de `resolve_person` ainda citava `core.workspace_members` (commit b1671c5).
 
+**Backfill dos 108 leads → `core.persons` executado (2026-06-25):** script `supabase/proposals/backfill_leads_to_core_persons.sql` (one-off, idempotente). Resultado: **108 leads → 108 pessoas** (6 identificadas / 102 pendentes), 211 identificadores. Mapeamento 1:1 por email (0 sobra dos dois lados). Sem dedup porque a origem não tinha email/telefone repetido. `public.leads` permanece intacta (link recuperável por email; coluna `person_id` em leads não foi adicionada — passo futuro se preciso pra migrar eventos/scores).
+
 ## Artefatos do core (status individual)
 
 | Artefato | Conteúdo | Status |
@@ -77,7 +79,7 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
 ## Roadmap — próxima fase (outro tipo de trabalho: banco vivo + frontend)
 
 1. **Decidir onde o core mora** e **aplicar** os schemas (de preferência testar numa branch do Supabase antes — schema vivo é multi-tenant).
-2. **Migrar dados reais** para o core: os 108 leads do Next (✅ já estão na sala Vantari) → reprocessar via `resolve_person` pra virar `core.persons` + contatos do FlowCRM. Deduplicar via `resolve_person`/`merge_persons`.
+2. **Migrar dados reais** para o core: ✅ os 108 leads do Next viraram `core.persons` (backfill 2026-06-25). Falta: contatos do FlowCRM + migrar eventos/scores/form_submissions pra referenciar `person_id`. Deduplicar via `resolve_person`/`merge_persons`.
 3. **Ponte da Nina** — guardar o `person_id` que a `ingest` devolve.
 4. **App único** — Flow + Next convergem num app só (Nina à parte). Recomendação: **recriar limpo sobre o core, não migrar código Lovable** (carrega cenografia/lixo). Antes: inventariar telas do FlowCRM como spec.
 5. **Worker `deal_won → fin.criar_antecipacao`** (Edge Function escutando eventos).

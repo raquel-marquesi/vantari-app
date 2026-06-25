@@ -49,6 +49,24 @@ begin
   return true;
 end $$;
 
+-- normaliza telefone BR para forma canônica DDD+número (sem +55, sem 0 de
+-- operadora). Crítico para identidade: o lead chega na Nina como "+55 11 9..."
+-- e no form como "11 9..." — sem isso, vira pessoa duplicada.
+-- O guard de comprimento (12/13) preserva o DDD 55 real (Santa Maria/RS).
+create or replace function core.normalize_phone_br(p text)
+returns text language plpgsql immutable as $$
+declare d text := core.only_digits(p);
+begin
+  if d is null then return null; end if;
+  if length(d) in (12, 13) and left(d, 2) = '55' then   -- código país +55
+    d := substr(d, 3);
+  end if;
+  if length(d) in (11, 12) and left(d, 1) = '0' then     -- 0 de operadora/DDD
+    d := substr(d, 2);
+  end if;
+  return d;
+end $$;
+
 -- trigger genérico de updated_at
 create or replace function core.touch_updated_at()
 returns trigger language plpgsql as $$
@@ -261,7 +279,7 @@ create or replace function core.resolve_person(
 language plpgsql security definer set search_path = core, public as $$
 declare
   v_cpf   text := core.only_digits(p_cpf);
-  v_phone text := core.only_digits(p_phone);
+  v_phone text := core.normalize_phone_br(p_phone);
   v_email text := lower(nullif(trim(p_email), ''));
   v_by_cpf uuid; v_by_phone uuid; v_by_email uuid;
   v_person uuid;

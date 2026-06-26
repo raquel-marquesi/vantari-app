@@ -86,6 +86,11 @@ A pilha `0001`+`0002`+`0004`+`0005` foi **aplicada no banco vivo** (`ejhrlrasepo
    - ⏳ Próximas slices: cadastro de **Processo → Negócio** (deal exige processo_id), detalhe do negócio, Contatos, Empresas, Atividades, Tarefas, Em Risco.
 5. **Worker `deal_won → fin.criar_antecipacao`** (Edge Function escutando eventos).
 
+### Convergência do front pro core (marketing)
+- ✅ **`/leads`** abre o cadastro único (`core.persons`) — renomeou Contatos→Leads; tela legada `vantari-leads-module.jsx` órfã (commit 2e0a81f).
+- ✅ **`/segments`** (`src/vantari-segments.jsx`) reescrito sobre o core (jun/2026): motor `buildPersonQuery/computeLeads/countLeads` filtra `core.persons` + resolve conjuntos de `person_id` de `mkt.lead_scores` (score/perfil), `crm.deals→crm.stages` (estágio), `core.events` (visita), `core.consents` (descadastro). Campos podados do mundo RD: `tags`, `source`, `profile_points`, `stage` Visitor→Customer (virou estágio do negócio). `visited_page`/`unsubscribed` ligados ao lugar certo mas **inertes** (sem produtor no core: tracker ainda grava `public.page_visits`; não há fluxo de consent no core).
+  - ⚠️ **PRÉ-REQ INFRA: expor `mkt` no PostgREST.** Hoje só `public, graphql_public, core, crm` estão expostos (verificado via `PGRST106` no banco vivo). Sem `mkt` exposto, filtros de **Score/Perfil/Faixa** falham no navegador (a UI mostra banner de erro). Ação: Supabase → Project Settings → API → Exposed schemas → adicionar `mkt`. O schema `mkt` já está **aplicado** no banco; falta só expor. (Isso também destrava o front ler `mkt.campaigns`/`lead_scores` no futuro.)
+
 ## Decisões fechadas (2026-06-25)
 
 - **Onde o core mora:** mesmo projeto Supabase (`ejhrlrasepowdcdnggmv`) como schemas novos. FK cross-schema exige mesmo banco; projeto novo recriaria o dual-DB. Não há escolha real.

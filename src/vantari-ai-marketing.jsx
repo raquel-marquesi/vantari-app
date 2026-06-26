@@ -66,7 +66,7 @@ const T = {
 ═══════════════════════════════════════════════════ */
 const MOCK_SETTINGS = {
   workspace_id: "ws_1",
-  model_preference: "claude-sonnet-4-20250514",
+  model_preference: "gemini-2.5-flash",
   temperature: 0.7,
   custom_prompts: {
     email:   "Você é um copywriter especialista em marketing B2B brasileiro. Escreva emails persuasivos, claros e com boa entregabilidade.",
@@ -77,10 +77,11 @@ const MOCK_SETTINGS = {
 
 
 const MODELS = [
-  { id:"claude-sonnet-4-20250514",  name:"Claude Sonnet 4",  provider:"Anthropic", cost:"$0.003/1k tokens", badge:"Recomendado",  color:T.blue   },
-  { id:"claude-haiku-4-5-20251001", name:"Claude Haiku 4.5", provider:"Anthropic", cost:"$0.00025/1k tokens",badge:"Econômico",   color:T.teal   },
-  { id:"gpt-4o",                    name:"GPT-4o",           provider:"OpenAI",    cost:"$0.005/1k tokens", badge:"OpenAI",       color:"#10a37f" },
+  { id:"gemini-2.5-flash",  name:"Gemini 2.5 Flash", provider:"Google", cost:"rápido e econômico", badge:"Recomendado", color:T.blue   },
+  { id:"gemini-flash-latest", name:"Gemini Flash (latest)", provider:"Google", cost:"sempre o flash atual", badge:"Auto", color:T.teal },
+  { id:"gemini-2.5-pro",    name:"Gemini 2.5 Pro",   provider:"Google", cost:"mais capaz (requer billing)", badge:"Avançado", color:T.purple },
 ];
+const modelLabel = (id) => (MODELS.find(m => m.id === id) || {}).name || id;
 
 const AUDIENCE_OPTS  = ["Todos os Leads","MQL","SQL","Newsletter","Demo Solicitada","Inativos 30d","Alto Valor","B2B"];
 const TONE_OPTS      = ["Formal","Semi-formal","Casual","Urgente","Empático","Persuasivo"];
@@ -93,14 +94,14 @@ const CONTENT_ICONS = { email:Mail, blog:BookOpen, case_study:BarChart2, webinar
 /* ═══════════════════════════════════════════════════
    AI API CALL
 ═══════════════════════════════════════════════════ */
-const callAI = async (systemPrompt, userPrompt, model="claude-sonnet-4-20250514", temperature=0.7) => {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST", headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({ model, max_tokens:1000, system:systemPrompt, messages:[{role:"user",content:userPrompt}] }),
+const callAI = async (systemPrompt, userPrompt, model="gemini-2.0-flash", temperature=0.7) => {
+  // chama a Edge Function ai-generate (Gemini server-side; chave nunca vai ao navegador)
+  const { data, error } = await supabase.functions.invoke("ai-generate", {
+    body: { system: systemPrompt, prompt: userPrompt, model, temperature },
   });
-  const data = await res.json();
-  if(data.error) throw new Error(data.error.message);
-  return { text:data.content?.[0]?.text||"", tokens:(data.usage?.input_tokens||0)+(data.usage?.output_tokens||0) };
+  if (error) throw new Error(error.message || "Falha ao chamar a IA");
+  if (data?.error) throw new Error(data.error);
+  return { text: data?.text || "", tokens: data?.tokens || 0 };
 };
 
 /* ═══════════════════════════════════════════════════
@@ -387,7 +388,7 @@ const EmailGenTab = ({ settings, onSave }) => {
           )}
           {generated&&genMeta&&(
             <div style={{maxWidth:600,margin:"16px auto 0",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
-              <Badge label={genMeta.model.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.teal} bg={T.blueL}/>
+              <Badge label={modelLabel(genMeta.model)} color={T.teal} bg={T.blueL}/>
               <Badge label={`${genMeta.tokens} tokens`} color={T.muted} bg={T.bg}/>
               <Badge label={`~$${(genMeta.tokens*0.003/1000).toFixed(4)}`} color={T.green} bg="#DCFCE7"/>
               <Badge label={new Date(genMeta.timestamp).toLocaleTimeString("pt-BR")} color={T.muted} bg={T.bg}/>
@@ -1123,7 +1124,7 @@ export default function VantariAIMarketing() {
         <div style={{height:56,background:T.white,borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",padding:"0 24px",flexShrink:0,zIndex:10}}>
           <span style={{fontSize:18,fontWeight:700,color:T.ink,fontFamily:T.head,letterSpacing:"-0.02em"}}>IA & Automação</span>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-            <Badge label={settings.model_preference.includes("claude")?"Claude Sonnet":"GPT-4o"} color={T.teal} bg={T.blueL}/>
+            <Badge label={modelLabel(settings.model_preference)} color={T.teal} bg={T.blueL}/>
             <Badge label={`Temp ${settings.temperature}`} color={T.muted} bg={T.bg}/>
             <Btn size="sm" variant="secondary" icon={Settings} onClick={()=>setTab("settings")}>Config</Btn>
           </div>

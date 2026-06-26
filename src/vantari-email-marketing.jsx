@@ -11,6 +11,7 @@ import {
   AlertTriangle, XCircle, ArrowUp, ArrowDown, X,
   Loader2, AlertCircle, Upload
 } from "lucide-react";
+import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -2051,6 +2052,7 @@ export default function VantariEmailMarketing() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email" active />
           <NavSection label="CRM" />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" />
+          <NavItem icon={IdCard} label="Contatos" path="/contatos" />
           <NavSection label="Ferramentas" />
           <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, createElement, Fragment } fro
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import { Loader2, AlertCircle, BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap } from "lucide-react";
+import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
@@ -906,6 +907,7 @@ export default function WorkflowBuilderPage() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
           <NavSection label="CRM" />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" />
+          <NavItem icon={IdCard} label="Contatos" path="/contatos" />
           <NavSection label="Ferramentas" />
           <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
           <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      />

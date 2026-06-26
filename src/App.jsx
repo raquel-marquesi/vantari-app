@@ -16,6 +16,7 @@ const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
 const Segments         = lazy(() => import("./vantari-segments"));
 const CRM              = lazy(() => import("./vantari-crm"));
 const DealDetail       = lazy(() => import("./vantari-crm-deal"));
+const Contatos         = lazy(() => import("./vantari-crm-contatos"));
 const PublicForm       = lazy(() => import("./vantari-public-form"));
 
 function PageLoader() {
@@ -94,6 +95,7 @@ export default function App() {
           <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
           <Route path="/crm"           element={<ProtectedRoute><CRM /></ProtectedRoute>} />
           <Route path="/crm/:dealId"   element={<ProtectedRoute><DealDetail /></ProtectedRoute>} />
+          <Route path="/contatos"      element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

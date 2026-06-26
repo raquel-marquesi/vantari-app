@@ -4,7 +4,6 @@ import { supabase } from "./supabase";
 
 const AuthSystem     = lazy(() => import("./vantari-auth-system"));
 const Analytics      = lazy(() => import("./vantari-analytics-dashboard"));
-const Leads          = lazy(() => import("./vantari-leads-module"));
 const Scoring        = lazy(() => import("./vantari-scoring-system"));
 const EmailMarketing = lazy(() => import("./vantari-email-marketing"));
 const LandingPages   = lazy(() => import("./vantari-landing-pages"));
@@ -83,7 +82,8 @@ export default function App() {
           {/* Rota pública: form embedável /f/:slug */}
           <Route path="/f/:slug"        element={<PublicForm />} />
           <Route path="/dashboard"      element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
-          <Route path="/leads"          element={<ProtectedRoute><Leads /></ProtectedRoute>} />
+          {/* /leads abre a tela do core (antes era public.leads, agora core.persons) */}
+          <Route path="/leads"          element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
           <Route path="/scoring"        element={<ProtectedRoute><Scoring /></ProtectedRoute>} />
           <Route path="/email"          element={<ProtectedRoute><EmailMarketing /></ProtectedRoute>} />
           <Route path="/landing"        element={<ProtectedRoute><LandingPages /></ProtectedRoute>} />
@@ -95,7 +95,8 @@ export default function App() {
           <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
           <Route path="/crm"           element={<ProtectedRoute><CRM /></ProtectedRoute>} />
           <Route path="/crm/:dealId"   element={<ProtectedRoute><DealDetail /></ProtectedRoute>} />
-          <Route path="/contatos"      element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
+          {/* /contatos → redireciona pra /leads (termo adotado pela equipe) */}
+          <Route path="/contatos"      element={<Navigate to="/leads" replace />} />
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>

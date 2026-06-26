@@ -496,10 +496,10 @@ const CampaignRing = ({ campaignCount }) => {
    SECTION 1 — OVERVIEW EXECUTIVO
 ═══════════════════════════════════════════════════════════ */
 const OverviewSection = () => {
-  const [activeMetric, setActiveMetric] = useState("leads");
-  const [kpis,        setKpis]        = useState({ leads: 0, mqls: 0, sqls: 0, campaigns: 0 });
+  const [activeMetric, setActiveMetric] = useState("pessoas");
+  const [kpis,        setKpis]        = useState({ pessoas: 0, abertos: 0, ganhos: 0, pipelineCents: 0, campaigns: 0 });
   const [monthlyData, setMonthlyData] = useState([]);
-  const [sparkData,   setSparkData]   = useState({ leads: [], mqls: [], sqls: [], conv: [] });
+  const [sparkData,   setSparkData]   = useState({ pessoas: [], negocios: [] });
   const [alerts,      setAlerts]      = useState([]);
 
   useEffect(() => {
@@ -507,76 +507,67 @@ const OverviewSection = () => {
       const sevenMonthsAgo = new Date();
       sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
 
+      const core = supabase.schema("core");
+      const crm = supabase.schema("crm");
+
       const [
-        { count: leads },
-        { count: mqls },
-        { count: sqls },
+        { count: pessoas },
+        { data: openDeals },
+        { count: ganhos },
         { count: campaigns },
-        { data: rawLeads },
+        { data: rawPersons },
+        { data: rawDeals },
         { data: alertData },
       ] = await Promise.all([
-        supabase.from("leads").select("*", { count: "exact", head: true }),
-        supabase.from("leads").select("*", { count: "exact", head: true }).eq("stage", "MQL"),
-        supabase.from("leads").select("*", { count: "exact", head: true }).eq("stage", "SQL"),
+        core.from("persons").select("*", { count: "exact", head: true }),
+        crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open"),
+        crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won"),
         supabase.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
-        supabase.from("leads").select("created_at, stage").gte("created_at", sevenMonthsAgo.toISOString()),
+        core.from("persons").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
+        crm.from("deals").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
         supabase.from("dashboard_alerts").select("id, name, condition, last_triggered, trigger_count, enabled").eq("enabled", true).order("last_triggered", { ascending: false }).limit(6),
       ]);
 
-      setKpis({ leads: leads || 0, mqls: mqls || 0, sqls: sqls || 0, campaigns: campaigns || 0 });
+      const abertos = (openDeals || []).length;
+      const pipelineCents = (openDeals || []).reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+      setKpis({ pessoas: pessoas || 0, abertos, ganhos: ganhos || 0, pipelineCents, campaigns: campaigns || 0 });
 
-      /* agrupa em buckets mensais para sparkline + chart */
+      /* buckets mensais (pessoas e negócios) para sparkline + chart */
       const now = new Date();
       const buckets = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
         return {
           key:    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
           month:  d.toLocaleString("pt-BR", { month: "short" }),
-          leads:  0, mqls: 0, sqls: 0, receita: 0,
+          pessoas: 0, negocios: 0,
         };
       });
-
-      (rawLeads || []).forEach(r => {
-        const d   = new Date(r.created_at);
+      const bump = (arr, field) => (arr || []).forEach(r => {
+        const d = new Date(r.created_at);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        const b   = buckets.find(m => m.key === key);
-        if (!b) return;
-        b.leads++;
-        if (r.stage === "MQL") b.mqls++;
-        if (r.stage === "SQL") b.sqls++;
+        const b = buckets.find(m => m.key === key);
+        if (b) b[field]++;
       });
+      bump(rawPersons, "pessoas");
+      bump(rawDeals, "negocios");
 
-      /* linha de meta: rampa simples baseada no total atual */
-      const goalBase = Math.max(20, Math.round((leads || 0) / 6));
-      const withGoal = buckets.map((b, i) => ({
-        ...b,
-        goal: goalBase + Math.round(goalBase * 0.12 * i),
-      }));
-
+      const goalBase = Math.max(10, Math.round((pessoas || 0) / 6));
+      const withGoal = buckets.map((b, i) => ({ ...b, goal: goalBase + Math.round(goalBase * 0.12 * i) }));
       setMonthlyData(withGoal);
-      setSparkData({
-        leads: buckets.map(b => b.leads),
-        mqls:  buckets.map(b => b.mqls),
-        sqls:  buckets.map(b => b.sqls),
-        conv:  buckets.map(b => b.leads > 0 ? parseFloat((b.sqls / b.leads * 100).toFixed(2)) : 0),
-      });
+      setSparkData({ pessoas: buckets.map(b => b.pessoas), negocios: buckets.map(b => b.negocios) });
       setAlerts(alertData || []);
     };
     fetchData();
   }, []);
 
-  const convRate = kpis.leads > 0 ? (kpis.sqls / kpis.leads * 100).toFixed(2) : "0";
-  const mqlRate  = kpis.leads > 0 ? (kpis.mqls / kpis.leads * 100).toFixed(1) : "0";
-  const sqlRate  = kpis.leads > 0 ? (kpis.sqls / kpis.leads * 100).toFixed(1) : "0";
-  const prevMonth = sparkData.leads.at(-2) || 0;
-  const thisMonth = sparkData.leads.at(-1) || 0;
-  const leadsDelta = thisMonth - prevMonth;
+  const prevP = sparkData.pessoas.at(-2) || 0;
+  const thisP = sparkData.pessoas.at(-1) || 0;
+  const pessoasDelta = thisP - prevP;
+  const fmtMoney = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 
   const lineKeys = {
-    leads:   { key: "leads",   color: T.teal,   label: "Leads"        },
-    mqls:    { key: "mqls",    color: T.amber,   label: "MQLs"         },
-    sqls:    { key: "sqls",    color: T.violet,  label: "SQLs"         },
-    receita: { key: "receita", color: T.green,   label: "Receita (R$)" },
+    pessoas:  { key: "pessoas",  color: T.teal,   label: "Pessoas"  },
+    negocios: { key: "negocios", color: T.violet, label: "Negócios" },
   };
   const activeMeta = lineKeys[activeMetric];
 
@@ -585,32 +576,32 @@ const OverviewSection = () => {
       {/* ── Hero KPI cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
         <HeroKpiCard
-          icon={Users}      color={T.teal}   trend={12.4}
-          label="Total de Leads"
-          value={kpis.leads.toLocaleString("pt-BR")}
-          sub={leadsDelta >= 0 ? `+${leadsDelta} vs anterior` : `${leadsDelta} vs anterior`}
-          sparkData={sparkData.leads}
+          icon={Users}      color={T.teal}
+          label="Pessoas (core)"
+          value={kpis.pessoas.toLocaleString("pt-BR")}
+          sub={pessoasDelta >= 0 ? `+${pessoasDelta} no mês` : `${pessoasDelta} no mês`}
+          sparkData={sparkData.pessoas}
         />
         <HeroKpiCard
-          icon={Star}       color={T.amber}  trend={8.7}
-          label="MQLs este mês"
-          value={kpis.mqls.toLocaleString("pt-BR")}
-          sub={`Taxa MQL · ${mqlRate}%`}
-          sparkData={sparkData.mqls}
+          icon={Star}       color={T.amber}
+          label="Negócios abertos"
+          value={kpis.abertos.toLocaleString("pt-BR")}
+          sub="em andamento"
+          sparkData={sparkData.negocios}
         />
         <HeroKpiCard
-          icon={Zap}        color={T.violet} trend={15.2}
-          label="SQLs qualificados"
-          value={kpis.sqls.toLocaleString("pt-BR")}
-          sub={`Taxa SQL · ${sqlRate}%`}
-          sparkData={sparkData.sqls}
+          icon={Zap}        color={T.violet}
+          label="Ganhos"
+          value={kpis.ganhos.toLocaleString("pt-BR")}
+          sub="negócios fechados"
+          sparkData={sparkData.negocios}
         />
         <HeroKpiCard
-          icon={DollarSign} color={T.green}  trend={3.1}
-          label="Taxa de Conversão"
-          value={`${convRate}%`}
-          sub="R$ — receita"
-          sparkData={sparkData.conv}
+          icon={DollarSign} color={T.green}
+          label="Valor em pipeline"
+          value={fmtMoney(kpis.pipelineCents)}
+          sub="ofertado · abertos"
+          sparkData={sparkData.pessoas}
         />
       </div>
 
@@ -734,35 +725,43 @@ const OverviewSection = () => {
 /* ═══════════════════════════════════════════════════════════
    SECTION 2 — FUNIL DE VENDAS
 ═══════════════════════════════════════════════════════════ */
-const FUNNEL_STAGES = [
-  { key: "Lead",     label: "Leads",     sub: "cadastro",        color: T.brand2 },
-  { key: "MQL",      label: "MQLs",      sub: "marketing",       color: T.amber  },
-  { key: "SQL",      label: "SQLs",      sub: "vendas",          color: T.violet },
-  { key: "Customer", label: "Clientes",  sub: "conversão final", color: T.green  },
-];
+const FUNNEL_COLORS = [T.brand2, T.violet, T.amber, T.coral, T.green, T.faint3];
+const stageKindSub = (k) => k === "won" ? "ganho" : k === "lost" ? "perdido" : "em aberto";
 
 const FunnelSection = () => {
-  const [stageCounts, setStageCounts] = useState({});
+  const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
-      const { data } = await supabase.from("leads").select("stage");
-      const counts = {};
-      (data || []).forEach(r => { counts[r.stage] = (counts[r.stage] || 0) + 1; });
-      setStageCounts(counts);
+      const crm = supabase.schema("crm");
+      const { data: pipes } = await crm.from("pipelines").select("id").eq("is_default", true).limit(1);
+      const pipe = pipes?.[0];
+      if (!pipe) { setLoading(false); return; }
+      const [{ data: st }, { data: deals }] = await Promise.all([
+        crm.from("stages").select("id,name,position,kind").eq("pipeline_id", pipe.id).order("position"),
+        crm.from("deals").select("stage_id").eq("pipeline_id", pipe.id),
+      ]);
+      const c = {};
+      (deals || []).forEach(d => { c[d.stage_id] = (c[d.stage_id] || 0) + 1; });
+      setStages((st || []).map((s, i) => ({
+        key: s.id, label: s.name, sub: stageKindSub(s.kind),
+        color: s.kind === "won" ? T.green : s.kind === "lost" ? T.coral : FUNNEL_COLORS[i % FUNNEL_COLORS.length],
+        count: c[s.id] || 0,
+      })));
       setLoading(false);
     };
     load();
   }, []);
 
-  const counts  = FUNNEL_STAGES.map(s => stageCounts[s.key] || 0);
+  const FUNNEL_STAGES = stages;
+  const counts  = FUNNEL_STAGES.map(s => s.count);
   const maxCount = Math.max(...counts, 1);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <Card>
-        <SectionTitle sub="Distribuição real por etapa do funil — dados ao vivo">Funil de Vendas</SectionTitle>
+        <SectionTitle sub="Negócios por estágio — dados ao vivo do CRM">Esteira de Aquisição</SectionTitle>
         {loading ? (
           <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>Carregando…</div>
         ) : (

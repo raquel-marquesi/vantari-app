@@ -408,7 +408,7 @@ function SegmentModal({ segment, onClose, onSave }) {
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome obrigatório"); return; }
     setSaving(true); setError(null);
-    const payload = { name: name.trim(), description: desc.trim(), rules: filters, updated_at: new Date().toISOString() };
+    const payload = { name: name.trim(), description: desc.trim(), rules: filters, workspace_id: WORKSPACE_VANTARI, updated_at: new Date().toISOString() };
     let err;
     if (isEdit) {
       ({ error: err } = await supabase.from("segments").update(payload).eq("id", segment.id));
@@ -740,7 +740,7 @@ export default function VantariSegments() {
       const sevenAgo = new Date();
       sevenAgo.setMonth(sevenAgo.getMonth() - 7);
       const [{ data: segData }, { data: personData }] = await Promise.all([
-        supabase.from("segments").select("created_at").gte("created_at", sevenAgo.toISOString()),
+        supabase.from("segments").select("created_at").eq("workspace_id", WORKSPACE_VANTARI).gte("created_at", sevenAgo.toISOString()),
         core().from("persons").select("created_at").eq("workspace_id", WORKSPACE_VANTARI).gte("created_at", sevenAgo.toISOString()),
       ]);
       const now = new Date();
@@ -770,6 +770,7 @@ export default function VantariSegments() {
     const { data, error: err } = await supabase
       .from("segments")
       .select("*")
+      .eq("workspace_id", WORKSPACE_VANTARI)
       .order("created_at", { ascending: false });
     if (err) { setError(err.message); setLoading(false); return; }
     setSegments(data || []);
@@ -794,7 +795,7 @@ export default function VantariSegments() {
 
   const handleDuplicate = async (seg) => {
     const { data } = await supabase.from("segments")
-      .insert({ name: seg.name + " (cópia)", description: seg.description, rules: seg.rules })
+      .insert({ name: seg.name + " (cópia)", description: seg.description, rules: seg.rules, workspace_id: WORKSPACE_VANTARI })
       .select().single();
     if (data) setSegments(s => [data, ...s]);
   };

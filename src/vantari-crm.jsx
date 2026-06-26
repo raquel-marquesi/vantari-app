@@ -7,6 +7,7 @@ import {
   X, Scale, Building2, UserPlus, CheckCircle2, XCircle,
 } from "lucide-react";
 
+import { IdCard } from "lucide-react";
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
 const T = {
   teal: "#0D7491", blue: "#0D7491", green: "#14A273", brand2: "#1F76BC", deep: "#0A3D4D",
@@ -187,6 +188,7 @@ function Sidebar() {
         <NavItem icon={Mail} label="Email Marketing" path="/email" />
         <NavSection label="CRM" />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" active />
+        <NavItem icon={IdCard} label="Contatos" path="/contatos" />
         <NavSection label="Ferramentas" />
         <NavItem icon={Star} label="Scoring" path="/scoring" />
         <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" />

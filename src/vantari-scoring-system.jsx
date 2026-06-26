@@ -9,6 +9,7 @@ import {
   Activity, Clock, Webhook, Loader2, Briefcase, Award, Building2,
   Trash2, RefreshCw
 } from "lucide-react";
+import { IdCard } from "lucide-react";
 import { supabase } from "./supabase";
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1716,6 +1717,7 @@ export default function VantariScoringSystem() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
           <NavSection label="CRM" />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" />
+          <NavItem icon={IdCard} label="Contatos" path="/contatos" />
           <NavSection label="Ferramentas" />
           <NavItem icon={Star}           label="Scoring"        path="/scoring"      active />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />

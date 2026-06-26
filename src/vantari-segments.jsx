@@ -373,8 +373,7 @@ function SegmentModal({ segment, onClose, onSave }) {
   const isEdit = !!segment?.id;
   const [name, setName]         = useState(segment?.name || "");
   const [desc, setDesc]         = useState(segment?.description || "");
-  const [type, setType]         = useState(segment?.type || "dynamic");
-  const [filters, setFilters]   = useState(segment?.filters || []);
+  const [filters, setFilters]   = useState(segment?.rules || []);
   const [preview, setPreview]   = useState([]);
   const [previewCount, setPreviewCount] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -387,13 +386,12 @@ function SegmentModal({ segment, onClose, onSave }) {
   const removeRule = (i) => setFilters(f => f.filter((_, idx) => idx !== i));
 
   const runPreview = useCallback(async () => {
-    if (type !== "dynamic") return;
     setPreviewLoading(true); setPreviewError(null);
     const { data, error: err } = await computeLeads(filters);
     if (err) { setPreviewError(err.message || String(err)); setPreview([]); setPreviewCount(null); }
     else { setPreview(data || []); setPreviewCount(data?.length ?? 0); }
     setPreviewLoading(false);
-  }, [filters, type]);
+  }, [filters]);
 
   useEffect(() => {
     const t = setTimeout(runPreview, 600);
@@ -403,7 +401,7 @@ function SegmentModal({ segment, onClose, onSave }) {
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome obrigatório"); return; }
     setSaving(true); setError(null);
-    const payload = { name: name.trim(), description: desc.trim(), type, filters: type === "dynamic" ? filters : [], updated_at: new Date().toISOString() };
+    const payload = { name: name.trim(), description: desc.trim(), rules: filters, updated_at: new Date().toISOString() };
     let err;
     if (isEdit) {
       ({ error: err } = await supabase.from("segments").update(payload).eq("id", segment.id));
@@ -445,43 +443,22 @@ function SegmentModal({ segment, onClose, onSave }) {
               <input value={desc} onChange={e => setDesc(e.target.value)} placeholder="Descrição opcional..." style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 13, fontFamily: T.font, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none", color: T.text }} />
             </div>
 
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, display: "block", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>Tipo</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                {[["dynamic","Dinâmico","Regras automáticas"], ["static","Estático","Lista manual"]].map(([v, l, sub]) => (
-                  <div key={v} onClick={() => setType(v)} style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${type === v ? T.teal : T.border}`, background: type === v ? "#E8F5FB" : "#fff", cursor: "pointer" }}>
-                    <div style={{ fontFamily: T.head, fontSize: 13, fontWeight: 700, color: type === v ? T.teal : T.text }}>{l}</div>
-                    <div style={{ fontFamily: T.font, fontSize: 11, color: T.muted, marginTop: 2 }}>{sub}</div>
-                  </div>
-                ))}
+            <div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Regras (AND)</label>
+                <button onClick={addRule} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${T.teal}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, color: T.teal, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
+                  <Plus size={12} aria-hidden="true" /> Adicionar regra
+                </button>
               </div>
-            </div>
-
-            {type === "dynamic" && (
-              <div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                  <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em" }}>Regras (AND)</label>
-                  <button onClick={addRule} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${T.teal}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, color: T.teal, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>
-                    <Plus size={12} aria-hidden="true" /> Adicionar regra
-                  </button>
+              {filters.length === 0 && (
+                <div style={{ textAlign: "center", padding: "20px 10px", background: T.faint, borderRadius: 8, color: T.muted, fontSize: 13, fontFamily: T.font }}>
+                  Sem regras = todas as pessoas do core. Clique em "Adicionar regra" para filtrar.
                 </div>
-                {filters.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "20px 10px", background: T.faint, borderRadius: 8, color: T.muted, fontSize: 13, fontFamily: T.font }}>
-                    Sem regras = todas as pessoas do core. Clique em "Adicionar regra" para filtrar.
-                  </div>
-                )}
-                {filters.map((rule, i) => (
-                  <RuleRow key={i} rule={rule} onChange={r => updateRule(i, r)} onRemove={() => removeRule(i)} />
-                ))}
-              </div>
-            )}
-
-            {type === "static" && (
-              <div style={{ background: T.faint, borderRadius: 10, padding: 14, textAlign: "center" }}>
-                <Layers size={24} color={T.muted} style={{ marginBottom: 8 }} aria-hidden="true" />
-                <p style={{ fontFamily: T.font, fontSize: 13, color: T.muted, margin: 0 }}>Segmentos estáticos armazenam a lista atual de pessoas. Você poderá gerenciar os membros após criar o segmento.</p>
-              </div>
-            )}
+              )}
+              {filters.map((rule, i) => (
+                <RuleRow key={i} rule={rule} onChange={r => updateRule(i, r)} onRemove={() => removeRule(i)} />
+              ))}
+            </div>
           </div>
 
           {/* right: preview */}
@@ -497,12 +474,7 @@ function SegmentModal({ segment, onClose, onSave }) {
               }
             </div>
             <div style={{ flex: 1, overflowY: "auto", padding: "10px 20px" }}>
-              {type === "static" ? (
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.muted, gap: 8 }}>
-                  <Layers size={32} color={T.border} aria-hidden="true" />
-                  <span style={{ fontFamily: T.font, fontSize: 13 }}>Preview não disponível para segmentos estáticos</span>
-                </div>
-              ) : previewError ? (
+              {previewError ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.danger, gap: 8, textAlign: "center", padding: "0 16px" }}>
                   <AlertCircle size={28} color={T.danger} aria-hidden="true" />
                   <span style={{ fontFamily: T.font, fontSize: 12.5 }}>{previewError}</span>
@@ -558,9 +530,7 @@ function SegmentModal({ segment, onClose, onSave }) {
 /* ─── segment card ─── */
 function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelete }) {
   const [hov, setHov] = useState(false);
-  const typeBg   = segment.type === "dynamic" ? "#E8F5FB" : T.faint;
-  const typeCl   = segment.type === "dynamic" ? T.teal    : T.muted;
-  const typeIcon = segment.type === "dynamic" ? <Filter size={11} aria-hidden="true" /> : <Layers size={11} aria-hidden="true" />;
+  const ruleCount = segment.rules?.length || 0;
 
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
@@ -577,8 +547,8 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
           <h3 style={{ margin: "0 0 4px", fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{segment.name}</h3>
           {segment.description && <p style={{ margin: 0, fontFamily: T.font, fontSize: 12, color: T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{segment.description}</p>}
         </div>
-        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "3px 8px", borderRadius: 20, background: typeBg, color: typeCl, fontWeight: 700, fontFamily: T.font, flexShrink: 0 }}>
-          {typeIcon}{segment.type === "dynamic" ? "Dinâmico" : "Estático"}
+        <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10, padding: "3px 8px", borderRadius: 20, background: "#E8F5FB", color: T.teal, fontWeight: 700, fontFamily: T.font, flexShrink: 0 }}>
+          <Filter size={11} aria-hidden="true" />{ruleCount > 0 ? `${ruleCount} regra${ruleCount > 1 ? "s" : ""}` : "todos"}
         </span>
       </div>
 
@@ -589,9 +559,9 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
         }
       </div>
 
-      {segment.type === "dynamic" && segment.filters?.length > 0 && (
+      {ruleCount > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
-          {segment.filters.slice(0, 3).map((rule, i) => {
+          {segment.rules.slice(0, 3).map((rule, i) => {
             const f = FIELDS.find(x => x.value === rule.field);
             const allOps = [...OPS.number, ...OPS.text, ...OPS.enum, ...OPS.stage, ...OPS.page];
             const o = allOps.find(x => x.v === rule.op);
@@ -601,7 +571,7 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
               </span>
             );
           })}
-          {segment.filters.length > 3 && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>+{segment.filters.length - 3} regras</span>}
+          {ruleCount > 3 && <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>+{ruleCount - 3} regras</span>}
         </div>
       )}
 
@@ -687,7 +657,7 @@ function SegmentDetail({ segment, onClose }) {
   useEffect(() => {
     const load = async () => {
       setLoading(true); setError(null);
-      const { data, error: err } = await computeLeads(segment.type === "dynamic" ? segment.filters : []);
+      const { data, error: err } = await computeLeads(segment.rules || []);
       if (err) setError(err.message || String(err));
       else setLeads(data || []);
       setLoading(false);
@@ -756,26 +726,26 @@ export default function VantariSegments() {
   const [detail, setDetail]       = useState(null);
   const [search, setSearch]       = useState("");
 
-  const [segSpark, setSegSpark] = useState({ segments: [], leads: [], dynamic: [], staticS: [] });
+  const [segSpark, setSegSpark] = useState({ segments: [], leads: [] });
 
   useEffect(() => {
     const loadSpark = async () => {
       const sevenAgo = new Date();
       sevenAgo.setMonth(sevenAgo.getMonth() - 7);
       const [{ data: segData }, { data: personData }] = await Promise.all([
-        supabase.from("segments").select("created_at, type").gte("created_at", sevenAgo.toISOString()),
+        supabase.from("segments").select("created_at").gte("created_at", sevenAgo.toISOString()),
         core().from("persons").select("created_at").eq("workspace_id", WORKSPACE_VANTARI).gte("created_at", sevenAgo.toISOString()),
       ]);
       const now = new Date();
       const buckets = Array.from({ length: 7 }, (_, i) => {
         const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
-        return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, segs: 0, leads: 0, dyn: 0, stat: 0 };
+        return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, segs: 0, leads: 0 };
       });
       (segData || []).forEach(r => {
         const d = new Date(r.created_at);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const b = buckets.find(m => m.key === key);
-        if (b) { b.segs++; if (r.type === "dynamic") b.dyn++; else b.stat++; }
+        if (b) b.segs++;
       });
       (personData || []).forEach(r => {
         const d = new Date(r.created_at);
@@ -783,7 +753,7 @@ export default function VantariSegments() {
         const b = buckets.find(m => m.key === key);
         if (b) b.leads++;
       });
-      setSegSpark({ segments: buckets.map(b => b.segs), leads: buckets.map(b => b.leads), dynamic: buckets.map(b => b.dyn), staticS: buckets.map(b => b.stat) });
+      setSegSpark({ segments: buckets.map(b => b.segs), leads: buckets.map(b => b.leads) });
     };
     loadSpark();
   }, []);
@@ -798,9 +768,8 @@ export default function VantariSegments() {
     setSegments(data || []);
     setLoading(false);
     for (const seg of (data || [])) {
-      if (seg.type !== "dynamic") continue;
       setCounting(c => ({ ...c, [seg.id]: true }));
-      const { count } = await countLeads(seg.filters || []);
+      const { count } = await countLeads(seg.rules || []);
       setLeadCounts(lc => ({ ...lc, [seg.id]: count ?? 0 }));
       setCounting(c => ({ ...c, [seg.id]: false }));
     }
@@ -818,7 +787,7 @@ export default function VantariSegments() {
 
   const handleDuplicate = async (seg) => {
     const { data } = await supabase.from("segments")
-      .insert({ name: seg.name + " (cópia)", description: seg.description, type: seg.type, filters: seg.filters })
+      .insert({ name: seg.name + " (cópia)", description: seg.description, rules: seg.rules })
       .select().single();
     if (data) setSegments(s => [data, ...s]);
   };
@@ -923,17 +892,17 @@ export default function VantariSegments() {
             />
             <HeroKpiCard
               icon={Zap}      color={T.green}  trend={0}
-              label="Segmentos Dinâmicos"
-              value={segments.filter(s => s.type === "dynamic").length.toLocaleString("pt-BR")}
-              sub="regras automáticas"
-              sparkData={segSpark.dynamic}
+              label="Média por Segmento"
+              value={Math.round(totalLeads / (segments.length || 1)).toLocaleString("pt-BR")}
+              sub="pessoas / segmento"
+              sparkData={segSpark.leads}
             />
             <HeroKpiCard
               icon={Filter}   color={T.amber}  trend={0}
-              label="Segmentos Estáticos"
-              value={segments.filter(s => s.type === "static").length.toLocaleString("pt-BR")}
-              sub="listas manuais"
-              sparkData={segSpark.staticS}
+              label="Com Regras"
+              value={segments.filter(s => (s.rules?.length || 0) > 0).length.toLocaleString("pt-BR")}
+              sub="segmentos filtrados"
+              sparkData={segSpark.segments}
             />
           </div>
 
@@ -976,7 +945,7 @@ export default function VantariSegments() {
                 <div key={seg.id} onClick={() => setDetail(seg)} style={{ cursor: "pointer" }}>
                   <SegmentCard
                     segment={seg}
-                    leadCount={seg.type === "dynamic" ? leadCounts[seg.id] : "—"}
+                    leadCount={leadCounts[seg.id]}
                     loading={counting[seg.id]}
                     onEdit={s => { setModal(s); }}
                     onDuplicate={s => { handleDuplicate(s); }}

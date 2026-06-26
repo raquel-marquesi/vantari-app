@@ -4,11 +4,9 @@ import { supabase } from "./supabase";
 import {
   Loader2, AlertCircle, BarChart2, Users, Mail, Star,
   LayoutTemplate, Bot, Plug, Settings, Zap, Plus, X,
-  Filter, Layers, ChevronRight, Trash2, Copy, Edit2,
+  Filter, Layers, Trash2, Copy, Edit2, Briefcase,
 } from "lucide-react";
 
-import { IdCard } from "lucide-react";
-import { Briefcase } from "lucide-react";
 /* ───── DESIGN TOKENS ───── */
 const T = {
   // Brand
@@ -56,6 +54,20 @@ const T = {
 const SPIN = `@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}`;
 
+/* ───── CORE CANÔNICO ─────
+   Segmentação roda sobre o cadastro único:
+     - pessoa     → core.persons
+     - score      → mkt.lead_scores   (Interesse + Perfil A-D)
+     - estágio    → crm.deals → crm.stages (Esteira de Aquisição)
+     - eventos    → core.events       (visita de página etc.)
+     - consent    → core.consents     (descadastro de email)
+   `mkt` precisa estar exposto no PostgREST (Supabase → API → Exposed schemas). */
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+const core = () => supabase.schema("core");
+const mkt  = () => supabase.schema("mkt");
+const crm  = () => supabase.schema("crm");
+const NIL  = "00000000-0000-0000-0000-000000000000"; // id impossível p/ forçar conjunto vazio
+
 /* ───── SIDEBAR NAV HELPERS ───── */
 const NavSection = ({ label }) => (
   <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
@@ -92,88 +104,191 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
   );
 };
 
-/* ─── filter fields and operators ─── */
+/* ─── filter fields and operators (sobre o core) ─── */
 const FIELDS = [
-  { value: "score",          label: "Score (Interesse)",  type: "number" },
-  { value: "profile",        label: "Perfil (A-D)",       type: "enum",   opts: ["A","B","C","D"] },
-  { value: "profile_points", label: "Pontos de Perfil",   type: "number" },
-  { value: "stage",          label: "Estágio",            type: "enum",   opts: ["visitor","lead","mql","sql","opportunity","customer"] },
-  { value: "source",         label: "Fonte",              type: "text"   },
-  { value: "email",          label: "Email",              type: "text"   },
-  { value: "company",        label: "Empresa",            type: "text"   },
-  { value: "tags",           label: "Tags",               type: "text"   },
-  { value: "unsubscribed",   label: "Descadastrado",      type: "bool"   },
-  { value: "visited_page",   label: "Visitou página",     type: "page"   },  // Lead Tracking
+  // src indica de onde o valor é resolvido (ver computeLeads)
+  { value: "interest_points", label: "Score (Interesse)",   type: "number", src: "score" },
+  { value: "interest_band",   label: "Faixa de Interesse",  type: "enum",   src: "score", opts: ["cold","warm","hot","sql"] },
+  { value: "profile",         label: "Perfil (A-D)",        type: "enum",   src: "score", opts: ["A","B","C","D"] },
+  { value: "status",          label: "Status",              type: "enum",   src: "person", col: "status", opts: ["identificado","pendente"] },
+  { value: "stage",           label: "Estágio (negócio)",   type: "stage",  src: "deal" },
+  { value: "full_name",       label: "Nome",                type: "text",   src: "person", col: "full_name" },
+  { value: "email",           label: "Email",               type: "text",   src: "person", col: "primary_email" },
+  { value: "phone",           label: "Telefone",            type: "text",   src: "person", col: "primary_phone" },
+  { value: "company",         label: "Empresa",             type: "text",   src: "company" },
+  { value: "visited_page",    label: "Visitou página",      type: "page",   src: "event" },   // core.events (inerte até tracker no core)
+  { value: "unsubscribed",    label: "Descadastrado (email)", type: "bool", src: "consent" }, // core.consents (inerte até consent no core)
 ];
+const fieldOf = (rule) => FIELDS.find(f => f.value === rule.field) || FIELDS[0];
+
 const OPS = {
   number: [{ v: "gt", l: ">" }, { v: "gte", l: "≥" }, { v: "lt", l: "<" }, { v: "lte", l: "≤" }, { v: "eq", l: "=" }],
-  text:   [{ v: "eq", l: "=" }, { v: "ilike_c", l: "contém" }, { v: "neq", l: "≠" }],
+  text:   [{ v: "ilike_c", l: "contém" }, { v: "eq", l: "=" }, { v: "neq", l: "≠" }],
   enum:   [{ v: "eq", l: "=" }, { v: "neq", l: "≠" }],
   bool:   [{ v: "eq", l: "=" }],
+  stage:  [{ v: "eq", l: "está em" }, { v: "neq", l: "não está em" }],
   page:   [{ v: "visited", l: "visitou" }, { v: "not_visited", l: "não visitou" }],
 };
 
-/* ─── resolve lead IDs from "visited_page" filters (pre-query) ─── */
-async function resolveVisitedLeadIds(filters) {
-  const pageFilters = filters.filter(r => r.field === "visited_page" && r.value);
-  if (pageFilters.length === 0) return { mode: "none", ids: null };
-
-  // Recupera os lead_ids que tiveram page_visits para cada página
-  const include = [];   // visited
-  const exclude = [];   // not_visited
-  for (const r of pageFilters) {
-    const { data } = await supabase
-      .from("page_visits")
-      .select("lead_id")
-      .eq("tracked_page_id", r.value)
-      .not("lead_id", "is", null);
-    const ids = Array.from(new Set((data || []).map(x => x.lead_id)));
-    if (r.op === "not_visited") exclude.push(...ids); else include.push(...ids);
+/* ─── aplica um operador a um query builder do PostgREST ─── */
+function applyOp(q, col, field, rule) {
+  const val = field.type === "number" ? Number(rule.value)
+            : field.type === "bool"   ? rule.value === "true"
+            : rule.value;
+  switch (rule.op) {
+    case "gt":      return q.gt(col, val);
+    case "gte":     return q.gte(col, val);
+    case "lt":      return q.lt(col, val);
+    case "lte":     return q.lte(col, val);
+    case "eq":      return q.eq(col, val);
+    case "neq":     return q.neq(col, val);
+    case "ilike_c": return q.ilike(col, `%${val}%`);
+    default:        return q;
   }
-  return { mode: "ids", include: include.length ? Array.from(new Set(include)) : null, exclude: Array.from(new Set(exclude)) };
 }
 
-/* ─── apply filters to a Supabase query ─── */
-function applyFilters(query, filters) {
-  for (const rule of filters) {
-    if (!rule.field || !rule.op || rule.value === "") continue;
-    if (rule.field === "visited_page") continue; // tratado em resolveVisitedLeadIds
-    const field = FIELDS.find(f => f.value === rule.field);
-    if (!field) continue;
-    const val = field.type === "number" ? Number(rule.value)
-              : field.type === "bool"   ? rule.value === "true"
-              : rule.value;
-    if (rule.op === "gt")      query = query.gt(rule.field, val);
-    else if (rule.op === "gte") query = query.gte(rule.field, val);
-    else if (rule.op === "lt")  query = query.lt(rule.field, val);
-    else if (rule.op === "lte") query = query.lte(rule.field, val);
-    else if (rule.op === "eq")  query = query.eq(rule.field, val);
-    else if (rule.op === "neq") query = query.neq(rule.field, val);
-    else if (rule.op === "ilike_c") query = query.ilike(rule.field, `%${val}%`);
-  }
-  return query;
+/* intersecta arrays de person_id (lógica AND entre conjuntos). null = irrestrito. */
+function intersect(allowed, ids) {
+  const set = new Set(ids);
+  if (allowed === null) return set;
+  return new Set([...allowed].filter(x => set.has(x)));
 }
 
-/* ─── compute leads for a dynamic segment ─── */
+/* ─── monta o query builder de core.persons já filtrado (sem select/limit) ───
+   Resolve filtros que vivem em outros schemas para conjuntos de person_id e
+   aplica include (.in) / exclude (.not in) sobre a base. Devolve um builder
+   NÃO awaited — o chamador acrescenta .select()/.limit() e aguarda. */
+async function buildPersonQuery(filters) {
+  const rules = (filters || []).filter(r => r.field && r.op && r.value !== "" && r.value != null);
+
+  let allowed = null;            // conjunto de person_id permitidos (AND); null = todos
+  const exclude = new Set();     // person_id removidos
+
+  // SCORE / PERFIL — mkt.lead_scores (todas as regras de score numa query só)
+  const scoreRules = rules.filter(r => fieldOf(r).src === "score");
+  if (scoreRules.length) {
+    let q = mkt().from("lead_scores").select("person_id").eq("workspace_id", WORKSPACE_VANTARI);
+    for (const r of scoreRules) q = applyOp(q, r.field, fieldOf(r), r);
+    const { data, error } = await q.limit(5000);
+    if (error) throw error;
+    allowed = intersect(allowed, (data || []).map(x => x.person_id));
+  }
+
+  // ESTÁGIO — crm.deals (pessoa com negócio no estágio). value = stage_id
+  for (const r of rules.filter(r => r.field === "stage")) {
+    const { data, error } = await crm().from("deals")
+      .select("person_id").eq("workspace_id", WORKSPACE_VANTARI).eq("stage_id", r.value).limit(5000);
+    if (error) throw error;
+    const ids = (data || []).map(x => x.person_id).filter(Boolean);
+    if (r.op === "neq") ids.forEach(i => exclude.add(i));
+    else allowed = intersect(allowed, ids);
+  }
+
+  // VISITOU PÁGINA — core.events type=page_visit. value = path observado
+  for (const r of rules.filter(r => r.field === "visited_page")) {
+    const { data, error } = await core().from("events")
+      .select("person_id").eq("type", "page_visit").eq("payload->>path", r.value)
+      .not("person_id", "is", null).limit(5000);
+    if (error) throw error;
+    const ids = Array.from(new Set((data || []).map(x => x.person_id)));
+    if (r.op === "not_visited") ids.forEach(i => exclude.add(i));
+    else allowed = intersect(allowed, ids);
+  }
+
+  // DESCADASTRO — core.consents (email revogado)
+  const unsub = rules.find(r => r.field === "unsubscribed");
+  if (unsub) {
+    const { data, error } = await core().from("consents")
+      .select("person_id").eq("channel", "email").eq("status", "revoked").limit(5000);
+    if (error) throw error;
+    const ids = Array.from(new Set((data || []).map(x => x.person_id)));
+    if (unsub.value === "true") allowed = intersect(allowed, ids);
+    else ids.forEach(i => exclude.add(i));   // descadastrado = não → exclui revogados
+  }
+
+  // EMPRESA — resolve nome → company_ids (vira filtro direto persons.company_id in)
+  let companyIds = null;
+  for (const r of rules.filter(r => r.field === "company")) {
+    let cq = core().from("companies").select("id").eq("workspace_id", WORKSPACE_VANTARI);
+    cq = applyOp(cq, "name", { type: "text" }, r);
+    const { data, error } = await cq.limit(5000);
+    if (error) throw error;
+    const ids = (data || []).map(x => x.id);
+    companyIds = companyIds === null ? ids : companyIds.filter(i => ids.includes(i));
+  }
+
+  // BASE — core.persons + filtros diretos da pessoa
+  let pq = core().from("persons").eq("workspace_id", WORKSPACE_VANTARI);
+  for (const r of rules.filter(r => fieldOf(r).src === "person")) {
+    pq = applyOp(pq, fieldOf(r).col || r.field, fieldOf(r), r);
+  }
+  if (companyIds !== null) {
+    pq = pq.in("company_id", companyIds.length ? companyIds : [NIL]);
+  }
+  if (allowed !== null) {
+    const arr = [...allowed];
+    pq = pq.in("id", arr.length ? arr : [NIL]);
+  }
+  if (exclude.size) {
+    pq = pq.not("id", "in", `(${[...exclude].join(",")})`);
+  }
+  return pq;
+}
+
+/* ─── computa as pessoas de um segmento dinâmico (com score p/ exibição) ─── */
 async function computeLeads(filters) {
-  if (!filters || filters.length === 0) {
-    return await supabase.from("leads").select("id, name, email, score, stage").limit(200);
+  try {
+    const base = await buildPersonQuery(filters);
+    const { data: persons, error } = await base
+      .select("id, full_name, primary_email, status, company_id")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (error) throw error;
+
+    const ids = (persons || []).map(p => p.id);
+    const scoreMap = {};
+    if (ids.length) {
+      const { data: sc } = await mkt().from("lead_scores")
+        .select("person_id, interest_points, interest_band, profile").in("person_id", ids);
+      (sc || []).forEach(s => { scoreMap[s.person_id] = s; });
+    }
+    const out = (persons || []).map(p => ({
+      id: p.id,
+      name: p.full_name,
+      email: p.primary_email,
+      status: p.status,
+      score: scoreMap[p.id]?.interest_points ?? 0,
+      band: scoreMap[p.id]?.interest_band ?? "cold",
+      profile: scoreMap[p.id]?.profile ?? null,
+    }));
+    return { data: out, error: null };
+  } catch (err) {
+    return { data: null, error: err };
   }
-  const { mode, include, exclude } = await resolveVisitedLeadIds(filters);
-  let q = applyFilters(supabase.from("leads").select("id, name, email, score, stage"), filters);
-  if (mode === "ids") {
-    if (include) q = q.in("id", include.length ? include : ["00000000-0000-0000-0000-000000000000"]);
-    if (exclude && exclude.length) q = q.not("id", "in", `(${exclude.join(",")})`);
-  }
-  return await q.limit(200);
 }
 
-/* ─── score badge ─── */
-function ScoreBadge({ score }) {
-  const s = score >= 100 ? { label: "Sales Ready", bg: "#d1fae5", cl: "#059669" }
-           : score >= 51  ? { label: "Hot",         bg: `${T.coral}18`, cl: T.coral  }
-           : score >= 21  ? { label: "Warm",        bg: "#fef3c7", cl: "#d97706" }
-           :                { label: "Cold",         bg: T.border,  cl: T.muted  };
+/* ─── conta as pessoas de um segmento (sem enriquecer) ─── */
+async function countLeads(filters) {
+  try {
+    const base = await buildPersonQuery(filters);
+    const { count, error } = await base.select("id", { count: "exact", head: true });
+    if (error) throw error;
+    return { count: count ?? 0, error: null };
+  } catch (err) {
+    return { count: 0, error: err };
+  }
+}
+
+/* ─── score badge (bandas do core: cold/warm/hot/sql) ─── */
+function ScoreBadge({ score, band }) {
+  const b = band || (score >= 80 ? "sql" : score >= 51 ? "hot" : score >= 21 ? "warm" : "cold");
+  const map = {
+    sql:  { label: "Sales Ready", bg: "#d1fae5",        cl: "#059669" },
+    hot:  { label: "Hot",         bg: `${T.coral}18`,   cl: T.coral   },
+    warm: { label: "Warm",        bg: "#fef3c7",        cl: "#d97706" },
+    cold: { label: "Cold",        bg: T.border,         cl: T.muted   },
+  };
+  const s = map[b] || map.cold;
   return (
     <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, fontFamily: T.font }}>
       {score} · {s.label}
@@ -181,40 +296,43 @@ function ScoreBadge({ score }) {
   );
 }
 
-/* ─── stage badge ─── */
-function StageBadge({ stage }) {
-  const map = {
-    visitor:     { bg: T.faint,      cl: T.muted    },
-    lead:        { bg: "#E8F5FB",    cl: T.teal     },
-    mql:         { bg: "#E8F5FB",    cl: T.teal     },
-    sql:         { bg: "#E6F9F2",    cl: T.green    },
-    opportunity: { bg: "#f0fdf4",    cl: "#16a34a"  },
-    customer:    { bg: "#d1fae5",    cl: "#059669"  },
-  };
-  const s = map[stage?.toLowerCase()] || map.lead;
+/* ─── status badge (core: pendente / identificado) ─── */
+function StatusBadge({ status }) {
+  const s = status === "identificado"
+    ? { label: "Identificado", bg: "#F0FDF7", cl: "#0F6E4E" }
+    : { label: "Pendente",     bg: "#FFF8E6", cl: "#9A6A00" };
   return (
-    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, fontFamily: T.font, textTransform: "uppercase" }}>
-      {stage}
+    <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, fontFamily: T.font }}>
+      {s.label}
     </span>
   );
 }
 
 /* ─── rule row ─── */
 function RuleRow({ rule, onChange, onRemove }) {
-  const field = FIELDS.find(f => f.value === rule.field) || FIELDS[0];
+  const field = fieldOf(rule);
   const ops   = OPS[field.type] || OPS.text;
   const inp = { fontFamily: T.font, fontSize: 13, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 10px", outline: "none", background: "#fff", color: T.text };
-  const [pages, setPages] = useState([]);
+  const [pages, setPages]   = useState([]);
+  const [stages, setStages] = useState([]);
 
   useEffect(() => {
-    if (field.type !== "page") return;
-    supabase.from("tracked_pages").select("id, title, url").eq("active", true).order("title", { ascending: true })
-      .then(({ data }) => setPages(data || []));
+    if (field.type === "page") {
+      core().from("events").select("payload").eq("type", "page_visit").limit(500)
+        .then(({ data }) => {
+          const paths = Array.from(new Set((data || []).map(e => e.payload?.path || e.payload?.url).filter(Boolean)));
+          setPages(paths.map(p => ({ id: p, label: p })));
+        });
+    } else if (field.type === "stage") {
+      crm().from("stages").select("id, name, position").eq("workspace_id", WORKSPACE_VANTARI)
+        .order("position", { ascending: true })
+        .then(({ data }) => setStages(data || []));
+    }
   }, [field.type]);
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-      <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value, op: OPS[(FIELDS.find(f=>f.value===e.target.value)||FIELDS[0]).type][0].v, value: "" })} style={{ ...inp, flex: "0 0 150px" }}>
+      <select value={rule.field} onChange={e => onChange({ ...rule, field: e.target.value, op: (OPS[fieldOf({ field: e.target.value }).type] || OPS.text)[0].v, value: "" })} style={{ ...inp, flex: "0 0 160px" }}>
         {FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
       </select>
       <select value={rule.op} onChange={e => onChange({ ...rule, op: e.target.value })} style={{ ...inp, flex: "0 0 110px" }}>
@@ -230,10 +348,15 @@ function RuleRow({ rule, onChange, onRemove }) {
           <option value="false">Não</option>
           <option value="true">Sim</option>
         </select>
+      ) : field.type === "stage" ? (
+        <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ ...inp, flex: 1 }}>
+          <option value="">— selecionar estágio —</option>
+          {stages.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       ) : field.type === "page" ? (
         <select value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} style={{ ...inp, flex: 1 }}>
-          <option value="">— selecionar página —</option>
-          {pages.map(p => <option key={p.id} value={p.id}>{p.title || p.url}</option>)}
+          <option value="">— página observada —</option>
+          {pages.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
         </select>
       ) : (
         <input value={rule.value} onChange={e => onChange({ ...rule, value: e.target.value })} placeholder={field.type === "number" ? "0" : "valor..."} style={{ ...inp, flex: 1 }} type={field.type === "number" ? "number" : "text"} />
@@ -255,18 +378,20 @@ function SegmentModal({ segment, onClose, onSave }) {
   const [preview, setPreview]   = useState([]);
   const [previewCount, setPreviewCount] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(null);
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState(null);
 
-  const addRule = () => setFilters(f => [...f, { field: "score", op: "gte", value: "" }]);
+  const addRule = () => setFilters(f => [...f, { field: "interest_points", op: "gte", value: "" }]);
   const updateRule = (i, r) => setFilters(f => f.map((x, idx) => idx === i ? r : x));
   const removeRule = (i) => setFilters(f => f.filter((_, idx) => idx !== i));
 
   const runPreview = useCallback(async () => {
     if (type !== "dynamic") return;
-    setPreviewLoading(true);
+    setPreviewLoading(true); setPreviewError(null);
     const { data, error: err } = await computeLeads(filters);
-    if (!err) { setPreview(data || []); setPreviewCount(data?.length ?? 0); }
+    if (err) { setPreviewError(err.message || String(err)); setPreview([]); setPreviewCount(null); }
+    else { setPreview(data || []); setPreviewCount(data?.length ?? 0); }
     setPreviewLoading(false);
   }, [filters, type]);
 
@@ -302,7 +427,7 @@ function SegmentModal({ segment, onClose, onSave }) {
 
         <div style={{ flex: 1, overflow: "hidden", display: "flex" }}>
           {/* left: form */}
-          <div style={{ flex: "0 0 420px", padding: "20px 24px", borderRight: `1px solid ${T.border}`, overflowY: "auto" }}>
+          <div style={{ flex: "0 0 430px", padding: "20px 24px", borderRight: `1px solid ${T.border}`, overflowY: "auto" }}>
             {error && (
               <div style={{ display: "flex", alignItems: "center", gap: 8, background: `${T.danger}14`, border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 14 }}>
                 <AlertCircle size={15} color={T.danger} aria-hidden="true" />
@@ -312,7 +437,7 @@ function SegmentModal({ segment, onClose, onSave }) {
 
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, display: "block", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.04em" }}>Nome *</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Leads Quentes MQL" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 14, fontFamily: T.font, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none", color: T.text }} />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Leads Quentes Perfil A" style={{ width: "100%", boxSizing: "border-box", padding: "9px 12px", fontSize: 14, fontFamily: T.font, border: `1px solid ${T.border}`, borderRadius: 8, outline: "none", color: T.text }} />
             </div>
 
             <div style={{ marginBottom: 14 }}>
@@ -342,7 +467,7 @@ function SegmentModal({ segment, onClose, onSave }) {
                 </div>
                 {filters.length === 0 && (
                   <div style={{ textAlign: "center", padding: "20px 10px", background: T.faint, borderRadius: 8, color: T.muted, fontSize: 13, fontFamily: T.font }}>
-                    Sem regras = todos os leads. Clique em "Adicionar regra" para filtrar.
+                    Sem regras = todas as pessoas do core. Clique em "Adicionar regra" para filtrar.
                   </div>
                 )}
                 {filters.map((rule, i) => (
@@ -354,7 +479,7 @@ function SegmentModal({ segment, onClose, onSave }) {
             {type === "static" && (
               <div style={{ background: T.faint, borderRadius: 10, padding: 14, textAlign: "center" }}>
                 <Layers size={24} color={T.muted} style={{ marginBottom: 8 }} aria-hidden="true" />
-                <p style={{ fontFamily: T.font, fontSize: 13, color: T.muted, margin: 0 }}>Segmentos estáticos armazenam a lista atual de leads. Você poderá gerenciar os membros após criar o segmento.</p>
+                <p style={{ fontFamily: T.font, fontSize: 13, color: T.muted, margin: 0 }}>Segmentos estáticos armazenam a lista atual de pessoas. Você poderá gerenciar os membros após criar o segmento.</p>
               </div>
             )}
           </div>
@@ -367,7 +492,7 @@ function SegmentModal({ segment, onClose, onSave }) {
               {previewLoading
                 ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", marginLeft: "auto" }} aria-hidden="true" />
                 : previewCount !== null
-                  ? <span style={{ marginLeft: "auto", fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.teal }}>{previewCount} leads</span>
+                  ? <span style={{ marginLeft: "auto", fontFamily: T.font, fontSize: 13, fontWeight: 700, color: T.teal }}>{previewCount} pessoas</span>
                   : null
               }
             </div>
@@ -377,6 +502,12 @@ function SegmentModal({ segment, onClose, onSave }) {
                   <Layers size={32} color={T.border} aria-hidden="true" />
                   <span style={{ fontFamily: T.font, fontSize: 13 }}>Preview não disponível para segmentos estáticos</span>
                 </div>
+              ) : previewError ? (
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.danger, gap: 8, textAlign: "center", padding: "0 16px" }}>
+                  <AlertCircle size={28} color={T.danger} aria-hidden="true" />
+                  <span style={{ fontFamily: T.font, fontSize: 12.5 }}>{previewError}</span>
+                  <span style={{ fontFamily: T.font, fontSize: 11, color: T.muted }}>Score/Perfil exigem o schema <code>mkt</code> exposto no PostgREST.</span>
+                </div>
               ) : previewLoading ? (
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", gap: 8, color: T.muted }}>
                   <Loader2 size={18} style={{ animation: "spin 0.7s linear infinite" }} aria-hidden="true" />
@@ -385,7 +516,7 @@ function SegmentModal({ segment, onClose, onSave }) {
               ) : preview.length === 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: T.muted, gap: 8 }}>
                   <Users size={32} color={T.border} aria-hidden="true" />
-                  <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhum lead corresponde às regras</span>
+                  <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhuma pessoa corresponde às regras</span>
                 </div>
               ) : (
                 preview.slice(0, 50).map(lead => (
@@ -398,14 +529,14 @@ function SegmentModal({ segment, onClose, onSave }) {
                       <div style={{ fontFamily: T.font, fontSize: 11, color: T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.email}</div>
                     </div>
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                      <StageBadge stage={lead.stage} />
-                      <ScoreBadge score={lead.score || 0} />
+                      <StatusBadge status={lead.status} />
+                      <ScoreBadge score={lead.score || 0} band={lead.band} />
                     </div>
                   </div>
                 ))
               )}
               {preview.length > 50 && (
-                <div style={{ textAlign: "center", padding: 12, fontFamily: T.font, fontSize: 12, color: T.muted }}>+ {preview.length - 50} leads não exibidos</div>
+                <div style={{ textAlign: "center", padding: 12, fontFamily: T.font, fontSize: 12, color: T.muted }}>+ {preview.length - 50} pessoas não exibidas</div>
               )}
             </div>
           </div>
@@ -454,7 +585,7 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 14 }}>
         {loading
           ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} aria-hidden="true" />
-          : <><Users size={14} color={T.teal} aria-hidden="true" /><span style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.ink, letterSpacing: "-0.035em", fontVariantNumeric: "tabular-nums" }}>{leadCount ?? "—"}</span><span style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>leads</span></>
+          : <><Users size={14} color={T.teal} aria-hidden="true" /><span style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.ink, letterSpacing: "-0.035em", fontVariantNumeric: "tabular-nums" }}>{leadCount ?? "—"}</span><span style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>pessoas</span></>
         }
       </div>
 
@@ -462,10 +593,11 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
           {segment.filters.slice(0, 3).map((rule, i) => {
             const f = FIELDS.find(x => x.value === rule.field);
-            const o = [...OPS.number, ...OPS.text, ...OPS.enum].find(x => x.v === rule.op);
+            const allOps = [...OPS.number, ...OPS.text, ...OPS.enum, ...OPS.stage, ...OPS.page];
+            const o = allOps.find(x => x.v === rule.op);
             return (
               <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>
-                {f?.label} {o?.l} {rule.value}
+                {f?.label} {o?.l} {f?.type === "stage" || f?.type === "page" ? "" : rule.value}
               </span>
             );
           })}
@@ -556,7 +688,7 @@ function SegmentDetail({ segment, onClose }) {
     const load = async () => {
       setLoading(true); setError(null);
       const { data, error: err } = await computeLeads(segment.type === "dynamic" ? segment.filters : []);
-      if (err) setError(err.message);
+      if (err) setError(err.message || String(err));
       else setLeads(data || []);
       setLoading(false);
     };
@@ -576,7 +708,7 @@ function SegmentDetail({ segment, onClose }) {
         </div>
         <div style={{ padding: "12px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", gap: 8 }}>
           <Users size={14} color={T.teal} aria-hidden="true" />
-          <span style={{ fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.ink }}>{loading ? "..." : leads.length} leads</span>
+          <span style={{ fontFamily: T.head, fontSize: 14, fontWeight: 700, color: T.ink }}>{loading ? "..." : leads.length} pessoas</span>
           {loading && <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite", color: T.muted }} aria-hidden="true" />}
         </div>
         {error && (
@@ -589,7 +721,7 @@ function SegmentDetail({ segment, onClose }) {
           {!loading && leads.length === 0 && !error && (
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 200, gap: 8, color: T.muted }}>
               <Users size={28} color={T.border} aria-hidden="true" />
-              <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhum lead corresponde a este segmento</span>
+              <span style={{ fontFamily: T.font, fontSize: 13 }}>Nenhuma pessoa corresponde a este segmento</span>
             </div>
           )}
           {leads.map(lead => (
@@ -602,8 +734,8 @@ function SegmentDetail({ segment, onClose }) {
                 <div style={{ fontFamily: T.font, fontSize: 11, color: T.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lead.email}</div>
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                <StageBadge stage={lead.stage} />
-                <ScoreBadge score={lead.score || 0} />
+                <StatusBadge status={lead.status} />
+                <ScoreBadge score={lead.score || 0} band={lead.band} />
               </div>
             </div>
           ))}
@@ -630,9 +762,9 @@ export default function VantariSegments() {
     const loadSpark = async () => {
       const sevenAgo = new Date();
       sevenAgo.setMonth(sevenAgo.getMonth() - 7);
-      const [{ data: segData }, { data: leadsData }] = await Promise.all([
+      const [{ data: segData }, { data: personData }] = await Promise.all([
         supabase.from("segments").select("created_at, type").gte("created_at", sevenAgo.toISOString()),
-        supabase.from("leads").select("created_at").gte("created_at", sevenAgo.toISOString()),
+        core().from("persons").select("created_at").eq("workspace_id", WORKSPACE_VANTARI).gte("created_at", sevenAgo.toISOString()),
       ]);
       const now = new Date();
       const buckets = Array.from({ length: 7 }, (_, i) => {
@@ -645,7 +777,7 @@ export default function VantariSegments() {
         const b = buckets.find(m => m.key === key);
         if (b) { b.segs++; if (r.type === "dynamic") b.dyn++; else b.stat++; }
       });
-      (leadsData || []).forEach(r => {
+      (personData || []).forEach(r => {
         const d = new Date(r.created_at);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const b = buckets.find(m => m.key === key);
@@ -668,10 +800,7 @@ export default function VantariSegments() {
     for (const seg of (data || [])) {
       if (seg.type !== "dynamic") continue;
       setCounting(c => ({ ...c, [seg.id]: true }));
-      const { count } = await applyFilters(
-        supabase.from("leads").select("id", { count: "exact", head: true }),
-        seg.filters || []
-      );
+      const { count } = await countLeads(seg.filters || []);
       setLeadCounts(lc => ({ ...lc, [seg.id]: count ?? 0 }));
       setCounting(c => ({ ...c, [seg.id]: false }));
     }
@@ -767,7 +896,7 @@ export default function VantariSegments() {
           <div>
             <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.ink, margin: 0, letterSpacing: "-0.02em" }}>Segmentação</h1>
             <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0", fontFamily: T.font }}>
-              {loading ? "Carregando..." : `${segments.length} segmentos criados`}
+              {loading ? "Carregando..." : `${segments.length} segmentos · cadastro único (core)`}
             </p>
           </div>
           <button onClick={() => setModal("new")} style={{ display: "flex", alignItems: "center", gap: 6, background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)", color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font, boxShadow: "0 4px 14px -4px rgba(13,116,145,.4)" }}>
@@ -787,7 +916,7 @@ export default function VantariSegments() {
             />
             <HeroKpiCard
               icon={Users}    color={T.violet} trend={0}
-              label="Leads Segmentados"
+              label="Pessoas Segmentadas"
               value={totalLeads.toLocaleString("pt-BR")}
               sub="em segmentos"
               sparkData={segSpark.leads}

@@ -68,11 +68,10 @@ function Sidebar() {
       <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
         <NavSection label="Principal" />
         <NavItem icon={BarChart2} label="Analytics" path="/dashboard" />
-        <NavItem icon={Users} label="Leads" path="/leads" />
+        <NavItem icon={Users} label="Leads" path="/leads" active />
         <NavItem icon={Mail} label="Email Marketing" path="/email" />
         <NavSection label="CRM" />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-        <NavItem icon={IdCard} label="Contatos" path="/contatos" active />
         <NavSection label="Ferramentas" />
         <NavItem icon={Star} label="Scoring" path="/scoring" />
         <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" />
@@ -115,7 +114,7 @@ function NovoContatoModal({ onClose, onCreated }) {
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: T.surface, borderRadius: 16, width: 460, maxWidth: "92vw", overflow: "hidden", boxShadow: "0 20px 60px rgba(0,0,0,.18)" }}>
         <div style={{ padding: "18px 22px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 15, color: T.ink }}>Novo contato</span>
+          <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 15, color: T.ink }}>Novo lead</span>
           <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
         </div>
         <div style={{ padding: "18px 22px" }}>
@@ -130,7 +129,7 @@ function NovoContatoModal({ onClose, onCreated }) {
         <div style={{ padding: "14px 22px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={onClose} disabled={saving} style={{ padding: "8px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>Cancelar</button>
           <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", background: T.gradient, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1, fontFamily: T.font }}>
-            {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />} Criar contato
+            {saving && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />} Criar lead
           </button>
         </div>
       </div>
@@ -188,11 +187,11 @@ export default function Contatos() {
       <div style={{ marginLeft: 240, padding: "28px 32px", minHeight: "100vh" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
           <div>
-            <h1 style={{ fontSize: 26, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>Contatos</h1>
+            <h1 style={{ fontSize: 26, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>Leads</h1>
             <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Pessoas do cadastro único (core) · {rows.length}{rows.length === 500 ? "+" : ""}</div>
           </div>
           <button onClick={() => setShowNovo(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.gradient, border: "none", borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: T.font }}>
-            <Plus size={15} /> Novo Contato
+            <Plus size={15} /> Novo Lead
           </button>
         </div>
 
@@ -224,8 +223,8 @@ export default function Contatos() {
           ) : rows.length === 0 ? (
             <div style={{ textAlign: "center", color: T.muted, padding: "70px 0", fontSize: 14 }}>
               <UserPlus size={28} color={T.faint3} style={{ marginBottom: 8 }} />
-              <div>Nenhum contato {q || statusFilter !== "all" ? "para este filtro" : "ainda"}.</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>Contatos aparecem aqui quando criados aqui, via negócio (CRM) ou pela Nina.</div>
+              <div>Nenhum lead {q || statusFilter !== "all" ? "para este filtro" : "ainda"}.</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>Leads aparecem aqui quando criados aqui, via negócio (CRM) ou pela Nina.</div>
             </div>
           ) : (
             <table style={{ width: "100%", borderCollapse: "collapse" }}>

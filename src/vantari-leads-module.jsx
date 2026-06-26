@@ -216,7 +216,6 @@ function Sidebar() {
         <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
         <NavSection label="CRM" />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-        <NavItem icon={IdCard} label="Contatos" path="/contatos" />
         <NavSection label="Ferramentas" />
         <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
         <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />

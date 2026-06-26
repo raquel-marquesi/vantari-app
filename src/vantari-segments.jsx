@@ -154,11 +154,12 @@ function intersect(allowed, ids) {
   return new Set([...allowed].filter(x => set.has(x)));
 }
 
-/* ─── monta o query builder de core.persons já filtrado (sem select/limit) ───
-   Resolve filtros que vivem em outros schemas para conjuntos de person_id e
-   aplica include (.in) / exclude (.not in) sobre a base. Devolve um builder
-   NÃO awaited — o chamador acrescenta .select()/.limit() e aguarda. */
-async function buildPersonQuery(filters) {
+/* ─── resolve as restrições de um segmento sobre o core ───
+   Filtros que vivem em outros schemas (score/estágio/visita/consent/empresa)
+   são resolvidos para conjuntos de person_id aqui. Devolve um objeto de
+   restrições; quem consulta core.persons chama .select() primeiro e só então
+   aplica via applyConstraints (no supabase-js os filtros exigem pós-select). */
+async function buildPersonConstraints(filters) {
   const rules = (filters || []).filter(r => r.field && r.op && r.value !== "" && r.value != null);
 
   let allowed = null;            // conjunto de person_id permitidos (AND); null = todos
@@ -217,32 +218,34 @@ async function buildPersonQuery(filters) {
     companyIds = companyIds === null ? ids : companyIds.filter(i => ids.includes(i));
   }
 
-  // BASE — core.persons + filtros diretos da pessoa
-  let pq = core().from("persons").eq("workspace_id", WORKSPACE_VANTARI);
-  for (const r of rules.filter(r => fieldOf(r).src === "person")) {
-    pq = applyOp(pq, fieldOf(r).col || r.field, fieldOf(r), r);
-  }
-  if (companyIds !== null) {
-    pq = pq.in("company_id", companyIds.length ? companyIds : [NIL]);
-  }
-  if (allowed !== null) {
-    const arr = [...allowed];
-    pq = pq.in("id", arr.length ? arr : [NIL]);
-  }
-  if (exclude.size) {
-    pq = pq.not("id", "in", `(${[...exclude].join(",")})`);
-  }
-  return pq;
+  // BASE — devolve as restrições da pessoa; o chamador aplica DEPOIS do .select()
+  // (no supabase-js os filtros .eq/.in/.not só existem no builder pós-select)
+  return {
+    personRules: rules.filter(r => fieldOf(r).src === "person"),
+    companyIds,
+    allowed,
+    exclude,
+  };
+}
+
+/* aplica as restrições a um builder de core.persons que JÁ chamou .select() */
+function applyConstraints(q, c) {
+  for (const r of c.personRules) q = applyOp(q, fieldOf(r).col || r.field, fieldOf(r), r);
+  if (c.companyIds !== null) q = q.in("company_id", c.companyIds.length ? c.companyIds : [NIL]);
+  if (c.allowed !== null) { const arr = [...c.allowed]; q = q.in("id", arr.length ? arr : [NIL]); }
+  if (c.exclude.size) q = q.not("id", "in", `(${[...c.exclude].join(",")})`);
+  return q;
 }
 
 /* ─── computa as pessoas de um segmento dinâmico (com score p/ exibição) ─── */
 async function computeLeads(filters) {
   try {
-    const base = await buildPersonQuery(filters);
-    const { data: persons, error } = await base
+    const c = await buildPersonConstraints(filters);
+    let q = core().from("persons")
       .select("id, full_name, primary_email, status, company_id")
-      .order("created_at", { ascending: false })
-      .limit(200);
+      .eq("workspace_id", WORKSPACE_VANTARI);
+    q = applyConstraints(q, c);
+    const { data: persons, error } = await q.order("created_at", { ascending: false }).limit(200);
     if (error) throw error;
 
     const ids = (persons || []).map(p => p.id);
@@ -270,8 +273,12 @@ async function computeLeads(filters) {
 /* ─── conta as pessoas de um segmento (sem enriquecer) ─── */
 async function countLeads(filters) {
   try {
-    const base = await buildPersonQuery(filters);
-    const { count, error } = await base.select("id", { count: "exact", head: true });
+    const c = await buildPersonConstraints(filters);
+    let q = core().from("persons")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", WORKSPACE_VANTARI);
+    q = applyConstraints(q, c);
+    const { count, error } = await q;
     if (error) throw error;
     return { count: count ?? 0, error: null };
   } catch (err) {

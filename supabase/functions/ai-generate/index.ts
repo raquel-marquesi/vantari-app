@@ -25,7 +25,7 @@ Deno.serve(async (req) => {
     // só aceita modelos Gemini; fallback para o padrão (ou GEMINI_MODEL)
     const m = (model && String(model).startsWith("gemini"))
       ? model
-      : (Deno.env.get("GEMINI_MODEL") || "gemini-2.0-flash");
+      : (Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash");
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${KEY}`;
     const body: Record<string, unknown> = {

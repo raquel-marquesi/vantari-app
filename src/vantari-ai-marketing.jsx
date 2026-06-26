@@ -66,7 +66,7 @@ const T = {
 ═══════════════════════════════════════════════════ */
 const MOCK_SETTINGS = {
   workspace_id: "ws_1",
-  model_preference: "gemini-2.0-flash",
+  model_preference: "gemini-2.5-flash",
   temperature: 0.7,
   custom_prompts: {
     email:   "Você é um copywriter especialista em marketing B2B brasileiro. Escreva emails persuasivos, claros e com boa entregabilidade.",
@@ -77,9 +77,9 @@ const MOCK_SETTINGS = {
 
 
 const MODELS = [
-  { id:"gemini-2.0-flash", name:"Gemini 2.0 Flash", provider:"Google", cost:"rápido e econômico", badge:"Recomendado", color:T.blue   },
-  { id:"gemini-1.5-flash", name:"Gemini 1.5 Flash", provider:"Google", cost:"estável",            badge:"Econômico",   color:T.teal   },
-  { id:"gemini-1.5-pro",   name:"Gemini 1.5 Pro",   provider:"Google", cost:"mais capaz",         badge:"Avançado",    color:T.purple },
+  { id:"gemini-2.5-flash",  name:"Gemini 2.5 Flash", provider:"Google", cost:"rápido e econômico", badge:"Recomendado", color:T.blue   },
+  { id:"gemini-flash-latest", name:"Gemini Flash (latest)", provider:"Google", cost:"sempre o flash atual", badge:"Auto", color:T.teal },
+  { id:"gemini-2.5-pro",    name:"Gemini 2.5 Pro",   provider:"Google", cost:"mais capaz (requer billing)", badge:"Avançado", color:T.purple },
 ];
 const modelLabel = (id) => (MODELS.find(m => m.id === id) || {}).name || id;
 

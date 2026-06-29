@@ -13,7 +13,7 @@ import {
   RefreshCw, Download, Plus, Pencil, Save, X,
   Hash, Table2, PieChart as PieIcon, BookOpen, KeyRound,
   Monitor, ClipboardList, Activity, Bell, Clock,
-  AlertTriangle, AlertCircle, Info, FileSpreadsheet,
+  FileSpreadsheet,
   ChevronRight, CheckCircle2
 } from "lucide-react";
 
@@ -40,18 +40,6 @@ import { Briefcase } from "lucide-react";
      created_at  timestamptz default now()
      updated_at  timestamptz default now()
      workspace_id uuid references workspaces(id)
-
-   TABLE: dashboard_alerts
-     id          uuid primary key default gen_random_uuid()
-     name        text not null
-     condition   jsonb not null
-     recipients  text[]
-     channels    text[]
-     last_triggered timestamptz
-     trigger_count  int default 0
-     enabled     bool default true
-     workspace_id uuid references workspaces(id)
-     created_at  timestamptz default now()
 ═══════════════════════════════════════════════════════════ */
 
 /* ───── DESIGN TOKENS ───── */
@@ -125,7 +113,6 @@ const EVENT_ICONS = {
 };
 
 const campaignPerf = [];
-const alertsDB = [];
 const todayVsYesterday = [];
 const leadsPerStage = { Visitor: [], Lead: [], MQL: [], SQL: [], Cliente: [] };
 const savedReports = [];
@@ -390,12 +377,16 @@ const relTime = (iso) => {
   return `${Math.floor(s / 3600)}h`;
 };
 
+/* chaveado por core.events.type (ver convenção em 0001_core_foundation.sql) */
 const EVENT_META = {
-  lead_novo:   { color: T => T.teal,   Icon: User,         fmt: (e, T) => ({ title: `Novo lead · ${e.leads?.name || "Anônimo"}`, sub: <>fonte <b style={{color: T.teal}}>{e.leads?.source || "—"}</b></> }) },
-  email_open:  { color: T => T.amber,  Icon: Mail,         fmt: (e, T) => ({ title: `Email aberto · ${e.leads?.name || "Lead"}`,  sub: <>abertura <b style={{color: T.amber}}>{e.data?.rate || "—"}</b></> }) },
-  sql_convert: { color: T => T.green,  Icon: Zap,          fmt: (e, T) => ({ title: `${e.leads?.name || "Lead"} atingiu SQL`,     sub: <>score <b style={{color: T.green}}>{e.data?.score || "—"}</b></> }) },
-  email_click: { color: T => T.rose,   Icon: Link2,        fmt: (e, T) => ({ title: `Click em email · ${e.leads?.name || "Lead"}`, sub: <>link <b style={{color: T.rose}}>{e.data?.url || "email"}</b></> }) },
-  form_submit: { color: T => T.violet, Icon: ClipboardList, fmt: (e, T) => ({ title: `Formulário enviado`,                        sub: <>lead <b style={{color: T.violet}}>{e.leads?.name || "—"}</b></> }) },
+  lead_created:    { color: T => T.teal,   Icon: User,          fmt: (e, T) => ({ title: `Novo lead · ${e.persons?.full_name || "Anônimo"}`, sub: <>fonte <b style={{color: T.teal}}>{e.source || "—"}</b></> }) },
+  form_submit:     { color: T => T.violet, Icon: ClipboardList, fmt: (e, T) => ({ title: `Formulário enviado`,                              sub: <>lead <b style={{color: T.violet}}>{e.persons?.full_name || "—"}</b></> }) },
+  page_visit:      { color: T => T.cyan,   Icon: Link2,         fmt: (e, T) => ({ title: `Visitou página · ${e.persons?.full_name || "Anônimo"}`, sub: <>url <b style={{color: T.cyan}}>{e.payload?.path || e.payload?.url || "—"}</b></> }) },
+  stage_changed:   { color: T => T.green,  Icon: Zap,           fmt: (e, T) => ({ title: `${e.persons?.full_name || "Lead"} mudou de estágio`, sub: <>para <b style={{color: T.green}}>{e.payload?.to || e.payload?.stage || "—"}</b></> }) },
+  whatsapp_in:     { color: T => T.amber,  Icon: Mail,          fmt: (e, T) => ({ title: `WhatsApp · ${e.persons?.full_name || "Lead"}`,        sub: <>via <b style={{color: T.amber}}>Nina</b></> }) },
+  contract_signed: { color: T => T.green,  Icon: Zap,           fmt: (e, T) => ({ title: `Contrato assinado · ${e.persons?.full_name || "—"}`, sub: null }) },
+  email_open:      { color: T => T.amber,  Icon: Mail,          fmt: (e, T) => ({ title: `Email aberto · ${e.persons?.full_name || "Lead"}`,    sub: <>abertura <b style={{color: T.amber}}>{e.payload?.rate || "—"}</b></> }) },
+  email_click:     { color: T => T.rose,   Icon: Link2,         fmt: (e, T) => ({ title: `Click em email · ${e.persons?.full_name || "Lead"}`,   sub: <>link <b style={{color: T.rose}}>{e.payload?.url || "email"}</b></> }) },
 };
 
 /* ───── ANEL DE CAMPANHAS (Fase 3) ───── */
@@ -404,15 +395,16 @@ const CampaignRing = ({ campaignCount }) => {
 
   useEffect(() => {
     const load = async () => {
+      const mkt = supabase.schema("mkt");
       const [{ data: sends }, { count: active }] = await Promise.all([
-        supabase.from("campaign_sends").select("opened, clicked, converted"),
-        supabase.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "active"),
+        mkt.from("campaign_sends").select("status, opened_at, clicked_at, converted_at"),
+        mkt.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "active"),
       ]);
       if (!sends?.length) return;
       const total     = sends.length;
-      const opened    = sends.filter(s => s.opened).length;
-      const clicked   = sends.filter(s => s.clicked).length;
-      const converted = sends.filter(s => s.converted).length;
+      const opened    = sends.filter(s => s.opened_at  || ["opened", "clicked", "converted"].includes(s.status)).length;
+      const clicked   = sends.filter(s => s.clicked_at || ["clicked", "converted"].includes(s.status)).length;
+      const converted = sends.filter(s => s.converted_at || s.status === "converted").length;
       setStats({
         open:        parseFloat(((opened    / total) * 100).toFixed(1)),
         ctr:         parseFloat(((clicked   / total) * 100).toFixed(1)),
@@ -500,7 +492,6 @@ const OverviewSection = () => {
   const [kpis,        setKpis]        = useState({ pessoas: 0, abertos: 0, ganhos: 0, pipelineCents: 0, campaigns: 0 });
   const [monthlyData, setMonthlyData] = useState([]);
   const [sparkData,   setSparkData]   = useState({ pessoas: [], negocios: [] });
-  const [alerts,      setAlerts]      = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -509,6 +500,7 @@ const OverviewSection = () => {
 
       const core = supabase.schema("core");
       const crm = supabase.schema("crm");
+      const mkt = supabase.schema("mkt");
 
       const [
         { count: pessoas },
@@ -517,15 +509,13 @@ const OverviewSection = () => {
         { count: campaigns },
         { data: rawPersons },
         { data: rawDeals },
-        { data: alertData },
       ] = await Promise.all([
         core.from("persons").select("*", { count: "exact", head: true }),
         crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open"),
         crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won"),
-        supabase.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
+        mkt.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
         core.from("persons").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
         crm.from("deals").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
-        supabase.from("dashboard_alerts").select("id, name, condition, last_triggered, trigger_count, enabled").eq("enabled", true).order("last_triggered", { ascending: false }).limit(6),
       ]);
 
       const abertos = (openDeals || []).length;
@@ -555,7 +545,6 @@ const OverviewSection = () => {
       const withGoal = buckets.map((b, i) => ({ ...b, goal: goalBase + Math.round(goalBase * 0.12 * i) }));
       setMonthlyData(withGoal);
       setSparkData({ pessoas: buckets.map(b => b.pessoas), negocios: buckets.map(b => b.negocios) });
-      setAlerts(alertData || []);
     };
     fetchData();
   }, []);
@@ -665,59 +654,6 @@ const OverviewSection = () => {
 
         <CampaignRing campaignCount={kpis.campaigns} />
       </div>
-
-      {/* Alerts */}
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <SectionTitle>Alertas Importantes</SectionTitle>
-          <Badge color={T.coral}>{alerts.length} ativos</Badge>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
-          {alerts.length === 0 && (
-            <div style={{ gridColumn: "1/-1", fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>
-              Nenhum alerta ativo
-            </div>
-          )}
-          {alerts.map((a, idx) => {
-            const sev = idx === 0
-              ? { color: T.coral,  anim: "pulse-coral",  label: "Crítico", Icon: AlertTriangle }
-              : idx === 1
-              ? { color: T.amber,  anim: "pulse-amber",  label: "Atenção", Icon: AlertCircle  }
-              :   { color: T.cyan,  anim: "pulse-cyan2",  label: "Info",    Icon: Info         };
-            const condStr = a.condition && typeof a.condition === "object"
-              ? Object.entries(a.condition).map(([k, v]) => `${k} ${v}`).join(" · ")
-              : String(a.condition || "—");
-            const lastFired = a.last_triggered ? relTime(a.last_triggered) : "—";
-            const SevIcon = sev.Icon;
-            return (
-              <div key={a.id} style={{ position: "relative", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 18px 14px 22px", overflow: "hidden" }}>
-                {/* barra colorida esquerda */}
-                <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: sev.color, borderRadius: "12px 0 0 12px" }} />
-                {/* pill severidade */}
-                <span style={{ position: "absolute", right: 14, top: 14, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 10, color: sev.color, fontFamily: T.mono, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  <span style={{ width: 7, height: 7, borderRadius: "50%", background: sev.color, animation: `${sev.anim} 1.5s infinite`, flexShrink: 0 }} />
-                  {sev.label}
-                </span>
-                <div style={{ display: "grid", gridTemplateColumns: "40px 1fr", gap: 14, alignItems: "flex-start" }}>
-                  <div style={{ width: 40, height: 40, background: `${sev.color}14`, color: sev.color, borderRadius: 10, display: "grid", placeItems: "center", flexShrink: 0 }}>
-                    <SevIcon size={18} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: T.ink, fontFamily: T.head, marginBottom: 4, paddingRight: 56 }}>{a.name}</div>
-                    <div style={{ fontSize: 11.5, color: T.muted }}>
-                      Condição:{" "}
-                      <code style={{ fontFamily: T.mono, background: `${sev.color}14`, color: sev.color, padding: "1px 6px", borderRadius: 4, fontWeight: 600, fontSize: 11 }}>{condStr}</code>
-                    </div>
-                    <div style={{ marginTop: 6, fontSize: 11, color: sev.color, fontFamily: T.mono, fontWeight: 600 }}>
-                      Último disparo · {lastFired} · {a.trigger_count || 0} ocorrências
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </Card>
     </div>
   );
 };
@@ -1130,33 +1066,41 @@ const ChannelSection = () => {
    SECTION 5 — REAL-TIME MONITORING
 ═══════════════════════════════════════════════════════════ */
 const RealtimeSection = () => {
-  const [feed,      setFeed]      = useState([]);
-  const [feedTick,  setFeedTick]  = useState(0);
+  const [feed,  setFeed]  = useState([]);
+  const [today, setToday] = useState({ email_open: 0, form_submit: 0, sql_reached: 0 });
 
   const liveStats = [
-    { Icon: Users,         label: "Online agora",        value: 0, color: T.green },
-    { Icon: Mail,          label: "Emails abertos hoje",  value: 0, color: T.teal  },
-    { Icon: ClipboardList, label: "Forms hoje",           value: 0, color: T.teal  },
-    { Icon: Zap,           label: "SQLs hoje",            value: 0, color: T.amber },
+    { Icon: Mail,          label: "Emails abertos hoje", value: today.email_open,  color: T.teal  },
+    { Icon: ClipboardList, label: "Forms hoje",          value: today.form_submit, color: T.teal  },
+    { Icon: Zap,           label: "SQLs hoje",           value: today.sql_reached, color: T.amber },
   ];
 
   useEffect(() => {
-    const loadFeed = async () => {
-      const { data } = await supabase
-        .from("lead_events")
-        .select("id, event_type, data, created_at, leads(name, source)")
-        .order("created_at", { ascending: false })
-        .limit(8);
-      if (data?.length) setFeed(data);
+    const core = supabase.schema("core");
+    const load = async () => {
+      const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
+      const [{ data: events }, { data: dayEvents }] = await Promise.all([
+        core.from("events")
+          .select("id, type, source, payload, occurred_at, persons(full_name)")
+          .order("occurred_at", { ascending: false })
+          .limit(8),
+        core.from("events")
+          .select("type")
+          .gte("occurred_at", startOfDay.toISOString()),
+      ]);
+      if (events?.length) setFeed(events);
+      const c = {};
+      (dayEvents || []).forEach(e => { c[e.type] = (c[e.type] || 0) + 1; });
+      setToday({ email_open: c.email_open || 0, form_submit: c.form_submit || 0, sql_reached: c.sql_reached || 0 });
     };
-    loadFeed();
-    const iv = setInterval(loadFeed, 5000);
+    load();
+    const iv = setInterval(load, 5000);
     return () => clearInterval(iv);
   }, []);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         {liveStats.map((s, i) => {
           const SIcon = s.Icon;
           return (
@@ -1196,10 +1140,10 @@ const RealtimeSection = () => {
               </div>
             )}
             {feed.map((e, i) => {
-              const meta    = EVENT_META[e.event_type] || {};
+              const meta    = EVENT_META[e.type] || {};
               const color   = (meta.color || (() => T.cyan))(T);
               const EIcon   = meta.Icon || Activity;
-              const fmt     = meta.fmt ? meta.fmt(e, T) : { title: e.event_type, sub: null };
+              const fmt     = meta.fmt ? meta.fmt(e, T) : { title: e.type, sub: null };
               return (
                 <div key={e.id}
                   style={{
@@ -1216,7 +1160,7 @@ const RealtimeSection = () => {
                     {fmt.sub && <div style={{ fontSize: 11.5, color: T.faint3, marginTop: 2, fontFamily: T.font }}>{fmt.sub}</div>}
                   </div>
                   <div style={{ fontSize: 11, color: T.faint3, fontFamily: T.mono, fontWeight: 600, flexShrink: 0 }}>
-                    {relTime(e.created_at)}
+                    {relTime(e.occurred_at)}
                   </div>
                 </div>
               );
@@ -1273,40 +1217,6 @@ const RealtimeSection = () => {
               })}
             </tbody>
           </table>
-        </div>
-      </Card>
-
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-          <SectionTitle sub="Alertas configurados para a equipe">Gerenciar Alertas</SectionTitle>
-          <Btn icon={Plus} onClick={() => {}}>Novo alerta</Btn>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {alertsDB.map(a => {
-            const urgencyColor = { high: T.coral, medium: T.amber, low: T.teal }[a.urgency];
-            return (
-              <div key={a.id} style={{ display: "flex", gap: 14, padding: "12px 16px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 10, alignItems: "center" }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: a.enabled ? urgencyColor : T.border, flexShrink: 0 }} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.font }}>{a.name}</span>
-                    {!a.enabled && <Badge color={T.muted}>Desativado</Badge>}
-                  </div>
-                  <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, marginTop: 2, fontWeight: 600 }}>
-                    Se <code style={{ background: "#EEF2F6", padding: "1px 5px", borderRadius: 4, fontFamily: T.mono }}>{a.condition}</code> → envia para {a.recipients.join(", ")}
-                  </div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, fontWeight: 600 }}>Último: {a.last}</div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: urgencyColor, fontFamily: T.font }}>{a.count} disparos</div>
-                </div>
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Btn size="xs" variant="ghost" icon={Pencil} />
-                  <Btn size="xs" variant={a.enabled ? "danger" : "success"}>{a.enabled ? "Pausar" : "Ativar"}</Btn>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </Card>
     </div>

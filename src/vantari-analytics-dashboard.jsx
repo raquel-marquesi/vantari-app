@@ -1067,12 +1067,12 @@ const ChannelSection = () => {
 ═══════════════════════════════════════════════════════════ */
 const RealtimeSection = () => {
   const [feed,  setFeed]  = useState([]);
-  const [today, setToday] = useState({ email_open: 0, form_submit: 0, sql_reached: 0 });
+  const [today, setToday] = useState({ lead_created: 0, form_submit: 0, page_visit: 0 });
 
   const liveStats = [
-    { Icon: Mail,          label: "Emails abertos hoje", value: today.email_open,  color: T.teal  },
-    { Icon: ClipboardList, label: "Forms hoje",          value: today.form_submit, color: T.teal  },
-    { Icon: Zap,           label: "SQLs hoje",           value: today.sql_reached, color: T.amber },
+    { Icon: User,          label: "Novos leads hoje", value: today.lead_created, color: T.teal  },
+    { Icon: ClipboardList, label: "Forms hoje",       value: today.form_submit,  color: T.violet },
+    { Icon: Link2,         label: "Visitas hoje",     value: today.page_visit,   color: T.cyan  },
   ];
 
   useEffect(() => {
@@ -1091,7 +1091,7 @@ const RealtimeSection = () => {
       if (events?.length) setFeed(events);
       const c = {};
       (dayEvents || []).forEach(e => { c[e.type] = (c[e.type] || 0) + 1; });
-      setToday({ email_open: c.email_open || 0, form_submit: c.form_submit || 0, sql_reached: c.sql_reached || 0 });
+      setToday({ lead_created: c.lead_created || 0, form_submit: c.form_submit || 0, page_visit: c.page_visit || 0 });
     };
     load();
     const iv = setInterval(load, 5000);

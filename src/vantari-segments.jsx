@@ -57,7 +57,7 @@ const SPIN = `@keyframes spin{to{transform:rotate(360deg)}}
 /* ───── CORE CANÔNICO ─────
    Segmentação roda sobre o cadastro único:
      - pessoa     → core.persons
-     - score      → mkt.lead_scores   (Interesse + Perfil A-D)
+     - score      → mkt.lead_scores   (score_inicial + segment_inicial, Etapa 1)
      - estágio    → crm.deals → crm.stages (Esteira de Aquisição)
      - eventos    → core.events       (visita de página etc.)
      - consent    → core.consents     (descadastro de email)
@@ -107,9 +107,8 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
 /* ─── filter fields and operators (sobre o core) ─── */
 const FIELDS = [
   // src indica de onde o valor é resolvido (ver computeLeads)
-  { value: "interest_points", label: "Score (Interesse)",   type: "number", src: "score" },
-  { value: "interest_band",   label: "Faixa de Interesse",  type: "enum",   src: "score", opts: ["cold","warm","hot","sql"] },
-  { value: "profile",         label: "Perfil (A-D)",        type: "enum",   src: "score", opts: ["A","B","C","D"] },
+  { value: "score_inicial",   label: "Score (Etapa 1)",     type: "number", src: "score" },
+  { value: "segment_inicial", label: "Segmento",            type: "enum",   src: "score", opts: ["Prioritário","Interessado","Educativo","Descartado"] },
   { value: "status",          label: "Status",              type: "enum",   src: "person", col: "status", opts: ["identificado","pendente"] },
   { value: "stage",           label: "Estágio (negócio)",   type: "stage",  src: "deal" },
   { value: "full_name",       label: "Nome",                type: "text",   src: "person", col: "full_name" },
@@ -252,7 +251,7 @@ async function computeLeads(filters) {
     const scoreMap = {};
     if (ids.length) {
       const { data: sc } = await mkt().from("lead_scores")
-        .select("person_id, interest_points, interest_band, profile").in("person_id", ids);
+        .select("person_id, score_inicial, segment_inicial").in("person_id", ids);
       (sc || []).forEach(s => { scoreMap[s.person_id] = s; });
     }
     const out = (persons || []).map(p => ({
@@ -260,9 +259,8 @@ async function computeLeads(filters) {
       name: p.full_name,
       email: p.primary_email,
       status: p.status,
-      score: scoreMap[p.id]?.interest_points ?? 0,
-      band: scoreMap[p.id]?.interest_band ?? "cold",
-      profile: scoreMap[p.id]?.profile ?? null,
+      score: scoreMap[p.id]?.score_inicial ?? 0,
+      segment: scoreMap[p.id]?.segment_inicial ?? null,
     }));
     return { data: out, error: null };
   } catch (err) {
@@ -286,19 +284,19 @@ async function countLeads(filters) {
   }
 }
 
-/* ─── score badge (bandas do core: cold/warm/hot/sql) ─── */
-function ScoreBadge({ score, band }) {
-  const b = band || (score >= 80 ? "sql" : score >= 51 ? "hot" : score >= 21 ? "warm" : "cold");
+/* ─── score badge (segmentos da Etapa 1: Prioritário/Interessado/Educativo/Descartado) ─── */
+function ScoreBadge({ score, segment }) {
+  const seg = segment || (score >= 35 ? "Prioritário" : score >= 25 ? "Interessado" : score >= 15 ? "Educativo" : "Descartado");
   const map = {
-    sql:  { label: "Sales Ready", bg: "#d1fae5",        cl: "#059669" },
-    hot:  { label: "Hot",         bg: `${T.coral}18`,   cl: T.coral   },
-    warm: { label: "Warm",        bg: "#fef3c7",        cl: "#d97706" },
-    cold: { label: "Cold",        bg: T.border,         cl: T.muted   },
+    "Prioritário": { bg: "#d1fae5",      cl: "#059669" },
+    "Interessado": { bg: "#E8F5FB",      cl: T.teal    },
+    "Educativo":   { bg: "#fef3c7",      cl: "#d97706" },
+    "Descartado":  { bg: T.border,       cl: T.muted   },
   };
-  const s = map[b] || map.cold;
+  const s = map[seg] || map["Descartado"];
   return (
     <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, fontFamily: T.font }}>
-      {score} · {s.label}
+      {score} · {seg}
     </span>
   );
 }
@@ -388,7 +386,7 @@ function SegmentModal({ segment, onClose, onSave }) {
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState(null);
 
-  const addRule = () => setFilters(f => [...f, { field: "interest_points", op: "gte", value: "" }]);
+  const addRule = () => setFilters(f => [...f, { field: "score_inicial", op: "gte", value: "" }]);
   const updateRule = (i, r) => setFilters(f => f.map((x, idx) => idx === i ? r : x));
   const removeRule = (i) => setFilters(f => f.filter((_, idx) => idx !== i));
 
@@ -509,7 +507,7 @@ function SegmentModal({ segment, onClose, onSave }) {
                     </div>
                     <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
                       <StatusBadge status={lead.status} />
-                      <ScoreBadge score={lead.score || 0} band={lead.band} />
+                      <ScoreBadge score={lead.score || 0} segment={lead.segment} />
                     </div>
                   </div>
                 ))
@@ -712,7 +710,7 @@ function SegmentDetail({ segment, onClose }) {
               </div>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
                 <StatusBadge status={lead.status} />
-                <ScoreBadge score={lead.score || 0} band={lead.band} />
+                <ScoreBadge score={lead.score || 0} segment={lead.segment} />
               </div>
             </div>
           ))}

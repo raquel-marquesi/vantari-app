@@ -66,6 +66,7 @@ export default function VantariPublicForm() {
   const fetchForm = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
+      .schema("mkt")
       .from("forms")
       .select("*")
       .eq("slug", slug)
@@ -105,15 +106,19 @@ export default function VantariPublicForm() {
     setSubmitting(true);
     setError(null);
 
-    // Normaliza payload: cpf como dígitos, demais como texto
+    // Monta payload: identidade (cpf/phone/email/name) no topo; campos com
+    // scoring_key vão sob payload.attributes (envelope canônico do motor 0007).
     const payload = {};
+    const attributes = {};
     (form.fields || []).forEach(f => {
       let v = values[f.id];
-      if (v === undefined || v === null) return;
+      if (v === undefined || v === null || v === "") return;
       if (f.type === "cpf")   v = cleanCpf(v);
       if (f.type === "phone") v = String(v).replace(/\D/g, "");
-      payload[f.id] = v;
+      if (f.scoring_key) attributes[f.scoring_key] = v;
+      else               payload[f.id] = v;
     });
+    if (Object.keys(attributes).length) payload.attributes = attributes;
 
     // UTMs a partir da URL (querystring)
     const utm_source   = searchParams.get("utm_source");
@@ -122,20 +127,15 @@ export default function VantariPublicForm() {
     const utm_content  = searchParams.get("utm_content");
     const utm_term     = searchParams.get("utm_term");
 
-    const { error } = await supabase.from("form_submissions").insert({
+    const { error } = await supabase.schema("mkt").from("form_submissions").insert({
+      workspace_id: form.workspace_id,
       form_id: form.id,
       payload,
       utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-      referrer: typeof document !== "undefined" ? document.referrer : null,
-      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
     });
 
     setSubmitting(false);
     if (error) { setError(error.message); return; }
-    if (form.redirect_url) {
-      window.location.href = form.redirect_url;
-      return;
-    }
     setDone(true);
   };
 
@@ -144,7 +144,7 @@ export default function VantariPublicForm() {
   if (done) return (
     <Centered tone="success">
       <div style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.green, marginBottom: 8 }}>✓ Pronto!</div>
-      <div style={{ fontFamily: T.font, fontSize: 14, color: T.text }}>{form.success_msg || "Recebemos seus dados."}</div>
+      <div style={{ fontFamily: T.font, fontSize: 14, color: T.text }}>{form.success_message || "Recebemos seus dados."}</div>
     </Centered>
   );
 
@@ -208,7 +208,11 @@ function FieldRow({ field, value, error, onChange }) {
     input = (
       <select value={value} onChange={e => onChange(e.target.value)} style={baseStyle}>
         <option value="">— selecione —</option>
-        {(field.options || []).map(o => <option key={o} value={o}>{o}</option>)}
+        {(field.options || []).map(o => {
+          const val = typeof o === "object" && o !== null ? o.value : o;
+          const lab = typeof o === "object" && o !== null ? o.label : o;
+          return <option key={val} value={val}>{lab}</option>;
+        })}
       </select>
     );
   } else if (field.type === "checkbox") {

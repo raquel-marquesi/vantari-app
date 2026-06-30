@@ -15,6 +15,8 @@ import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
 import { supabase } from "./supabase";
 
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
 ═══════════════════════════════════════════════════ */
@@ -790,15 +792,16 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
   useEffect(() => {
     const loadKpis = async () => {
       const [{ data: allCamps }, { data: sends }] = await Promise.all([
-        supabase.from("campaigns").select("id, status, sent_at, created_at"),
-        supabase.from("campaign_sends").select("opened, created_at"),
+        supabase.schema("mkt").from("campaigns").select("id, status, sent_at, created_at"),
+        supabase.schema("mkt").from("campaign_sends").select("status, opened_at, sent_at"),
       ]);
       const camps = allCamps || [];
       const s = sends || [];
       const total  = camps.length;
       const sent   = camps.filter(c => c.status === "sent").length;
       const active = camps.filter(c => c.status === "active" || c.status === "sending").length;
-      const avgOpen = s.length ? parseFloat(((s.filter(x => x.opened).length / s.length) * 100).toFixed(1)) : 0;
+      const isOpened = (x) => x.opened_at || ["opened", "clicked", "converted"].includes(x.status);
+      const avgOpen = s.length ? parseFloat(((s.filter(isOpened).length / s.length) * 100).toFixed(1)) : 0;
       setEmailKpis({ total, sent, avgOpen, active });
 
       // sparklines bucketed by month
@@ -814,10 +817,11 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
         if (b) { b.total++; if (c.status === "sent") b.sent++; }
       });
       s.forEach(x => {
-        const d = new Date(x.created_at);
+        if (!x.sent_at) return;
+        const d = new Date(x.sent_at);
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
         const b = buckets.find(m => m.key === key);
-        if (b) { b.openTotal++; if (x.opened) b.open++; }
+        if (b) { b.openTotal++; if (isOpened(x)) b.open++; }
       });
       setEmailSpark({
         total:  buckets.map(b => b.total),
@@ -1919,25 +1923,27 @@ export default function VantariEmailMarketing() {
     setError(null);
     try {
       const { data, error: err } = await supabase
+        .schema("mkt")
         .from("campaigns")
-        .select(`id, name, subject, sender, html_content, from_name, from_email, status, type, audience, audience_count, scheduled_at,
-                 campaign_sends(delivered, opened, clicked, bounced, unsubscribed)`)
+        .select(`id, name, subject, template_html, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+                 campaign_sends(status, sent_at, opened_at, clicked_at, converted_at)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
       setCampaigns((data || []).map(c => {
         const sends        = c.campaign_sends || [];
+        // métricas derivadas do shape do mkt (status enum + *_at), não de booleans
         const sent         = sends.length;
-        const delivered    = sends.filter(s => s.delivered).length;
-        const opened       = sends.filter(s => s.opened).length;
-        const clicked      = sends.filter(s => s.clicked).length;
-        const bounced      = sends.filter(s => s.bounced).length;
-        const unsubscribed = sends.filter(s => s.unsubscribed).length;
+        const delivered    = sends.filter(s => s.status !== "bounced" && s.status !== "failed").length;
+        const opened       = sends.filter(s => s.opened_at  || ["opened", "clicked", "converted"].includes(s.status)).length;
+        const clicked      = sends.filter(s => s.clicked_at || ["clicked", "converted"].includes(s.status)).length;
+        const bounced      = sends.filter(s => s.status === "bounced").length;
+        const unsubscribed = 0; // descadastro vive em core.consents (não por envio)
         return {
           id:            c.id,
           name:          c.name || "—",
           subject:       c.subject || "",
-          sender:        c.sender || "marketing@vantari.com.br",
-          htmlContent:   c.html_content || "",
+          sender:        c.from_email || "marketing@vantari.com.br",
+          htmlContent:   c.template_html || "",
           fromName:      c.from_name  || "Vantari",
           fromEmail:     c.from_email || "onboarding@resend.dev",
           status:        c.status || "draft",
@@ -1970,12 +1976,12 @@ export default function VantariEmailMarketing() {
 
   const handleSaveCampaign = useCallback(async (data) => {
     const payload = {
+      workspace_id:   WORKSPACE_VANTARI,
       name:           data.name,
       subject:        data.subject,
-      sender:         data.sender,
-      html_content:   data.htmlContent || null,
+      template_html:  data.htmlContent || null,
       from_name:      data.fromName  || "Vantari",
-      from_email:     data.fromEmail || null,
+      from_email:     data.fromEmail || data.sender || null,
       status:         data.status || "draft",
       type:           data.type   || "newsletter",
       audience:       data.audience || "Todos os leads",
@@ -1985,16 +1991,18 @@ export default function VantariEmailMarketing() {
                         : null,
     };
     const { error: err } = editCamp?.id
-      ? await supabase.from("campaigns").update(payload).eq("id", editCamp.id)
-      : await supabase.from("campaigns").insert(payload);
+      ? await supabase.schema("mkt").from("campaigns").update(payload).eq("id", editCamp.id)
+      : await supabase.schema("mkt").from("campaigns").insert(payload);
     if (err) { setError(err.message); return; }
     await fetchCampaigns();
     setView("list"); setEditCamp(null);
   }, [editCamp, fetchCampaigns]);
 
   const handleDuplicate = useCallback(async (c) => {
-    const { error: err } = await supabase.from("campaigns").insert({
-      name: `${c.name} (cópia)`, subject: c.subject, sender: c.sender,
+    const { error: err } = await supabase.schema("mkt").from("campaigns").insert({
+      workspace_id: WORKSPACE_VANTARI,
+      name: `${c.name} (cópia)`, subject: c.subject, from_email: c.fromEmail || c.sender,
+      from_name: c.fromName, template_html: c.htmlContent || null,
       status: "draft", type: c.type, audience: c.audience, audience_count: c.audienceCount,
       scheduled_at: null,
     });
@@ -2002,7 +2010,7 @@ export default function VantariEmailMarketing() {
   }, [fetchCampaigns]);
 
   const handleDelete = useCallback(async (id) => {
-    const { error: err } = await supabase.from("campaigns").delete().eq("id", id);
+    const { error: err } = await supabase.schema("mkt").from("campaigns").delete().eq("id", id);
     if (!err) fetchCampaigns();
   }, [fetchCampaigns]);
 

@@ -156,6 +156,79 @@ grant execute on function mkt.recompute_score_inicial(uuid)      to authenticate
 grant execute on function mkt.recompute_all_scores_inicial(uuid) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
+-- 5b) CONTRATO DE INTEGRAÇÃO — como os produtores (forms, Nina, ingest, import)
+--     populam os atributos da Etapa 1.
+--
+--   Envelope canônico: o produtor manda os atributos sob `payload.attributes`
+--   (objeto JSON chave→valor com o vocabulário do seed). Uma porta única
+--   (core.set_person_attributes) grava; a recompute reage via trigger no
+--   core.person_attributes (mesmo padrão de trg_event_score em core.events).
+-- ---------------------------------------------------------------------------
+
+-- porta única: upsert dos atributos (core puro, não conhece mkt)
+create or replace function core.set_person_attributes(p_person uuid, p_attrs jsonb, p_source text default null)
+returns void language plpgsql security definer set search_path = core, public as $$
+declare
+  v_ws uuid;
+  k text;
+  v text;
+begin
+  if p_attrs is null or jsonb_typeof(p_attrs) <> 'object' then return; end if;
+  select workspace_id into v_ws from core.persons where id = p_person;
+  if v_ws is null then return; end if;
+
+  for k, v in select key, value from jsonb_each_text(p_attrs) loop
+    insert into core.person_attributes (workspace_id, person_id, key, value, source, updated_at)
+    values (v_ws, p_person, k, v, p_source, now())
+    on conflict (person_id, key) do update
+       set value = excluded.value, source = excluded.source, updated_at = now();
+  end loop;
+end $$;
+grant execute on function core.set_person_attributes(uuid, jsonb, text) to authenticated, service_role;
+
+-- mkt PENDURA a recompute em core.person_attributes (igual ao trg_event_score)
+create or replace function mkt.on_attr_change()
+returns trigger language plpgsql security definer set search_path = mkt, core, public as $$
+begin
+  perform mkt.recompute_score_inicial(coalesce(new.person_id, old.person_id));
+  return null;
+end $$;
+drop trigger if exists trg_attr_score on core.person_attributes;
+create trigger trg_attr_score after insert or update or delete on core.person_attributes
+  for each row execute function mkt.on_attr_change();
+
+-- override do trigger de form submission (0004) p/ rotear payload.attributes
+create or replace function mkt.on_form_submission()
+returns trigger language plpgsql security definer set search_path = mkt, core, public as $$
+declare
+  v_label  text;
+  v_person uuid;
+begin
+  select coalesce(source_label, 'form') into v_label from mkt.forms where id = new.form_id;
+
+  v_person := core.resolve_person(
+    new.workspace_id,
+    new.payload->>'cpf',
+    new.payload->>'phone',
+    new.payload->>'email',
+    new.payload->>'name',
+    v_label);
+
+  new.person_id := v_person;
+
+  insert into core.events (workspace_id, person_id, source, type, payload)
+  values (new.workspace_id, v_person, 'form', 'form_submit',
+          jsonb_build_object('form_id', new.form_id) || coalesce(new.payload, '{}'::jsonb));
+
+  -- Etapa 1: atributos de scoring chegam no envelope canônico payload.attributes
+  if new.payload ? 'attributes' then
+    perform core.set_person_attributes(v_person, new.payload->'attributes', 'form');
+  end if;
+
+  return new;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 6) SEED — sala canônica Vantari. Codifica o doc Etapa 1 (0-50).
 --    Idempotente: bandas do-nothing; regras do-update (re-aplica pesos).
 -- ---------------------------------------------------------------------------

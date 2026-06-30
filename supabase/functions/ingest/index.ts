@@ -19,7 +19,10 @@
 //   "source":     "nina|meta|google|form|manual",   // obrigatório
 //   "event_type": "whatsapp_in",                     // opcional (default por source)
 //   "person": { "cpf":"...", "phone":"+55 11 9...", "email":"...", "name":"..." },
-//   "payload": { ...qualquer coisa... }              // opcional → vai pro evento
+//   "payload": { ...qualquer coisa... },             // opcional → vai pro evento
+//   "attributes": {                                  // opcional → scoring Etapa 1
+//     "cidade_estado":"sao_paulo", "nivel_urgencia":"alta_dividas", ...
+//   }                                                // chaves/valores canônicos: ver 0007
 //   // Alternativa Meta Lead Ads: enviar "field_data":[{name,values[]}] em vez de person
 // }
 //
@@ -148,6 +151,21 @@ serve(async (req) => {
   if (evErr) {
     // pessoa já resolvida; falha só no log → reporta mas não perde o lead
     return jsonResp({ person_id: personId, warning: "evento não registrado", detail: evErr.message }, 207);
+  }
+
+  // —— atributos de scoring (Etapa 1) — envelope canônico body.attributes ——
+  // grava via core.set_person_attributes; o trigger trg_attr_score recalcula o score.
+  if (body.attributes && typeof body.attributes === "object" && !Array.isArray(body.attributes)) {
+    const { error: attrErr } = await core.rpc("set_person_attributes", {
+      p_person: personId,
+      p_attrs:  body.attributes,
+      p_source: source,
+    });
+    if (attrErr) {
+      // não-fatal: pessoa e evento já gravados
+      return jsonResp({ person_id: personId, source, event_type: eventType,
+        warning: "atributos não gravados", detail: attrErr.message }, 207);
+    }
   }
 
   return jsonResp({ person_id: personId, source, event_type: eventType });

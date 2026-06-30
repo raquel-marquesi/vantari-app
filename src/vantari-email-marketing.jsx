@@ -14,6 +14,7 @@ import {
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
 import { supabase } from "./supabase";
+import { loadEmailSegments, resolveRecipients } from "./segment-resolver";
 
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 
@@ -1070,11 +1071,33 @@ const SendModal = ({ campaign, onClose, onDone }) => {
   const [sending,   setSending]     = useState(false);
   const [result,    setResult]      = useState(null); // {sent, total, test, error}
   const [mode,      setMode]        = useState("confirm"); // confirm | test | done
+  const [segments,  setSegments]    = useState([]);
+  const [segId,     setSegId]       = useState("");
+  const [recipients, setRecipients] = useState(null); // null = não resolvido
+  const [resolving, setResolving]   = useState(false);
+
+  useEffect(() => {
+    loadEmailSegments().then(setSegments).catch(() => setSegments([]));
+  }, []);
+
+  // resolve a lista de destinatários ao escolher um segmento
+  useEffect(() => {
+    if (!segId) { setRecipients(null); return; }
+    const seg = segments.find(s => s.id === segId);
+    if (!seg) return;
+    setResolving(true); setRecipients(null);
+    resolveRecipients(seg.rules || [])
+      .then(setRecipients)
+      .catch(e => setResult({ error: "Erro ao resolver segmento: " + e.message }))
+      .finally(() => setResolving(false));
+  }, [segId, segments]);
 
   const invoke = async (isTest) => {
     setSending(true); setResult(null);
     try {
-      const body = isTest ? { campaign_id: campaign.id, test_email: testEmail } : { campaign_id: campaign.id };
+      const body = isTest
+        ? { campaign_id: campaign.id, test_email: testEmail }
+        : { campaign_id: campaign.id, recipients: recipients || [] };
       const { data, error: fnErr } = await supabase.functions.invoke("send-campaign", { body });
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
@@ -1161,12 +1184,29 @@ const SendModal = ({ campaign, onClose, onDone }) => {
 
               {mode==="confirm" && (
                 <div>
-                  <div style={{background:"#fff4e6",border:`0.5px solid ${T.amber}`,borderRadius:8,padding:"12px 14px",marginBottom:18,fontFamily:T.font,fontSize:13,fontWeight:600,color:"#92400e"}}>
-                    Isso enviará o email para <strong>todos os leads ativos</strong> (não descadastrados). Esta ação não pode ser desfeita.
+                  <label style={{display:"block",fontFamily:T.head,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>Enviar para o segmento</label>
+                  <select value={segId} onChange={e=>setSegId(e.target.value)}
+                    style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink,marginBottom:12}}>
+                    <option value="">— escolha um segmento —</option>
+                    {segments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+
+                  {segId && (
+                    <div style={{background:T.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink}}>
+                      {resolving
+                        ? <span style={{color:T.muted}}>Resolvendo destinatários…</span>
+                        : <><strong>{(recipients?.length ?? 0).toLocaleString("pt-BR")}</strong> destinatário(s) com email</>}
+                    </div>
+                  )}
+
+                  <div style={{background:"#fff4e6",border:`0.5px solid ${T.amber}`,borderRadius:8,padding:"12px 14px",marginBottom:18,fontFamily:T.font,fontSize:12.5,fontWeight:600,color:"#92400e"}}>
+                    Disparo real, não pode ser desfeito. Quem revogou consentimento de email é descartado automaticamente.
                   </div>
+
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={onClose} variant="ghost" size="md" sx={{flex:1,justifyContent:"center"}}>Cancelar</Btn>
-                    <Btn onClick={()=>invoke(false)} variant="success" size="md" icon={sending?undefined:Send} disabled={sending} sx={{flex:1,justifyContent:"center"}}>
+                    <Btn onClick={()=>invoke(false)} variant="success" size="md" icon={sending?undefined:Send}
+                      disabled={sending || resolving || !segId || !(recipients?.length)} sx={{flex:1,justifyContent:"center"}}>
                       {sending
                         ? <><Loader2 size={14} style={{animation:"spin 0.7s linear infinite",marginRight:6}}/>Enviando...</>
                         : "Confirmar Envio"}

@@ -1,17 +1,32 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// ════════════════════════════════════════════════════════════════
+// Edge Function: /send-campaign  (core/mkt)
+// ────────────────────────────────────────────────────────────────
+// Envia uma campanha de mkt.campaigns via Resend.
+//
+// Destinatários (jeito A): a TELA resolve o segmento e manda a lista pronta
+// em `recipients: [{ person_id, email, name }]`. Esta função reverifica o
+// descadastro em core.consents (rede de segurança) antes de disparar e grava
+// os envios em mkt.campaign_sends.
+//
+// Body: { campaign_id, recipients?: [{person_id,email,name}], test_email? }
+//   - test_email → manda 1 email de teste, não grava campaign_sends
+//   - recipients → envio real pro segmento escolhido
+// ════════════════════════════════════════════════════════════════
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type Recipient = { person_id: string; email: string; name: string | null };
+
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS });
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
   try {
-    const { campaign_id, test_email } = await req.json();
+    const { campaign_id, test_email, recipients } = await req.json();
     if (!campaign_id) {
       return new Response(JSON.stringify({ error: "campaign_id obrigatório" }), { status: 400, headers: CORS });
     }
@@ -20,11 +35,13 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
+    const mkt  = supabase.schema("mkt");
+    const core = supabase.schema("core");
 
-    /* ── fetch campaign ── */
-    const { data: campaign, error: campErr } = await supabase
+    /* ── campanha (mkt.campaigns) ── */
+    const { data: campaign, error: campErr } = await mkt
       .from("campaigns")
-      .select("id, name, subject, sender, html_content, from_name, from_email, status")
+      .select("id, workspace_id, name, subject, template_html, from_name, from_email, status")
       .eq("id", campaign_id)
       .single();
 
@@ -35,50 +52,50 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Campanha já foi enviada" }), { status: 400, headers: CORS });
     }
 
-    /* ── set status to sending ── */
-    if (!test_email) {
-      await supabase.from("campaigns").update({ status: "sending" }).eq("id", campaign_id);
-    }
-
-    /* ── fetch recipients ── */
-    let leads: Array<{ id: string; email: string; name: string | null; company: string | null }>;
+    /* ── destinatários ── */
+    let list: Recipient[];
     if (test_email) {
-      leads = [{ id: "test", email: test_email, name: "Teste", company: null }];
+      list = [{ person_id: "test", email: test_email, name: "Teste" }];
     } else {
-      const { data } = await supabase
-        .from("leads")
-        .select("id, email, name, company")
-        .eq("unsubscribed", false)
-        .not("email", "is", null);
-      leads = (data || []).filter(l => !!l.email);
+      list = (Array.isArray(recipients) ? recipients : [])
+        .filter((r: Recipient) => r && !!r.email);
+
+      // rede de segurança: descarta quem revogou consent de email (core.consents)
+      const { data: revoked } = await core
+        .from("consents").select("person_id").eq("channel", "email").eq("status", "revoked");
+      const blocked = new Set((revoked || []).map((c: { person_id: string }) => c.person_id));
+      list = list.filter(r => !blocked.has(r.person_id));
     }
 
-    if (leads.length === 0) {
-      await supabase.from("campaigns").update({ status: "draft" }).eq("id", campaign_id);
-      return new Response(JSON.stringify({ sent: 0, error: "Nenhum lead ativo encontrado" }), { headers: CORS });
+    if (list.length === 0) {
+      if (!test_email) await mkt.from("campaigns").update({ status: "draft" }).eq("id", campaign_id);
+      return new Response(JSON.stringify({ sent: 0, total: 0, error: "Nenhum destinatário válido" }), { headers: CORS });
     }
 
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (!RESEND_API_KEY) {
-      await supabase.from("campaigns").update({ status: "failed" }).eq("id", campaign_id);
+      if (!test_email) await mkt.from("campaigns").update({ status: "failed" }).eq("id", campaign_id);
       return new Response(JSON.stringify({ error: "RESEND_API_KEY não configurada" }), { status: 500, headers: CORS });
     }
 
-    const fromEmail = campaign.from_email || Deno.env.get("FROM_EMAIL") || "onboarding@resend.dev";
-    const fromName  = campaign.from_name  || campaign.sender || "Vantari";
+    if (!test_email) await mkt.from("campaigns").update({ status: "sending" }).eq("id", campaign_id);
 
-    /* ── send in batches of 100 ── */
+    const fromEmail = campaign.from_email || Deno.env.get("FROM_EMAIL") || "onboarding@resend.dev";
+    const fromName  = campaign.from_name  || "Vantari";
+
+    /* ── envia em lotes de 100 ── */
     const BATCH = 100;
     let sentCount = 0;
     const sendRecords: object[] = [];
+    const now = () => new Date().toISOString();
 
-    for (let i = 0; i < leads.length; i += BATCH) {
-      const batch = leads.slice(i, i + BATCH);
-      const emails = batch.map(lead => ({
+    for (let i = 0; i < list.length; i += BATCH) {
+      const batch = list.slice(i, i + BATCH);
+      const emails = batch.map(r => ({
         from:    `${fromName} <${fromEmail}>`,
-        to:      [lead.email],
+        to:      [r.email],
         subject: campaign.subject || campaign.name,
-        html:    buildHtml(campaign.html_content, lead, campaign.name),
+        html:    buildHtml(campaign.template_html, r, campaign.name),
       }));
 
       const res = await fetch("https://api.resend.com/emails/batch", {
@@ -88,39 +105,36 @@ Deno.serve(async (req) => {
       });
 
       if (!res.ok) {
-        const errBody = await res.text();
-        console.error("Resend error:", errBody);
-        /* continue with remaining batches even if one fails */
+        console.error("Resend error:", await res.text());
       } else {
         sentCount += batch.length;
         if (!test_email) {
-          sendRecords.push(...batch.map(lead => ({
+          sendRecords.push(...batch.map(r => ({
+            workspace_id: campaign.workspace_id,
             campaign_id,
-            lead_id:      lead.id,
-            sent_at:      new Date().toISOString(),
-            delivered:    true,
-            opened:       false,
-            clicked:      false,
-            bounced:      false,
-            unsubscribed: false,
+            person_id:    r.person_id,
+            status:       "sent",
+            sent_at:      now(),
           })));
         }
       }
     }
 
-    /* ── persist send records ── */
+    /* ── grava envios (mkt.campaign_sends) ── */
     if (sendRecords.length > 0) {
-      await supabase.from("campaign_sends").insert(sendRecords);
+      await mkt.from("campaign_sends").upsert(sendRecords, { onConflict: "campaign_id,person_id" });
     }
 
-    /* ── final status ── */
+    /* ── status final ── */
     if (!test_email) {
-      const finalStatus = sentCount > 0 ? "sent" : "failed";
-      await supabase.from("campaigns").update({ status: finalStatus }).eq("id", campaign_id);
+      await mkt.from("campaigns").update({
+        status: sentCount > 0 ? "sent" : "failed",
+        sent_at: sentCount > 0 ? now() : null,
+      }).eq("id", campaign_id);
     }
 
     return new Response(
-      JSON.stringify({ sent: sentCount, total: leads.length, test: !!test_email }),
+      JSON.stringify({ sent: sentCount, total: list.length, test: !!test_email }),
       { headers: { ...CORS, "Content-Type": "application/json" } }
     );
 
@@ -133,17 +147,14 @@ Deno.serve(async (req) => {
 /* ── HTML builder ── */
 function buildHtml(
   htmlContent: string | null,
-  lead: { name: string | null; email: string; company: string | null },
+  r: { name: string | null; email: string },
   campaignName: string
 ): string {
-  const name    = lead.name    || lead.email;
-  const company = lead.company || "";
-
+  const name = r.name || r.email;
   const body = htmlContent
     ? htmlContent
-        .replace(/\{\{lead\.name\}\}/g,    name)
-        .replace(/\{\{lead\.company\}\}/g, company)
-        .replace(/\{\{lead\.email\}\}/g,   lead.email)
+        .replace(/\{\{lead\.name\}\}/g,  name)
+        .replace(/\{\{lead\.email\}\}/g, r.email)
     : `<p>Olá, ${name}!</p><p>${campaignName}</p>`;
 
   return `<!DOCTYPE html>

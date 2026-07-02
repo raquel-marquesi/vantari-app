@@ -10,6 +10,9 @@ import {
 
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
+
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+
 /* ═══════════════════════════════════════════════════════════════════════
    DESIGN TOKENS
 ════════════════════════════════════════════════════════════════════════ */
@@ -1624,8 +1627,8 @@ const FormsManager = () => {
 
   const fetchForms = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from("forms").select("*").order("created_at", { ascending: false });
-    setForms(data || []);
+    const { data } = await supabase.schema("mkt").from("forms").select("*").order("created_at", { ascending: false });
+    setForms((data || []).map(f => ({ ...f, success_msg: f.success_message })));
     setLoading(false);
   }, []);
 
@@ -1650,20 +1653,21 @@ const FormsManager = () => {
 
   const saveForm = async () => {
     const payload = {
-      name:         editing.name,
-      slug:         editing.slug || slugify(editing.name),
-      description:  editing.description,
-      fields:       editing.fields,
-      success_msg:  editing.success_msg,
-      source_label: editing.source_label,
-      tags:         editing.tags || [],
-      active:       editing.active,
+      workspace_id:    WORKSPACE_VANTARI,
+      name:            editing.name,
+      slug:            editing.slug || slugify(editing.name),
+      description:     editing.description,
+      fields:          editing.fields,
+      success_message: editing.success_msg,
+      source_label:    editing.source_label,
+      tags:            editing.tags || [],
+      active:          editing.active,
     };
     let err;
     if (editing.id) {
-      ({ error: err } = await supabase.from("forms").update(payload).eq("id", editing.id));
+      ({ error: err } = await supabase.schema("mkt").from("forms").update(payload).eq("id", editing.id));
     } else {
-      ({ error: err } = await supabase.from("forms").insert(payload));
+      ({ error: err } = await supabase.schema("mkt").from("forms").insert(payload));
     }
     if (err) { alert("Erro: " + err.message); return; }
     setEditing(null);
@@ -1672,7 +1676,7 @@ const FormsManager = () => {
 
   const deleteForm = async (id) => {
     if (!window.confirm("Excluir este formulário? Submissões serão preservadas.")) return;
-    await supabase.from("forms").delete().eq("id", id);
+    await supabase.schema("mkt").from("forms").delete().eq("id", id);
     fetchForms();
   };
 

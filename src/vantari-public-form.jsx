@@ -65,23 +65,13 @@ export default function VantariPublicForm() {
 
   const fetchForm = useCallback(async () => {
     setLoading(true);
-    // Forms novos (com scoring) vivem em mkt.forms; os legados das LPs ainda
-    // em public.forms. Tenta mkt primeiro, cai pro public — ponte até o builder
-    // do /landing convergir. _src guia a submissão pra tabela certa.
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .schema("mkt").from("forms").select("*")
       .eq("slug", slug).eq("active", true).maybeSingle();
-    let src = "mkt";
-    if (!error && !data) {
-      const r = await supabase
-        .from("forms").select("*")
-        .eq("slug", slug).eq("active", true).maybeSingle();
-      data = r.data; error = r.error; src = "public";
-    }
     setLoading(false);
     if (error) { setError(error.message); return; }
     if (!data) { setError("Formulário não encontrado."); return; }
-    setForm({ ...data, _src: src });
+    setForm(data);
   }, [slug]);
 
   useEffect(() => { fetchForm(); }, [fetchForm]);
@@ -133,25 +123,13 @@ export default function VantariPublicForm() {
     const utm_content  = searchParams.get("utm_content");
     const utm_term     = searchParams.get("utm_term");
 
-    let error;
-    if (form._src === "mkt") {
-      // form novo → mkt.form_submissions (dispara on_form_submission + scoring)
-      ({ error } = await supabase.schema("mkt").from("form_submissions").insert({
-        workspace_id: form.workspace_id,
-        form_id: form.id,
-        payload,
-        utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-      }));
-    } else {
-      // form legado → public.form_submissions (trigger legado)
-      ({ error } = await supabase.from("form_submissions").insert({
-        form_id: form.id,
-        payload,
-        utm_source, utm_medium, utm_campaign, utm_content, utm_term,
-        referrer: typeof document !== "undefined" ? document.referrer : null,
-        user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
-      }));
-    }
+    // dispara mkt.on_form_submission → core.resolve_person + evento + scoring
+    const { error } = await supabase.schema("mkt").from("form_submissions").insert({
+      workspace_id: form.workspace_id,
+      form_id: form.id,
+      payload,
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+    });
 
     setSubmitting(false);
     if (error) { setError(error.message); return; }

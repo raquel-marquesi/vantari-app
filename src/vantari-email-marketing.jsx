@@ -18,8 +18,6 @@ import { loadEmailSegments, resolveRecipients } from "./segment-resolver";
 
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 
-const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
-
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
 ═══════════════════════════════════════════════════ */
@@ -292,11 +290,18 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
     );
     case "text": return (
       <div style={{padding:"24px 40px",textAlign:b.align||"left"}}>
-        {b.text?.split("\n").map((line,i)=>(
-          <p key={i} style={{margin:"0 0 10px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.7,color:T.ink}}>
-            {line.replace("{{lead.name}}",leadName)||"\u00a0"}
-          </p>
-        ))}
+        {b.html!=null ? (
+          <div
+            style={{fontFamily:b.fontFamily||T.font,fontSize:b.fontSize||14,fontWeight:600,lineHeight:b.lineHeight||1.7,color:T.ink}}
+            dangerouslySetInnerHTML={{__html:b.html.replaceAll("{{lead.name}}",leadName)}}
+          />
+        ) : (
+          b.text?.split("\n").map((line,i)=>(
+            <p key={i} style={{margin:"0 0 10px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.7,color:T.ink}}>
+              {line.replace("{{lead.name}}",leadName)||"\u00a0"}
+            </p>
+          ))
+        )}
       </div>
     );
     case "image": return (
@@ -336,6 +341,62 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
 };
 
 /* ═══════════════════════════════════════════════════
+   BLOCOS → HTML (pra template_html / envio real)
+═══════════════════════════════════════════════════ */
+const escapeHtml = (s="") => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+const blockToHtml = (block) => {
+  const b = block.content||{};
+  switch(block.type) {
+    case "header": return `
+      <tr><td style="background:linear-gradient(135deg,${T.blue},${T.teal});background-color:${T.blue};padding:32px 40px;text-align:center;">
+        ${b.logo?`<div style="font-family:${T.head};font-size:18px;font-weight:700;color:#fff;letter-spacing:0.1em;${b.headline?"margin-bottom:12px;":""}">VANTARI</div>`:""}
+        ${b.headline?`<div style="font-family:${T.head};font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.01em;">${escapeHtml(b.headline)}</div>`:""}
+        ${b.subline?`<div style="font-family:${T.font};font-size:13px;font-weight:600;color:rgba(255,255,255,.75);margin-top:6px;">${escapeHtml(b.subline)}</div>`:""}
+      </td></tr>`;
+    case "text": {
+      const html = b.html!=null ? b.html : (b.text||"").split("\n").map(l=>`<p>${escapeHtml(l)||"&nbsp;"}</p>`).join("");
+      return `<tr><td style="padding:24px 40px;text-align:${b.align||"left"};font-family:${b.fontFamily||"Inter"},sans-serif;font-size:${b.fontSize||14}px;font-weight:600;line-height:${b.lineHeight||1.7};color:${T.ink};">${html}</td></tr>`;
+    }
+    case "image": return `<tr><td style="padding:0 40px;">
+        ${b.src?`<img src="${b.src}" alt="${escapeHtml(b.caption||"")}" style="width:100%;border-radius:8px;display:block;"/>`:""}
+        ${b.caption?`<p style="font-family:${T.font};font-size:11px;font-weight:600;color:${T.muted};text-align:center;margin-top:6px;">${escapeHtml(b.caption)}</p>`:""}
+      </td></tr>`;
+    case "button": return `<tr><td style="padding:20px 40px;text-align:${b.align||"center"};">
+        <a href="${b.url||"#"}" style="display:inline-block;padding:13px 30px;background:${b.color||T.blue};background-color:${b.color||T.blue};color:#fff;border-radius:8px;font-family:${T.font};font-weight:700;font-size:14px;text-decoration:none;letter-spacing:0.02em;">${escapeHtml(b.text||"Clique aqui")}</a>
+      </td></tr>`;
+    case "divider": return `<tr><td style="padding:8px 40px;"><div style="height:1px;background:${T.border};background-color:${T.border};"></div></td></tr>`;
+    case "spacer": return `<tr><td style="height:${b.height||24}px;line-height:${b.height||24}px;font-size:1px;">&nbsp;</td></tr>`;
+    case "columns": return `<tr><td style="padding:16px 40px;">
+        <table role="presentation" width="100%"><tr>
+          <td width="50%" style="padding:12px;background:${T.bg};background-color:${T.bg};border-radius:8px;font-family:${T.font};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escapeHtml(b.col1||"Coluna 1")}</td>
+          <td width="16"></td>
+          <td width="50%" style="padding:12px;background:${T.bg};background-color:${T.bg};border-radius:8px;font-family:${T.font};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escapeHtml(b.col2||"Coluna 2")}</td>
+        </tr></table>
+      </td></tr>`;
+    case "footer": return `<tr><td style="background:${T.faint};background-color:${T.faint};padding:20px 40px;text-align:center;border-top:1px solid ${T.border};">
+        <p style="font-family:${T.font};font-size:11px;font-weight:600;color:${T.muted};margin:0;">${escapeHtml(b.text||"© 2024 Vantari · Todos os direitos reservados")}</p>
+        <p style="font-family:${T.font};font-size:11px;color:${T.muted};margin:4px 0 0;font-weight:600;">
+          <a href="{{unsubscribe_url}}" style="color:${T.blue};text-decoration:none;">Descadastrar</a> · <a href="#" style="color:${T.blue};text-decoration:none;">Política de Privacidade</a>
+        </p>
+      </td></tr>`;
+    default: return "";
+  }
+};
+
+const blocksToHtml = (blocks=[]) => `<!doctype html>
+<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:${T.bg};">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${T.bg};padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background:${T.white};border-radius:12px;overflow:hidden;">
+        ${blocks.map(blockToHtml).join("\n")}
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+/* ═══════════════════════════════════════════════════
    WYSIWYG EMAIL EDITOR
 ═══════════════════════════════════════════════════ */
 const BLOCK_PALETTE = [
@@ -351,7 +412,7 @@ const BLOCK_PALETTE = [
 
 const DEFAULT_BLOCK_CONTENT = {
   header:  { logo:true, headline:"Seu Título Aqui", subline:"Subtítulo opcional" },
-  text:    { text:"Escreva seu texto aqui. Use {{lead.name}} para personalizar.", align:"left" },
+  text:    { html:"<p>Escreva seu texto aqui. Use {{lead.name}} para personalizar.</p>", align:"left", fontFamily:"Inter", fontSize:14, lineHeight:1.7 },
   image:   { src:"", caption:"" },
   button:  { text:"Clique Aqui", url:"#", align:"center", color:T.blue },
   divider: {},
@@ -363,6 +424,18 @@ const DEFAULT_BLOCK_CONTENT = {
 const BlockEditor = ({ block, onChange }) => {
   const b = block.content||{};
   const upd = (key,val) => onChange({...block,content:{...b,[key]:val}});
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState(null);
+  const uploadImage = async (file) => {
+    if (!file) return;
+    setUploading(true); setUploadErr(null);
+    const path = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,"_")}`;
+    const { error } = await supabase.storage.from("email-assets").upload(path, file, { upsert:false });
+    if (error) { setUploadErr(error.message); setUploading(false); return; }
+    const { data } = supabase.storage.from("email-assets").getPublicUrl(path);
+    upd("src", data.publicUrl);
+    setUploading(false);
+  };
   const labelStyle = { fontFamily:T.font,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4,display:"block" };
   const inputStyle = { width:"100%",boxSizing:"border-box",fontFamily:T.font,fontSize:12,fontWeight:600,padding:"7px 10px",border:`1px solid ${T.border}`,borderRadius:7,outline:"none",background:T.white,color:T.ink,marginBottom:10 };
 
@@ -378,10 +451,49 @@ const BlockEditor = ({ block, onChange }) => {
         </label>
       </div>
     );
-    case "text": return (
+    case "text": {
+      const exec = (cmd, val) => { document.execCommand(cmd, false, val); };
+      const stopBlur = e => e.preventDefault(); // preserva a seleção de texto ao clicar num botão da toolbar
+      const TEXT_COLORS = ["#0E1A24","#0D7491","#14A273","#F59E0B","#FF6B5E","#7C5CFF"];
+      return (
       <div>
         <label style={labelStyle}>Texto</label>
-        <textarea value={b.text||""} onChange={e=>upd("text",e.target.value)} rows={5} style={{...inputStyle,resize:"vertical",lineHeight:1.5}}/>
+        <div style={{display:"flex",gap:4,marginBottom:6,flexWrap:"wrap"}}>
+          {[["bold","B"],["italic","I"],["underline","U"]].map(([cmd,lbl])=>(
+            <button key={cmd} type="button" onMouseDown={stopBlur} onClick={()=>exec(cmd)}
+              style={{width:26,height:26,fontFamily:cmd==="italic"?"serif":T.font,fontStyle:cmd==="italic"?"italic":"normal",textDecoration:cmd==="underline"?"underline":"none",fontSize:12,fontWeight:800,border:`1px solid ${T.border}`,borderRadius:6,background:T.white,color:T.ink,cursor:"pointer"}}>
+              {lbl}
+            </button>
+          ))}
+          {TEXT_COLORS.map(c=>(
+            <button key={c} type="button" onMouseDown={stopBlur} onClick={()=>exec("foreColor",c)}
+              style={{width:20,height:20,borderRadius:"50%",background:c,border:"1.5px solid #fff",boxShadow:`0 0 0 1px ${T.border}`,cursor:"pointer",marginTop:3}} title={`Cor ${c}`}/>
+          ))}
+        </div>
+        <div
+          contentEditable
+          suppressContentEditableWarning
+          onInput={e=>upd("html",e.currentTarget.innerHTML)}
+          dangerouslySetInnerHTML={{__html:b.html!=null?b.html:(b.text||"").split("\n").map(l=>`<p>${l||"&nbsp;"}</p>`).join("")}}
+          style={{...inputStyle,minHeight:110,lineHeight:b.lineHeight||1.7,fontFamily:b.fontFamily||"Inter",fontSize:b.fontSize||14,cursor:"text",outline:"none"}}
+        />
+        <label style={labelStyle}>Fonte</label>
+        <select value={b.fontFamily||"Inter"} onChange={e=>upd("fontFamily",e.target.value)} style={inputStyle}>
+          <option value="Inter">Inter (padrão)</option>
+          <option value="Sora">Sora</option>
+          <option value="Georgia, serif">Georgia (serifa)</option>
+          <option value="Arial, sans-serif">Arial</option>
+        </select>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <div>
+            <label style={labelStyle}>Tamanho: {b.fontSize||14}px</label>
+            <input type="range" min="11" max="24" value={b.fontSize||14} onChange={e=>upd("fontSize",Number(e.target.value))} style={{width:"100%",accentColor:T.blue}}/>
+          </div>
+          <div>
+            <label style={labelStyle}>Espaçamento: {(b.lineHeight||1.7).toFixed(1)}</label>
+            <input type="range" min="1.2" max="2.4" step="0.1" value={b.lineHeight||1.7} onChange={e=>upd("lineHeight",Number(e.target.value))} style={{width:"100%",accentColor:T.blue}}/>
+          </div>
+        </div>
         <label style={labelStyle}>Alinhamento</label>
         <div style={{display:"flex",gap:4,marginBottom:10}}>
           {["left","center","right"].map(a=>(
@@ -396,7 +508,8 @@ const BlockEditor = ({ block, onChange }) => {
           Variáveis: <code style={{fontFamily:T.mono}}>{"{{lead.name}}"}</code> <code style={{fontFamily:T.mono}}>{"{{lead.company}}"}</code>
         </div>
       </div>
-    );
+      );
+    }
     case "button": return (
       <div>
         <label style={labelStyle}>Texto do Botão</label>
@@ -414,8 +527,16 @@ const BlockEditor = ({ block, onChange }) => {
     );
     case "image": return (
       <div>
-        <label style={labelStyle}>URL da Imagem</label>
+        <label style={labelStyle}>Enviar do computador</label>
+        <label style={{...inputStyle,display:"flex",alignItems:"center",justifyContent:"center",gap:6,cursor:uploading?"not-allowed":"pointer",color:T.blue,fontWeight:700}}>
+          <Upload size={13} aria-hidden="true"/> {uploading?"Enviando…":"Escolher arquivo"}
+          <input type="file" accept="image/*" style={{display:"none"}} disabled={uploading}
+            onChange={e=>uploadImage(e.target.files?.[0])}/>
+        </label>
+        {uploadErr && <div style={{fontSize:11,fontWeight:600,color:T.red,marginBottom:8}}>{uploadErr}</div>}
+        <label style={labelStyle}>ou URL da imagem</label>
         <input style={inputStyle} value={b.src||""} onChange={e=>upd("src",e.target.value)} placeholder="https://..."/>
+        {b.src && <img src={b.src} alt="" style={{width:"100%",borderRadius:8,marginBottom:10,border:`1px solid ${T.border}`}}/>}
         <label style={labelStyle}>Legenda</label>
         <input style={inputStyle} value={b.caption||""} onChange={e=>upd("caption",e.target.value)} placeholder="Opcional"/>
       </div>
@@ -502,7 +623,7 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
             );
           })}
         </div>
-        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks})} variant="ink" size="md" icon={Save}>Salvar</Btn>
+        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks,htmlContent:blocksToHtml(blocks)})} variant="ink" size="md" icon={Save}>Salvar</Btn>
       </div>
 
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>

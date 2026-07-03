@@ -36,64 +36,73 @@ O arquivo `src/supabase.js` já existe com `createClient` configurado via env va
 
 ```
 src/
-  App.jsx                          # Roteamento principal (lazy + Suspense, sem sidebar global)
-  supabase.js                      # Cliente Supabase (createClient)
+  App.jsx                          # Roteamento principal (lazy + Suspense + ProtectedRoute, sem sidebar global)
+  supabase.js                      # Cliente Supabase (createClient via env VITE_*)
   main.jsx                         # Entry point
   index.css / App.css              # Estilos globais
+  segment-resolver.js              # Resolve segmento dinâmico (public.segments.rules) → lista de pessoas do core (usado no /email)
   vantari-auth-system.jsx          # /login         ← Supabase Auth
-  vantari-analytics-dashboard.jsx  # /dashboard     ← KPIs reais via Supabase + design Fases 2-4
-  vantari-leads-module.jsx         # /leads         ← 4 abas: Leads / Empresas / Importações / Exportações
-  vantari-scoring-system.jsx       # /scoring       ← HeroKpiCard + sparklines
-  vantari-email-marketing.jsx      # /email         ← HeroKpiCard + sparklines (campaigns/sends) + aba "Biblioteca Vantari" em Templates com 5 cards e iframe preview
-  vantari-landing-pages.jsx        # /landing       ← HeroKpiCard + sparklines (form_submissions) + aba "Biblioteca" com 3 LPs (LibraryLPCard, LibraryView, MODULAR_BLOCKS, LP_PREVIEW_BODIES)
+  vantari-analytics-dashboard.jsx  # /dashboard     ← KPIs reais via Supabase (convergido pro core canônico, PR #13)
+  vantari-crm-contatos.jsx         # /leads         ← lista de contatos/pessoas (substituiu o antigo leads-module, removido no PR #12)
+  vantari-crm.jsx                  # /crm           ← pipeline/kanban de negócios (Esteira de Aquisição)
+  vantari-crm-deal.jsx             # /crm/:dealId   ← detalhe do negócio (processo + crédito)
+  vantari-scoring-system.jsx       # /scoring       ← modelo "Vantari Crédito" (score cumulativo 2 etapas, PR #14/#16)
+  vantari-email-marketing.jsx      # /email         ← convergido pro schema mkt (leitura/CRUD/métricas + envio por segmento, PR #19/#20)
+  vantari-landing-pages.jsx        # /landing       ← form_submissions + aba "Biblioteca" com 3 LPs + Formulários standalone
   vantari-ai-marketing.jsx         # /ai-marketing  ← leads reais via Supabase
   vantari-integrations-hub.jsx     # /integrations
-  vantari-settings-admin.jsx       # /settings      ← 8 abas: Workspace / Equipe / Campos Personalizados / Lead Tracking / Email / Billing / Avançado / Audit / Suporte
+  vantari-settings-admin.jsx       # /settings      ← abas de admin (Workspace / Equipe / Campos / Tracking / Email / etc.)
   vantari-onboarding-wizard.jsx    # /onboarding    ← localStorage
-  vantari-workflow-builder.jsx     # /workflow
-  vantari-segments.jsx             # /segments      ← HeroKpiCard + sparklines + filtro "visitou página"
+  vantari-workflow-builder.jsx     # /workflow      ← usa @tabler/icons-webfont (classes CSS ti ti-*)
+  vantari-segments.jsx             # /segments      ← convergido pro core (public.segments.rules, só dinâmico, PR #15/#17)
+  vantari-public-form.jsx          # /f/:slug       ← página pública embedável (sem auth)
+  marketing_workflow_builder_v2.html   # protótipo HTML (referência de design do workflow)
   assets/                          # hero.png, react.svg, vite.svg
 
 supabase/
   migrations/
-    001_custom_fields.sql          # custom_fields + lead_custom_values + seed 49 cf_*
-    002_leads_core.sql             # leads + lead_events + trigger score
-    003_lead_tracking.sql          # tracked_pages + page_visits + trigger → lead_event
-    004_companies_imports.sql      # companies + lead_imports + lead_exports
-    005_lead_scoring_2d.sql        # lead_profile enum + profile_rules + profile_thresholds + scoring_rules + função recompute_lead_profile + triggers
-    006_forms_standalone.sql       # forms + form_submissions + trigger que cria lead automaticamente
-    007_cpf_identifier.sql         # coluna cpf em leads (UNIQUE) + validador checksum + função merge_lead_by_cpf
-    008_email_templates.sql        # email_templates + bee_json column (BeeFree) + seed 3 templates
-    009_campaigns.sql              # campaigns + campaign_sends (FKs condicionais)
-  functions/
-    track/index.ts                 # Edge Function que recebe pings do tracker.js
-
-src/
-  vantari-public-form.jsx          # /f/:slug — página pública embedável (sem auth)
+    20260622130000_remote_baseline.sql   # baseline ÚNICO do banco vivo (dump do estado real). As 001-009 antigas foram
+                                          # arquivadas — ver migrations_archive/. NÃO recriar migrations numeradas soltas.
+  migrations_archive/              # 001..010 antigas (histórico) — NÃO aplicar, o baseline já contém o estado
+  proposals/                       # SQL da reestruturação core/crm/mkt/fin (0001..0009 + backfill). Ver REESTRUTURACAO.md
+    0001_core_foundation.sql       # core: persons, identifiers, companies, events, resolve_person, merge_persons, RLS
+    0002_crm_flow.sql              # crm: processos, créditos, negócios, avaliar_elegibilidade
+    0003_rls_hardening.sql         # fecha RLS de produção (anon deixa de ler leads/CPF)
+    0004_mkt_marketing.sql         # mkt: score, forms, campanhas
+    0005_fin_receivables.sql       # fin: antecipação + tranches
+    0007_scoring_vantari_etapa1.sql# motor de scoring "Vantari Crédito" (Etapa 1)
+  functions/                       # Edge Functions (Deno) — track, send-campaign, ingest, etc.
+  fixes/                           # patches SQL pontuais aplicados no banco vivo
 
 public/
   tracker.js                       # Snippet JS público (instalar em vantari.com.br)
   forms-embed.js                   # Snippet JS para embedar form via <script> em sites externos
+  landing-pages/                   # 3 LPs estáticas publicadas
 ```
 
 ## Rotas
 
-| Path | Componente |
-|------|-----------|
-| `/` | Redireciona para `/dashboard` |
-| `/login` | AuthSystem |
-| `/dashboard` | Analytics |
-| `/leads` | Leads |
-| `/scoring` | Scoring |
-| `/email` | EmailMarketing |
-| `/landing` | LandingPages |
-| `/ai-marketing` | AIMarketing |
-| `/integrations` | Integrations |
-| `/settings` | Settings |
-| `/onboarding` | Onboarding (wizard 4 fases) |
-| `/workflow` | WorkflowBuilder |
-| `/segments` | Segments |
-| `/f/:slug` | PublicForm (rota pública, sem auth) — render do form embedável |
+Todas as rotas exceto `/login` e `/f/:slug` passam por `<ProtectedRoute>` (checa sessão Supabase).
+
+| Path | Componente | Arquivo |
+|------|-----------|---------|
+| `/` | Redireciona para `/dashboard` | — |
+| `/login` | AuthSystem | vantari-auth-system.jsx |
+| `/dashboard` | Analytics | vantari-analytics-dashboard.jsx |
+| `/leads` | Contatos | vantari-crm-contatos.jsx |
+| `/crm` | CRM (pipeline) | vantari-crm.jsx |
+| `/crm/:dealId` | DealDetail | vantari-crm-deal.jsx |
+| `/scoring` | Scoring | vantari-scoring-system.jsx |
+| `/email` | EmailMarketing | vantari-email-marketing.jsx |
+| `/landing` | LandingPages | vantari-landing-pages.jsx |
+| `/ai-marketing` | AIMarketing | vantari-ai-marketing.jsx |
+| `/integrations` | Integrations | vantari-integrations-hub.jsx |
+| `/settings` | Settings | vantari-settings-admin.jsx |
+| `/onboarding` | Onboarding | vantari-onboarding-wizard.jsx |
+| `/workflow` | WorkflowBuilder | vantari-workflow-builder.jsx |
+| `/segments` | Segments | vantari-segments.jsx |
+| `/contatos` | Redireciona para `/leads` | — |
+| `/f/:slug` | PublicForm (rota pública, sem auth) | vantari-public-form.jsx |
 
 ## Comandos úteis
 

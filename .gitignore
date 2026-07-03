@@ -26,6 +26,7 @@ supabase/.temp/
 *.sln
 *.sw?
 .vercel
-dist2/
-dist3/
+# build outputs (inclui dist2, dist3, ... dist9 criados por engano)
+dist[0-9]*/
 .claude/
+.DS_Store

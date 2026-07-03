@@ -18,8 +18,6 @@ import { loadEmailSegments, resolveRecipients } from "./segment-resolver";
 
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 
-const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
-
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS
 ═══════════════════════════════════════════════════ */

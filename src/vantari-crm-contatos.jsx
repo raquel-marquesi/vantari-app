@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
-  Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard,
+  Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard, Zap, Filter,
+  ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS ───── */
@@ -34,53 +35,273 @@ const statusBadge = (st) => st === "identificado"
   : { label: "Pendente", color: "#9A6A00", bg: "#FFF8E6", border: "#F5D58A" };
 
 /* ─── Sidebar ─── */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>{label}</div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
-    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={() => path && navigate(path)}
-      style={{ position: "relative", display: "flex", alignItems: "center", gap: 9, padding: "8px 20px", fontSize: 13.5,
-        fontWeight: active ? 700 : 600, fontFamily: T.font,
+    <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
+      onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
+      style={{
+        position: "relative", display: "flex", alignItems: "center", gap: 9,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5, fontWeight: active ? 700 : 600, fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
         background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
-        cursor: "pointer", transition: "all 0.15s", userSelect: "none" }}>
-      {active && <span style={{ position: "absolute", left: 0, top: 6, bottom: 6, width: 3, background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)", borderRadius: "0 3px 3px 0" }} />}
-      {Icon && <Icon size={16} aria-hidden="true" />}{label}
+        cursor: "pointer", transition: "all 0.15s", userSelect: "none",
+      }}>
+      {active && (
+        <span style={{ position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
+          background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)", borderRadius: "0 3px 3px 0" }} />
+      )}
+      {Icon && <Icon size={16} aria-hidden="true" />}
+      {!collapsed && label}
     </div>
   );
 };
-function Sidebar() {
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
   return (
-    <div style={{ width: 240, background: T.sidebarBg, display: "flex", flexDirection: "column", flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "hidden" }}>
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+function Sidebar({ collapsed, onToggle }) {
+  return (
+    <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
+      flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)" }} />
-      <div style={{ padding: "20px 20px 0", position: "relative" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+      <div style={{ padding: collapsed ? "20px 8px 0" : "20px 20px 0", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16, justifyContent: collapsed ? "center" : "flex-start" }}>
           <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
             <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
           </div>
-          <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          {!collapsed && <>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          </>}
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
-        <NavSection label="Principal" />
-        <NavItem icon={BarChart2} label="Analytics" path="/dashboard" />
-        <NavItem icon={Users} label="Leads" path="/leads" active />
-        <NavItem icon={Mail} label="Email Marketing" path="/email" />
-        <NavSection label="CRM" />
-        <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-        <NavSection label="Ferramentas" />
-        <NavItem icon={Star} label="Scoring" path="/scoring" />
-        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" />
-        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" />
-        <NavSection label="Sistema" />
-        <NavItem icon={Plug} label="Integrações" path="/integrations" />
+        <NavSection label="Principal" collapsed={collapsed} />
+        <NavItem icon={BarChart2} label="Analytics" path="/dashboard" collapsed={collapsed} />
+        <NavItem icon={Users} label="Leads" path="/leads" active collapsed={collapsed} />
+        <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
+        <NavSection label="CRM" collapsed={collapsed} />
+        <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+        <NavSection label="Ferramentas" collapsed={collapsed} />
+        <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
+        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
+        <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
+        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+        <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+        <NavSection label="Sistema" collapsed={collapsed} />
+        <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-        <NavItem icon={Settings} label="Configurações" path="/settings" />
+        <AccountMenu collapsed={collapsed} />
+        <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+      </div>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+        <div onClick={onToggle} title={collapsed ? "Expandir menu" : "Recolher menu"}
+          style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+          {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const fmtBRL = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/* ─── Modal Detalhe do Lead (perfil: dados + negócios associados) ─── */
+const EVENT_LABELS = {
+  contact_updated: "Contato atualizado",
+  persons_merged:  "Cadastros unificados",
+  lead_created:    "Lead criado",
+  form_submit:     "Formulário enviado",
+  page_visit:      "Visita a página",
+  stage_changed:   "Etapa alterada",
+};
+const FIELD_LABELS_HIST = { email: "E-mail", phone: "Telefone" };
+
+function EventRow({ ev }) {
+  const label = EVENT_LABELS[ev.type] || ev.type;
+  let detail = null;
+  if (ev.type === "contact_updated" && ev.payload) {
+    const f = FIELD_LABELS_HIST[ev.payload.field] || ev.payload.field;
+    detail = `${f}: ${ev.payload.old || "—"} → ${ev.payload.new || "—"}`;
+  }
+  return (
+    <div style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: `0.5px solid ${T.border}` }}>
+      <div style={{ width: 6, height: 6, borderRadius: 99, background: T.teal, marginTop: 6, flexShrink: 0 }} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>{label}</div>
+        {detail && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{detail}</div>}
+      </div>
+      <div style={{ fontSize: 11, color: T.faint3, fontFamily: T.mono, whiteSpace: "nowrap" }}>{fmtDate(ev.occurred_at)}</div>
+    </div>
+  );
+}
+
+function LeadDetailModal({ lead, companyName, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [deals, setDeals] = useState([]);
+  const [events, setEvents] = useState([]);
+  const sb = statusBadge(lead.status);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true); setError(null);
+      try {
+        const [{ data, error: e }, { data: ev }] = await Promise.all([
+          supabase.schema("crm").from("deals")
+            .select("id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,stage_id,status,created_at")
+            .eq("person_id", lead.id)
+            .order("created_at", { ascending: false }),
+          supabase.schema("core").from("events")
+            .select("id,type,payload,occurred_at")
+            .eq("person_id", lead.id)
+            .order("occurred_at", { ascending: false })
+            .limit(20),
+        ]);
+        if (e) throw e;
+        if (alive) { setDeals(data || []); setEvents(ev || []); }
+      } catch (err) {
+        if (alive) setError(err.message || String(err));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, [lead.id]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }} onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: T.surface, borderRadius: 16, width: 560, maxWidth: "94vw", maxHeight: "88vh", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,.18)" }}>
+        <div style={{ padding: "18px 24px 14px", borderBottom: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 17, color: T.ink }}>{lead.full_name || "Sem nome"}</span>
+            <div style={{ marginTop: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99, background: sb.bg, color: sb.color, border: `1px solid ${sb.border}` }}>{sb.label}</span>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+        </div>
+
+        <div style={{ padding: "18px 24px", overflowY: "auto" }}>
+          <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Dados de contato
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
+            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>CPF</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.cpf ? maskCpf(lead.cpf) : "—"}</div></div>
+            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Telefone</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.primary_phone ? maskPhone(lead.primary_phone) : "—"}</div></div>
+            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text }}>{lead.primary_email || "—"}</div></div>
+            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Empresa</div><div style={{ fontSize: 13, color: T.text }}>{companyName || "—"}</div></div>
+            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Criado em</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{fmtDate(lead.created_at)}</div></div>
+          </div>
+
+          <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+            Negócios associados (CRM)
+          </div>
+          {loading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.muted, fontSize: 13 }}>
+              <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> Carregando...
+            </div>
+          )}
+          {error && !loading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#9B2C2C", fontSize: 12.5 }}>
+              <AlertCircle size={15} color={T.coral} /> {error}
+            </div>
+          )}
+          {!loading && !error && deals.length === 0 && (
+            <div style={{ fontSize: 13, color: T.muted }}>Nenhum negócio associado a este lead ainda.</div>
+          )}
+          {!loading && !error && deals.map((d) => (
+            <div key={d.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "10px 12px", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, marginBottom: 8 }}>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>{d.credit_type === "advogado_honorario" ? "Honorário (adv.)" : "Reclamante"}{d.modalidade ? ` · ${d.modalidade}` : ""}</div>
+                <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{d.status || "aberto"} · {fmtDate(d.created_at)}</div>
+              </div>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.teal, fontFamily: T.mono }}>{fmtBRL(d.valor_ofertado_cents ?? d.valor_face_cents)}</span>
+            </div>
+          ))}
+
+          <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", margin: "22px 0 10px" }}>
+            Histórico
+          </div>
+          {!loading && !error && events.length === 0 && (
+            <div style={{ fontSize: 13, color: T.muted }}>Nenhum evento registrado ainda.</div>
+          )}
+          {!loading && !error && events.length > 0 && (
+            <div>
+              {events.map((ev) => <EventRow key={ev.id} ev={ev} />)}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -145,6 +366,8 @@ export default function Contatos() {
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showNovo, setShowNovo] = useState(false);
+  const [selectedLead, setSelectedLead] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -183,8 +406,8 @@ export default function Contatos() {
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
-      <Sidebar />
-      <div style={{ marginLeft: 240, padding: "28px 32px", minHeight: "100vh" }}>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
+      <div style={{ marginLeft: collapsed ? 64 : 240, transition: "margin-left 0.15s", padding: "28px 32px", minHeight: "100vh" }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>Leads</h1>
@@ -236,7 +459,9 @@ export default function Contatos() {
                 {rows.map((r) => {
                   const sb = statusBadge(r.status);
                   return (
-                    <tr key={r.id}>
+                    <tr key={r.id} onClick={() => setSelectedLead(r)} style={{ cursor: "pointer" }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = T.bg}
+                      onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
                       <td style={{ ...td, fontWeight: 700, color: T.ink }}>{r.full_name || "—"}</td>
                       <td style={{ ...td, fontFamily: T.mono }}>{r.cpf ? maskCpf(r.cpf) : "—"}</td>
                       <td style={{ ...td, fontFamily: T.mono }}>{r.primary_phone ? maskPhone(r.primary_phone) : "—"}</td>
@@ -256,6 +481,13 @@ export default function Contatos() {
       </div>
 
       {showNovo && <NovoContatoModal onClose={() => setShowNovo(false)} onCreated={() => { setShowNovo(false); load(); }} />}
+      {selectedLead && (
+        <LeadDetailModal
+          lead={selectedLead}
+          companyName={selectedLead.company_id ? companies[selectedLead.company_id] : null}
+          onClose={() => setSelectedLead(null)}
+        />
+      )}
     </div>
   );
 }

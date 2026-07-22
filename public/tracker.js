@@ -64,16 +64,17 @@
   function send(payload) {
     try {
       var body = JSON.stringify(payload);
-      if (navigator.sendBeacon) {
-        var blob = new Blob([body], { type: "application/json" });
-        navigator.sendBeacon(endpoint, blob);
-      } else {
-        fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Visitor-Id": payload.visitor_id },
-          body: body, keepalive: true,
-        });
-      }
+      // fetch(keepalive) em vez de sendBeacon: sendBeacon falha silenciosamente
+      // em alguns cenários de CORS/rede local (ex.: localhost <-> 127.0.0.1) sem
+      // reportar erro algum. fetch com keepalive sobrevive à navegação da mesma
+      // forma, mas negocia CORS corretamente e é mais confiável.
+      fetch(endpoint, {
+        method: "POST",
+        mode: "cors",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", "X-Visitor-Id": payload.visitor_id },
+        body: body,
+      }).catch(function () { /* swallow network errors */ });
     } catch (e) { /* swallow */ }
   }
 

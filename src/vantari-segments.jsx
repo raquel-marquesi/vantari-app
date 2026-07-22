@@ -5,6 +5,7 @@ import {
   Loader2, AlertCircle, BarChart2, Users, Mail, Star,
   LayoutTemplate, Bot, Plug, Settings, Zap, Plus, X,
   Filter, Layers, Trash2, Copy, Edit2, Briefcase,
+  ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS ───── */
@@ -69,23 +70,27 @@ const crm  = () => supabase.schema("crm");
 const NIL  = "00000000-0000-0000-0000-000000000000"; // id impossível p/ forçar conjunto vazio
 
 /* ───── SIDEBAR NAV HELPERS ───── */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
 
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5,
         fontWeight: active ? 700 : 600, fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
         background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
@@ -99,10 +104,72 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
           borderRadius: "0 3px 3px 0",
         }} />
       )}
-      {Icon && <Icon size={16} aria-hidden="true" />}{label}
+      {Icon && <Icon size={16} aria-hidden="true" />}
+      {!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ─── filter fields and operators (sobre o core) ─── */
 const FIELDS = [
@@ -406,7 +473,10 @@ function SegmentModal({ segment, onClose, onSave }) {
   const handleSave = async () => {
     if (!name.trim()) { setError("Nome obrigatório"); return; }
     setSaving(true); setError(null);
-    const payload = { name: name.trim(), description: desc.trim(), rules: filters, workspace_id: WORKSPACE_VANTARI, updated_at: new Date().toISOString() };
+    // regras sem valor preenchido não filtram nada (buildPersonConstraints as ignora) —
+    // não persiste esse "peso morto" pra o card não anunciar uma regra que não existe
+    const cleanFilters = filters.filter(r => r.field && r.op && r.value !== "" && r.value != null);
+    const payload = { name: name.trim(), description: desc.trim(), rules: cleanFilters, workspace_id: WORKSPACE_VANTARI, updated_at: new Date().toISOString() };
     let err;
     if (isEdit) {
       ({ error: err } = await supabase.from("segments").update(payload).eq("id", segment.id));
@@ -581,13 +651,13 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
       )}
 
       <div style={{ display: "flex", gap: 6, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
-        <button onClick={() => onEdit(segment)} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "6px 0", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.text, fontSize: 12, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>
+        <button onClick={e => { e.stopPropagation(); onEdit(segment); }} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, padding: "6px 0", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.text, fontSize: 12, cursor: "pointer", fontFamily: T.font, fontWeight: 600 }}>
           <Edit2 size={12} aria-hidden="true" /> Editar
         </button>
-        <button onClick={() => onDuplicate(segment)} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.muted, cursor: "pointer" }} title="Duplicar">
+        <button onClick={e => { e.stopPropagation(); onDuplicate(segment); }} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: "none", color: T.muted, cursor: "pointer" }} title="Duplicar">
           <Copy size={13} aria-hidden="true" />
         </button>
-        <button onClick={() => onDelete(segment.id)} style={{ padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: T.muted, cursor: "pointer" }} title="Remover">
+        <button onClick={e => { e.stopPropagation(); onDelete(segment.id); }} style={{ padding: "6px 10px", borderRadius: 8, border: "none", background: "none", color: T.muted, cursor: "pointer" }} title="Remover">
           <Trash2 size={13} aria-hidden="true" />
         </button>
       </div>
@@ -730,6 +800,7 @@ export default function VantariSegments() {
   const [modal, setModal]         = useState(null);
   const [detail, setDetail]       = useState(null);
   const [search, setSearch]       = useState("");
+  const [collapsed, setCollapsed] = useState(false);
 
   const [segSpark, setSegSpark] = useState({ segments: [], leads: [] });
 
@@ -806,6 +877,14 @@ export default function VantariSegments() {
   const filtered = segments.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
   const totalLeads = Object.values(leadCounts).reduce((a, b) => a + b, 0);
 
+  // trend real: variação do último mês vs penúltimo (buckets de segSpark, 7 meses)
+  const trendPct = (arr) => {
+    if (!arr || arr.length < 2) return undefined;
+    const prev = arr[arr.length - 2], cur = arr[arr.length - 1];
+    if (!prev) return cur > 0 ? 100 : undefined;
+    return Math.round(((cur - prev) / prev) * 100);
+  };
+
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: T.font, background: T.bg }}>
       <style>{`
@@ -819,11 +898,12 @@ export default function VantariSegments() {
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240, flexShrink: 0,
+        width: collapsed ? 64 : 240, flexShrink: 0,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display: "flex", flexDirection: "column",
         height: "100vh", position: "sticky", top: 0,
-        overflow: "hidden",
+        overflow: "visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -832,35 +912,42 @@ export default function VantariSegments() {
         }} />
 
         {/* Brand */}
-        <div style={{ padding: "20px 20px 0", position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+        <div style={{ padding: collapsed ? "20px 0 0" : "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
             <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
               <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
             </div>
-            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+            {!collapsed && <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>}
+            {!collapsed && <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", paddingTop: 0, position: "relative" }}>
-          <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"           path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
-          <NavSection label="CRM" />
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
-          <NavItem icon={Filter}         label="Segmentação"     path="/segments"     active />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" />
-          <NavItem icon={Zap}            label="Workflows"       path="/workflow"     />
-          <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"     path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed} />
+          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"           path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed} />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Star}           label="Scoring"         path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"    path="/segments"     active collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed} />
+          <NavItem icon={Plug}           label="Integrações"     path="/integrations" collapsed={collapsed} />
         </div>
 
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-          <NavItem icon={Settings} label="Configurações" path="/settings" />
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
@@ -883,28 +970,28 @@ export default function VantariSegments() {
           {/* Hero KPI cards */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 20 }}>
             <HeroKpiCard
-              icon={Layers}   color={T.teal}   trend={0}
+              icon={Layers}   color={T.teal}   trend={trendPct(segSpark.segments)}
               label="Total de Segmentos"
               value={segments.length.toLocaleString("pt-BR")}
               sub="criados"
               sparkData={segSpark.segments}
             />
             <HeroKpiCard
-              icon={Users}    color={T.violet} trend={0}
+              icon={Users}    color={T.violet} trend={trendPct(segSpark.leads)}
               label="Pessoas Segmentadas"
               value={totalLeads.toLocaleString("pt-BR")}
               sub="em segmentos"
               sparkData={segSpark.leads}
             />
             <HeroKpiCard
-              icon={Zap}      color={T.green}  trend={0}
+              icon={Zap}      color={T.green}
               label="Média por Segmento"
               value={Math.round(totalLeads / (segments.length || 1)).toLocaleString("pt-BR")}
               sub="pessoas / segmento"
               sparkData={segSpark.leads}
             />
             <HeroKpiCard
-              icon={Filter}   color={T.amber}  trend={0}
+              icon={Filter}   color={T.amber}
               label="Com Regras"
               value={segments.filter(s => (s.rules?.length || 0) > 0).length.toLocaleString("pt-BR")}
               sub="segmentos filtrados"

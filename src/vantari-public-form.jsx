@@ -1,6 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { supabase } from "./supabase";
+
+/* ─── hCaptcha (invisible) ───
+   Chave de TESTE oficial do hCaptcha — sempre aprova, serve só pra dev.
+   Antes de publicar de verdade: criar conta em https://dashboard.hcaptcha.com,
+   cadastrar o domínio, trocar por essa sitekey real (é pública, pode ficar
+   no código) e rodar `supabase secrets set HCAPTCHA_SECRET=<secret key>`
+   (a secret key NUNCA vai no frontend — só a function /verify-captcha usa). */
+const HCAPTCHA_SITEKEY = "10000000-ffff-ffff-ffff-000000000001";
 
 /* ─── Tokens (mesma paleta) ─── */
 const T = {
@@ -63,6 +71,37 @@ export default function VantariPublicForm() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
+  // honeypot: campo invisível pra humano, tentador pra bot que preenche tudo
+  const [hpValue, setHpValue] = useState("");
+
+  // hCaptcha invisible: carrega o script e monta o widget escondido
+  const captchaBoxRef = useRef(null);
+  const captchaWidgetId = useRef(null);
+  const [captchaReady, setCaptchaReady] = useState(false);
+
+  useEffect(() => {
+    if (window.hcaptcha) { setCaptchaReady(true); return; }
+    const existing = document.querySelector('script[data-hcaptcha]');
+    if (existing) { existing.addEventListener("load", () => setCaptchaReady(true)); return; }
+    const s = document.createElement("script");
+    s.src = "https://js.hcaptcha.com/1/api.js?render=explicit";
+    s.async = true;
+    s.defer = true;
+    s.dataset.hcaptcha = "1";
+    s.onload = () => setCaptchaReady(true);
+    document.head.appendChild(s);
+  }, []);
+
+  useEffect(() => {
+    if (!captchaReady || !captchaBoxRef.current || captchaWidgetId.current !== null) return;
+    try {
+      captchaWidgetId.current = window.hcaptcha.render(captchaBoxRef.current, {
+        sitekey: HCAPTCHA_SITEKEY,
+        size: "invisible",
+      });
+    } catch { /* se falhar, submit() cai pro fallback sem captcha */ }
+  }, [captchaReady]);
+
   const fetchForm = useCallback(async () => {
     setLoading(true);
     // Forms novos (com scoring) vivem em mkt.forms; os legados das LPs ainda
@@ -109,8 +148,32 @@ export default function VantariPublicForm() {
 
   const submit = async () => {
     if (!validate()) return;
+
+    // honeypot preenchido = bot. Finge sucesso sem gravar nada, pra não
+    // ensinar o bot que foi barrado aqui.
+    if (hpValue) { setDone(true); return; }
+
     setSubmitting(true);
     setError(null);
+
+    // hCaptcha invisible: pede o token e valida server-side antes de gravar.
+    // Se o widget não carregou (bloqueador de script, falha de rede etc.),
+    // segue sem captcha — o honeypot continua ativo como segunda camada.
+    if (window.hcaptcha && captchaWidgetId.current !== null) {
+      try {
+        const { response: token } = await window.hcaptcha.execute(captchaWidgetId.current, { async: true });
+        const { data: verify, error: verifyErr } = await supabase.functions.invoke("verify-captcha", { body: { token } });
+        if (verifyErr || !verify?.success) {
+          setSubmitting(false);
+          setError("Não foi possível validar o formulário. Recarregue a página e tente novamente.");
+          return;
+        }
+      } catch {
+        // execute() falhou (widget não pronto etc.) — segue com honeypot só.
+      } finally {
+        try { window.hcaptcha.reset(captchaWidgetId.current); } catch { /* noop */ }
+      }
+    }
 
     // Monta payload: identidade (cpf/phone/email/name) no topo; campos com
     // scoring_key vão sob payload.attributes (envelope canônico do motor 0007).
@@ -191,11 +254,31 @@ export default function VantariPublicForm() {
           <FieldRow key={f.id} field={f} value={values[f.id] || ""} error={errors[f.id]} onChange={(v) => setField(f.id, v)} />
         ))}
 
+        {/* honeypot — invisível pra humano (não usa display:none, que alguns bots detectam) */}
+        <input
+          type="text"
+          name="empresa_confirmacao"
+          value={hpValue}
+          onChange={(e) => setHpValue(e.target.value)}
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          style={{ position: "absolute", left: "-9999px", top: "auto", width: 1, height: 1, opacity: 0, pointerEvents: "none" }}
+        />
+        <div ref={captchaBoxRef} />
+
         {error && (
           <div style={{ marginTop: 12, padding: "8px 12px", background: `${T.coral}14`, border: `1px solid ${T.coral}`, borderRadius: 8, color: T.coral, fontSize: 12, fontWeight: 600 }}>
             {error}
           </div>
         )}
+
+        <div style={{ marginTop: 14, fontSize: 11.5, color: T.muted, lineHeight: 1.5 }}>
+          Ao enviar, você concorda com o tratamento dos seus dados conforme nossa{" "}
+          <a href="/politica-privacidade.html" target="_blank" rel="noopener" style={{ color: T.teal, fontWeight: 700, textDecoration: "none" }}>
+            Política de Privacidade
+          </a>.
+        </div>
 
         <button onClick={submit} disabled={submitting} style={{
           marginTop: 20, width: "100%", padding: "11px 18px", border: "none", borderRadius: 10,

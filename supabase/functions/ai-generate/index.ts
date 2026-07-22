@@ -23,11 +23,17 @@ Deno.serve(async (req) => {
     }
 
     // só aceita modelos Gemini; fallback para o padrão (ou GEMINI_MODEL)
+    // gemini-2.5-flash foi aposentado pelo Google para novos usuários (jul/2026);
+    // "gemini-flash-latest" é o alias que sempre aponta pro flash vigente.
     const m = (model && String(model).startsWith("gemini"))
       ? model
-      : (Deno.env.get("GEMINI_MODEL") || "gemini-2.5-flash");
+      : (Deno.env.get("GEMINI_MODEL") || "gemini-flash-latest");
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${KEY}`;
+    // Chaves novas do AI Studio (auth keys, formato "AQ...") vêm vinculadas a uma
+    // service account e são enviadas via header x-goog-api-key — não mais via
+    // ?key= na URL (formato antigo das standard keys "AIzaSy..."). Mandar via
+    // header funciona para os dois formatos, então usamos sempre o header.
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
     const body: Record<string, unknown> = {
       contents: [{ role: "user", parts: [{ text: String(prompt) }] }],
       generationConfig: {
@@ -39,7 +45,7 @@ Deno.serve(async (req) => {
 
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": KEY },
       body: JSON.stringify(body),
     });
     const data = await res.json();

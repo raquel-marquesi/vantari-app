@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings,
   Briefcase, Plus, Filter, Loader2, AlertCircle, Kanban, List, TrendingUp,
-  X, Scale, Building2, UserPlus, CheckCircle2, XCircle,
+  X, Scale, Building2, UserPlus, CheckCircle2, XCircle, Zap, ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -137,21 +137,25 @@ const elegibilidadeMotivos = (f) => {
 };
 
 /* ─── Sidebar (padrão do projeto: cada página tem a sua) ─── */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
 
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position: "relative", display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5, fontWeight: active ? 700 : 600, fontFamily: T.font,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5, fontWeight: active ? 700 : 600, fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
         background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
         cursor: "pointer", transition: "all 0.15s", userSelect: "none",
@@ -161,42 +165,114 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
           background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)", borderRadius: "0 3px 3px 0" }} />
       )}
       {Icon && <Icon size={16} aria-hidden="true" />}
-      {label}
+      {!collapsed && label}
     </div>
   );
 };
 
-function Sidebar() {
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
   return (
-    <div style={{ width: 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
-      flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "hidden" }}>
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Sidebar({ collapsed, onToggle }) {
+  return (
+    <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
+      flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
       <div style={{ position: "absolute", inset: 0, pointerEvents: "none",
         background: "radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)" }} />
-      <div style={{ padding: "20px 20px 0", position: "relative" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+      <div style={{ padding: collapsed ? "20px 8px 0" : "20px 20px 0", position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16, justifyContent: collapsed ? "center" : "flex-start" }}>
           <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
             <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
           </div>
-          <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-          <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          {!collapsed && <>
+            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+          </>}
         </div>
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
-        <NavSection label="Principal" />
-        <NavItem icon={BarChart2} label="Analytics" path="/dashboard" />
-        <NavItem icon={Users} label="Leads" path="/leads" />
-        <NavItem icon={Mail} label="Email Marketing" path="/email" />
-        <NavSection label="CRM" />
-        <NavItem icon={Briefcase} label="Negócios" path="/crm" active />
-        <NavSection label="Ferramentas" />
-        <NavItem icon={Star} label="Scoring" path="/scoring" />
-        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" />
-        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" />
-        <NavSection label="Sistema" />
-        <NavItem icon={Plug} label="Integrações" path="/integrations" />
+        <NavSection label="Principal" collapsed={collapsed} />
+        <NavItem icon={BarChart2} label="Analytics" path="/dashboard" collapsed={collapsed} />
+        <NavItem icon={Users} label="Leads" path="/leads" collapsed={collapsed} />
+        <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
+        <NavSection label="CRM" collapsed={collapsed} />
+        <NavItem icon={Briefcase} label="Negócios" path="/crm" active collapsed={collapsed} />
+        <NavSection label="Ferramentas" collapsed={collapsed} />
+        <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
+        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
+        <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
+        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+        <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+        <NavSection label="Sistema" collapsed={collapsed} />
+        <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-        <NavItem icon={Settings} label="Configurações" path="/settings" />
+        <AccountMenu collapsed={collapsed} />
+        <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+      </div>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+        <div onClick={onToggle} title={collapsed ? "Expandir menu" : "Recolher menu"}
+          style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+          {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+        </div>
       </div>
     </div>
   );
@@ -234,6 +310,72 @@ function DealCard({ deal, personName }) {
           <span style={{ color: T.faint3 }}>captador:</span> <strong style={{ color: T.text }}>{deal.captador}</strong>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Visão Lista: todos os negócios em tabela, ordenados por estágio ─── */
+function ListaView({ stages, deals, personMap }) {
+  const stageName = (id) => stages.find((s) => s.id === id)?.name || "—";
+  const ordered = [...deals].sort((a, b) => {
+    const pa = stages.find((s) => s.id === a.stage_id)?.position ?? 999;
+    const pb = stages.find((s) => s.id === b.stage_id)?.position ?? 999;
+    return pa - pb;
+  });
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr 1.2fr 1fr 1fr", gap: 8, padding: "10px 16px",
+        borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.muted, fontFamily: T.font, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+        <div>Titular</div><div>Estágio</div><div>Tipo</div><div>Valor</div><div>Captador</div>
+      </div>
+      {ordered.length === 0 && (
+        <div style={{ padding: "40px 16px", textAlign: "center", color: T.muted, fontSize: 13 }}>Nenhum negócio ainda.</div>
+      )}
+      {ordered.map((d) => (
+        <div key={d.id} style={{ display: "grid", gridTemplateColumns: "2fr 1.4fr 1.2fr 1fr 1fr", gap: 8, padding: "11px 16px",
+          borderBottom: `1px solid ${T.border}`, fontSize: 12.5, color: T.text, fontFamily: T.font, alignItems: "center" }}>
+          <div style={{ fontWeight: 700, color: T.ink }}>{personMap[d.person_id] || "Sem titular"}</div>
+          <div>{stageName(d.stage_id)}</div>
+          <div>{creditTypeLabel(d.credit_type)}</div>
+          <div style={{ fontFamily: T.mono, fontWeight: 700, color: T.teal }}>{fmtBRL(d.valor_ofertado_cents ?? d.valor_face_cents)}</div>
+          <div style={{ color: T.muted }}>{d.captador || "—"}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Visão Previsão: total projetado por estágio ─── */
+function PrevisaoView({ stages, deals }) {
+  const ordered = [...stages].sort((a, b) => a.position - b.position);
+  const totalGeral = deals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 12.5, color: T.muted, fontFamily: T.font, marginBottom: 4 }}>
+        Projeção simples: soma do valor ofertado dos negócios abertos em cada estágio (sem ponderação por probabilidade).
+      </div>
+      {ordered.map((s, i) => {
+        const stageDeals = deals.filter((d) => d.stage_id === s.id);
+        const total = stageDeals.reduce((sum, d) => sum + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+        const pct = totalGeral > 0 ? (total / totalGeral) * 100 : 0;
+        return (
+          <div key={s.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 16px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, fontFamily: T.head }}>{s.name}</span>
+              <span style={{ fontFamily: T.mono, fontWeight: 700, color: T.teal, fontSize: 13 }}>{fmtBRL(total)}</span>
+            </div>
+            <div style={{ height: 6, borderRadius: 99, background: T.faint, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${pct}%`, background: stageAccent(s, i), borderRadius: 99 }} />
+            </div>
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 4, fontFamily: T.font }}>
+              {stageDeals.length} {stageDeals.length === 1 ? "negócio" : "negócios"} · {pct.toFixed(0)}% do total
+            </div>
+          </div>
+        );
+      })}
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", fontWeight: 700, color: T.ink, fontFamily: T.font, fontSize: 13 }}>
+        <span>Total geral</span><span style={{ fontFamily: T.mono, color: T.teal }}>{fmtBRL(totalGeral)}</span>
+      </div>
     </div>
   );
 }
@@ -573,6 +715,7 @@ export default function CRM() {
   const [view, setView] = useState("kanban");
   const [showNovo, setShowNovo] = useState(false);
   const [toast, setToast] = useState(null);
+  const [collapsed, setCollapsed] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -621,8 +764,8 @@ export default function CRM() {
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
-      <Sidebar />
-      <div style={{ marginLeft: 240, padding: "28px 32px", minHeight: "100vh" }}>
+      <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(c => !c)} />
+      <div style={{ marginLeft: collapsed ? 64 : 240, transition: "margin-left 0.15s", padding: "28px 32px", minHeight: "100vh" }}>
         {/* Cabeçalho */}
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 22 }}>
           <div>
@@ -638,8 +781,8 @@ export default function CRM() {
             <div style={{ display: "flex", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: 3, gap: 2 }}>
               {[
                 { id: "kanban", label: "Kanban", icon: Kanban, on: true },
-                { id: "lista", label: "Lista", icon: List, on: false },
-                { id: "previsao", label: "Previsão", icon: TrendingUp, on: false },
+                { id: "lista", label: "Lista", icon: List, on: true },
+                { id: "previsao", label: "Previsão", icon: TrendingUp, on: true },
               ].map((v) => (
                 <button key={v.id} onClick={() => v.on && setView(v.id)} disabled={!v.on}
                   title={v.on ? "" : "Em breve"}
@@ -686,12 +829,22 @@ export default function CRM() {
         )}
 
         {/* Board Kanban */}
-        {!loading && !error && pipeline && (
+        {!loading && !error && pipeline && view === "kanban" && (
           <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
             {stages.map((s, i) => (
               <StageColumn key={s.id} stage={s} accent={stageAccent(s, i)} deals={dealsByStage(s.id)} personMap={personMap} />
             ))}
           </div>
+        )}
+
+        {/* Visão Lista */}
+        {!loading && !error && pipeline && view === "lista" && (
+          <ListaView stages={stages} deals={deals} personMap={personMap} />
+        )}
+
+        {/* Visão Previsão */}
+        {!loading && !error && pipeline && view === "previsao" && (
+          <PrevisaoView stages={stages} deals={deals} />
         )}
       </div>
 

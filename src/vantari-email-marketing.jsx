@@ -1,15 +1,15 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Layout, AlignLeft, Image, MousePointerClick,
   Columns2, Minus, ArrowUpDown, PanelBottom, GripVertical,
   Pencil, Save, Send, Calendar, RefreshCw, Zap, FlaskConical,
-  Search, Plus, Copy, Trash2, Download, ChevronLeft,
+  Search, Plus, Copy, Trash2, Download, ChevronLeft, ChevronRight,
   Monitor, Tablet, Smartphone, Tag, Newspaper, FileText,
   CornerDownRight, Lightbulb, TrendingUp, MailOpen, Link2,
   AlertTriangle, XCircle, ArrowUp, ArrowDown, X,
-  Loader2, AlertCircle, Upload
+  Loader2, AlertCircle, Upload, Code2, Filter, LogOut
 } from "lucide-react";
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
@@ -241,21 +241,25 @@ const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData })
 );
 
 /* NavSection / NavItem */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5,
         fontWeight: active ? 700 : 600,
         fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
@@ -270,10 +274,71 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
         }} />
       )}
       {Icon && <Icon size={16} aria-hidden="true" />}
-      {label}
+      {!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════
    EMAIL BUILDER BLOCKS RENDERER
@@ -291,17 +356,20 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
     case "text": return (
       <div style={{padding:"24px 40px",textAlign:b.align||"left"}}>
         {b.text?.split("\n").map((line,i)=>(
-          <p key={i} style={{margin:"0 0 10px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.7,color:T.ink}}>
-            {line.replace("{{lead.name}}",leadName)||"\u00a0"}
-          </p>
+          <p key={i} style={{margin:"0 0 10px",fontFamily:T.font,fontSize:14,fontWeight:600,lineHeight:1.4,color:T.ink}}
+             dangerouslySetInnerHTML={{__html: formatInlineText(line.replace("{{lead.name}}",leadName)) || "&nbsp;"}} />
         ))}
       </div>
     );
     case "image": return (
-      <div style={{padding:"0 40px"}}>
-        <div style={{background:T.border2,borderRadius:8,height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600,gap:8}}>
-          {b.src?<img src={b.src} style={{width:"100%",borderRadius:8}} alt=""/>:<><Image size={20} color={T.muted} aria-hidden="true"/> Imagem</>}
-        </div>
+      <div style={{padding:"0 40px",textAlign:b.width?"center":"left"}}>
+        {b.src ? (
+          <img src={b.src} style={b.width ? {width:b.width,maxWidth:"100%",borderRadius:8,display:"inline-block"} : {width:"100%",borderRadius:8,display:"block"}} alt=""/>
+        ) : (
+          <div style={{background:T.border2,borderRadius:8,height:180,display:"flex",alignItems:"center",justifyContent:"center",color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600,gap:8}}>
+            <Image size={20} color={T.muted} aria-hidden="true"/> Imagem
+          </div>
+        )}
         {b.caption&&<p style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,textAlign:"center",marginTop:6}}>{b.caption}</p>}
       </div>
     );
@@ -329,8 +397,90 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
         </p>
       </div>
     );
+    case "html": return (
+      <div style={{padding:"0 40px 8px"}} dangerouslySetInnerHTML={{__html: b.html || ""}} />
+    );
     default: return null;
   }
+};
+
+/* ═══════════════════════════════════════════════════
+   BLOCOS → HTML DE EMAIL DE VERDADE
+   (espelha visualmente renderBlock, mas gera markup real
+   pra ser salvo em campaigns.template_html e enviado pelo
+   Resend. Mantém {{lead.name}} etc. intactos — quem troca
+   isso pelo valor real é a edge function send-campaign.)
+═══════════════════════════════════════════════════ */
+const escHtml = (s="") => String(s)
+  .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+/* formatação inline do bloco de Texto — escrita como
+   **negrito**, _itálico_, __sublinhado__, [[#RRGGBB|texto colorido]].
+   Escapa o texto primeiro (protege contra HTML acidental digitado por
+   engano) e só depois interpreta os marcadores conhecidos. Usada tanto
+   no preview (renderBlock) quanto no HTML final do email (blockToHtmlRow),
+   pra garantir que os dois sempre mostrem a mesma coisa. */
+const formatInlineText = (raw="") => {
+  let s = escHtml(raw);
+  s = s.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  s = s.replace(/__(.+?)__/g, "<u>$1</u>");
+  s = s.replace(/_(.+?)_/g, "<i>$1</i>");
+  s = s.replace(/\[\[#([0-9A-Fa-f]{6})\|(.+?)\]\]/g, '<span style="color:#$1">$2</span>');
+  return s;
+};
+
+const EMAIL_FONT = "Arial, Helvetica, sans-serif"; // fontes customizadas (Inter/Sora) não carregam em clientes de email
+
+const blockToHtmlRow = (block) => {
+  const b = block.content || {};
+  switch (block.type) {
+    case "header": return `
+<tr><td style="background:${T.blue};padding:32px 40px;text-align:center;">
+  ${b.logo ? `<div style="font-family:${EMAIL_FONT};font-size:18px;font-weight:700;color:#ffffff;letter-spacing:2px;margin-bottom:${b.headline?"12px":"0"};">VANTARI</div>` : ""}
+  ${b.headline ? `<div style="font-family:${EMAIL_FONT};font-size:24px;font-weight:700;color:#ffffff;">${escHtml(b.headline)}</div>` : ""}
+  ${b.subline ? `<div style="font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:rgba(255,255,255,0.75);margin-top:6px;">${escHtml(b.subline)}</div>` : ""}
+</td></tr>`;
+    case "text": return `
+<tr><td style="padding:24px 40px;text-align:${b.align||"left"};">
+  ${(b.text||"").split("\n").map(line => `<p style="margin:0 0 10px;font-family:${EMAIL_FONT};font-size:14px;font-weight:600;line-height:1.4;color:${T.ink};">${formatInlineText(line)||"&nbsp;"}</p>`).join("")}
+</td></tr>`;
+    case "image": return `
+<tr><td style="padding:0 40px 20px;${b.width?"text-align:center;":""}">
+  ${b.src ? (b.width
+    ? `<img src="${escHtml(b.src)}" alt="${escHtml(b.caption||"")}" width="${parseInt(b.width)||''}" style="width:${escHtml(b.width)};max-width:100%;border-radius:8px;display:inline-block;"/>`
+    : `<img src="${escHtml(b.src)}" alt="${escHtml(b.caption||"")}" width="100%" style="width:100%;max-width:520px;border-radius:8px;display:block;"/>`
+  ) : ""}
+  ${b.caption ? `<p style="font-family:${EMAIL_FONT};font-size:11px;font-weight:600;color:${T.muted};text-align:center;margin-top:6px;">${escHtml(b.caption)}</p>` : ""}
+</td></tr>`;
+    case "button": return `
+<tr><td style="padding:20px 40px;text-align:${b.align||"center"};">
+  <a href="${escHtml(b.url||"#")}" style="display:inline-block;padding:13px 30px;background:${b.color||T.blue};color:#ffffff;border-radius:8px;font-family:${EMAIL_FONT};font-weight:700;font-size:14px;text-decoration:none;letter-spacing:0.02em;">${escHtml(b.text||"Clique aqui")}</a>
+</td></tr>`;
+    case "divider": return `
+<tr><td style="padding:8px 40px;"><div style="height:1px;line-height:1px;font-size:1px;background:${T.border};">&nbsp;</div></td></tr>`;
+    case "spacer": return `
+<tr><td height="${b.height||24}" style="height:${b.height||24}px;line-height:${b.height||24}px;font-size:1px;">&nbsp;</td></tr>`;
+    case "columns": return `
+<tr><td style="padding:16px 40px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtml(b.col1||"Coluna 1")}</td>
+    <td width="16" style="font-size:1px;line-height:1px;">&nbsp;</td>
+    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtml(b.col2||"Coluna 2")}</td>
+  </tr></table>
+</td></tr>`;
+    case "footer": return `
+<tr><td style="background:${T.faint};padding:20px 40px;text-align:center;border-top:1px solid ${T.border};">
+  <p style="font-family:${EMAIL_FONT};font-size:11px;font-weight:600;color:${T.muted};margin:0;">${escHtml(b.text||"© 2024 Vantari · Todos os direitos reservados")}</p>
+</td></tr>`;
+    case "html": return `
+<tr><td style="padding:0 40px 8px;">${b.html||""}</td></tr>`;
+    default: return "";
+  }
+};
+
+const blocksToHtml = (blocks) => {
+  const rows = (blocks||[]).map(blockToHtmlRow).join("");
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">${rows}</table>`;
 };
 
 /* ═══════════════════════════════════════════════════
@@ -345,22 +495,72 @@ const BLOCK_PALETTE = [
   { type:"divider", Icon:Minus,              label:"Divisor" },
   { type:"spacer",  Icon:ArrowUpDown,        label:"Espaço"  },
   { type:"footer",  Icon:PanelBottom,        label:"Rodapé"  },
+  { type:"html",    Icon:Code2,             label:"HTML bruto" },
 ];
 
 const DEFAULT_BLOCK_CONTENT = {
   header:  { logo:true, headline:"Seu Título Aqui", subline:"Subtítulo opcional" },
   text:    { text:"Escreva seu texto aqui. Use {{lead.name}} para personalizar.", align:"left" },
-  image:   { src:"", caption:"" },
+  image:   { src:"", caption:"", width:"" },
   button:  { text:"Clique Aqui", url:"#", align:"center", color:T.blue },
   divider: {},
   spacer:  { height:24 },
   columns: { col1:"Texto da coluna esquerda", col2:"Texto da coluna direita" },
   footer:  { text:"© 2024 Vantari · Todos os direitos reservados" },
+  html:    { html:"<p>Cole aqui o HTML importado (ex: template do RD Station)</p>" },
 };
 
 const BlockEditor = ({ block, onChange }) => {
   const b = block.content||{};
   const upd = (key,val) => onChange({...block,content:{...b,[key]:val}});
+  const [uploading, setUploading] = useState(false);
+  const [imgDims, setImgDims] = useState(null); // dimensões reais da última imagem selecionada
+  const textRef = useRef(null); // textarea do bloco de Texto, pra aplicar formatação na seleção
+
+  // envolve o texto selecionado (ou insere um placeholder, se nada selecionado)
+  // com os marcadores de formatação, e reposiciona o cursor depois
+  const wrapSelection = (before, after, placeholder) => {
+    const ta = textRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart ?? 0, end = ta.selectionEnd ?? 0;
+    const current = b.text || "";
+    const selected = current.slice(start, end) || placeholder;
+    const next = current.slice(0, start) + before + selected + after + current.slice(end);
+    upd("text", next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      const pos = start + before.length + selected.length + after.length;
+      ta.setSelectionRange(pos, pos);
+    });
+  };
+  const applyColor = (hex) => wrapSelection(`[[#${hex.replace("#","")}|`, `]]`, "texto colorido");
+  const handleImageUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    setImgDims(null);
+    try {
+      // lê a dimensão real da imagem (client-side) antes de subir, pra dar feedback
+      const dims = await new Promise((resolve, reject) => {
+        const img = new window.Image();
+        const objUrl = URL.createObjectURL(file);
+        img.onload = () => { resolve({ width: img.naturalWidth, height: img.naturalHeight }); URL.revokeObjectURL(objUrl); };
+        img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error("Não foi possível ler a imagem")); };
+        img.src = objUrl;
+      });
+      setImgDims(dims);
+
+      const ext = file.name.split(".").pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await supabase.storage.from("email-images").upload(fileName, file);
+      if (error) throw error;
+      const { data } = supabase.storage.from("email-images").getPublicUrl(fileName);
+      upd("src", data.publicUrl);
+    } catch (err) {
+      alert("Erro ao enviar imagem: " + err.message);
+    } finally {
+      setUploading(false);
+    }
+  };
   const labelStyle = { fontFamily:T.font,fontSize:10,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4,display:"block" };
   const inputStyle = { width:"100%",boxSizing:"border-box",fontFamily:T.font,fontSize:12,fontWeight:600,padding:"7px 10px",border:`1px solid ${T.border}`,borderRadius:7,outline:"none",background:T.white,color:T.ink,marginBottom:10 };
 
@@ -379,7 +579,18 @@ const BlockEditor = ({ block, onChange }) => {
     case "text": return (
       <div>
         <label style={labelStyle}>Texto</label>
-        <textarea value={b.text||""} onChange={e=>upd("text",e.target.value)} rows={5} style={{...inputStyle,resize:"vertical",lineHeight:1.5}}/>
+        <div style={{display:"flex",gap:5,marginBottom:6,alignItems:"center"}}>
+          <button type="button" onClick={()=>wrapSelection("**","**","negrito")} title="Negrito"
+            style={{width:28,height:28,fontFamily:T.font,fontSize:13,fontWeight:700,border:`1px solid ${T.border}`,borderRadius:6,background:T.white,color:T.ink,cursor:"pointer"}}>B</button>
+          <button type="button" onClick={()=>wrapSelection("_","_","itálico")} title="Itálico"
+            style={{width:28,height:28,fontFamily:T.font,fontSize:13,fontStyle:"italic",fontWeight:700,border:`1px solid ${T.border}`,borderRadius:6,background:T.white,color:T.ink,cursor:"pointer"}}>I</button>
+          <button type="button" onClick={()=>wrapSelection("__","__","sublinhado")} title="Sublinhado"
+            style={{width:28,height:28,fontFamily:T.font,fontSize:13,textDecoration:"underline",fontWeight:700,border:`1px solid ${T.border}`,borderRadius:6,background:T.white,color:T.ink,cursor:"pointer"}}>U</button>
+          <input type="color" defaultValue="#0D7491" onChange={e=>applyColor(e.target.value)} title="Cor do texto selecionado"
+            style={{width:28,height:28,padding:0,border:`1px solid ${T.border}`,borderRadius:6,cursor:"pointer",background:"none"}}/>
+          <span style={{fontFamily:T.font,fontSize:10,fontWeight:600,color:T.muted}}>selecione o texto e clica</span>
+        </div>
+        <textarea ref={textRef} value={b.text||""} onChange={e=>upd("text",e.target.value)} rows={5} style={{...inputStyle,resize:"vertical",lineHeight:1.5}}/>
         <label style={labelStyle}>Alinhamento</label>
         <div style={{display:"flex",gap:4,marginBottom:10}}>
           {["left","center","right"].map(a=>(
@@ -393,6 +604,7 @@ const BlockEditor = ({ block, onChange }) => {
           <Lightbulb size={11} color={T.blue} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
           Variáveis: <code style={{fontFamily:T.mono}}>{"{{lead.name}}"}</code> <code style={{fontFamily:T.mono}}>{"{{lead.company}}"}</code>
         </div>
+
       </div>
     );
     case "button": return (
@@ -412,10 +624,29 @@ const BlockEditor = ({ block, onChange }) => {
     );
     case "image": return (
       <div>
+<label style={labelStyle}>Enviar Imagem</label>
+<div style={{fontFamily:T.font,fontSize:10,fontWeight:600,color:T.blue,background:T.blueL,borderRadius:7,padding:"7px 10px",display:"flex",gap:5,alignItems:"flex-start",marginBottom:10}}>
+  <Lightbulb size={11} color={T.blue} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
+  Recomendado: <strong>600px de largura</strong> (largura do email). Proporção 16:9 ou 2:1 costuma ficar melhor. Até 2MB.
+</div>
+<div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+<input type="file" accept="image/*" onChange={e=>handleImageUpload(e.target.files?.[0])} style={{fontSize:12}} />
+{uploading && <span style={{fontSize:11,color:T.muted}}>Enviando...</span>}
+</div>
+{imgDims && !uploading && (
+  <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:(imgDims.width<400||imgDims.width>1200)?T.amber:T.green,marginBottom:10}}>
+    Sua imagem: {imgDims.width}×{imgDims.height}px
+    {imgDims.width<400 && " — meio pequena, pode ficar borrada ao esticar pro tamanho do email."}
+    {imgDims.width>1200 && " — bem maior que o necessário; o email vai redimensionar, mas o arquivo fica mais pesado que precisa."}
+    {imgDims.width>=400 && imgDims.width<=1200 && " — boa largura pro email."}
+  </div>
+)}
         <label style={labelStyle}>URL da Imagem</label>
         <input style={inputStyle} value={b.src||""} onChange={e=>upd("src",e.target.value)} placeholder="https://..."/>
         <label style={labelStyle}>Legenda</label>
         <input style={inputStyle} value={b.caption||""} onChange={e=>upd("caption",e.target.value)} placeholder="Opcional"/>
+        <label style={labelStyle}>Largura fixa (opcional)</label>
+        <input style={inputStyle} value={b.width||""} onChange={e=>upd("width",e.target.value)} placeholder="Deixe vazio pra ocupar 100% do email. Ex: 195px pra logos pequenos"/>
       </div>
     );
     case "spacer": return (
@@ -438,12 +669,23 @@ const BlockEditor = ({ block, onChange }) => {
         <textarea value={b.col2||""} onChange={e=>upd("col2",e.target.value)} rows={3} style={{...inputStyle,resize:"vertical"}}/>
       </div>
     );
+    case "html": return (
+      <div>
+        <label style={labelStyle}>HTML bruto</label>
+        <div style={{fontFamily:T.font,fontSize:10,fontWeight:600,color:T.amber,background:"#fff4e6",borderRadius:7,padding:"7px 10px",display:"flex",gap:5,alignItems:"flex-start",marginBottom:8}}>
+          <AlertTriangle size={11} color={T.amber} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
+          Bloco avançado: cole HTML de templates importados (ex: RD Station). Não editável em blocos separados — só use se souber ler HTML.
+        </div>
+        <textarea value={b.html||""} onChange={e=>upd("html",e.target.value)} rows={10} style={{...inputStyle,resize:"vertical",fontFamily:T.mono,fontSize:11}}/>
+      </div>
+    );
     default: return <div style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted}}>Selecione um bloco para editar.</div>;
   }
 };
 
 const EmailEditor = ({ campaign, onSave, onClose }) => {
   const [blocks,       setBlocks]      = useState(campaign?.emailBlocks||TEMPLATES[0].blocks.map(b=>({...b,id:`b${Date.now()}_${Math.random()}`})));
+  const [hoveredId, setHoveredId] = useState(null); // controla qual bloco está com o mouse em cima, pra mostrar a alça de arrastar
   const [selectedId,   setSelectedId]  = useState(null);
   const [preview,      setPreview]     = useState("desktop");
   const [subjectLine,  setSubjectLine] = useState(campaign?.subject||"");
@@ -500,7 +742,7 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
             );
           })}
         </div>
-        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks})} variant="ink" size="md" icon={Save}>Salvar</Btn>
+        <Btn onClick={()=>onSave({...campaign,subject:subjectLine,emailBlocks:blocks,htmlContent:blocksToHtml(blocks)})} variant="ink" size="md" icon={Save}>Salvar</Btn>
       </div>
 
       <div style={{flex:1,overflow:"hidden",display:"flex"}}>
@@ -530,7 +772,7 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
                 {BLOCK_PALETTE.map(bp=>{
                   const BIcon=bp.Icon;
                   return (
-                    <button key={bp.type} onClick={()=>addBlock(bp.type)}
+                    <button key={bp.type} onClick={()=>addBlock(bp.type, selectedId ? blocks.findIndex(b=>b.id===selectedId) : null)}
                       style={{padding:"10px 6px",background:T.bg,border:`0.5px solid ${T.border}`,borderRadius:8,cursor:"pointer",textAlign:"center",fontFamily:T.font,fontSize:10,fontWeight:700,color:T.ink,transition:"all 0.15s",display:"flex",flexDirection:"column",alignItems:"center",gap:5}}
                       onMouseEnter={e=>{e.currentTarget.style.borderColor=T.blue;e.currentTarget.style.color=T.blue;e.currentTarget.style.background=T.blueL;}}
                       onMouseLeave={e=>{e.currentTarget.style.borderColor=T.border;e.currentTarget.style.color=T.ink;e.currentTarget.style.background=T.bg;}}>
@@ -567,7 +809,9 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
                   onDragOver={e=>{e.preventDefault();setDragOver(idx);}}
                   onDrop={e=>{e.preventDefault();if(draggingBlock!=null&&draggingBlock!==idx){setBlocks(prev=>{const a=[...prev];const[item]=a.splice(draggingBlock,1);a.splice(idx,0,item);return a;});}setDraggingBlock(null);setDragOver(null);}}
                   style={{position:"relative",outline:selectedId===block.id?`2px solid ${T.blue}`:"2px solid transparent",transition:"outline 0.1s",cursor:"pointer",background:dragOver===idx?"#e8f5fb":"transparent"}}
-                  onClick={e=>{e.stopPropagation();setSelectedId(block.id);}}>
+                  onClick={e=>{e.stopPropagation();setSelectedId(block.id);}}
+                  onMouseEnter={()=>setHoveredId(block.id)}
+                  onMouseLeave={()=>setHoveredId(h=>h===block.id?null:h)}>
                   {renderBlock(block,"Ana")}
                   {selectedId===block.id&&(
                     <div style={{position:"absolute",top:6,right:8,display:"flex",gap:3,zIndex:10}} onClick={e=>e.stopPropagation()}>
@@ -576,9 +820,12 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
                       <button onClick={()=>removeBlock(block.id)} title="Remover" style={{width:24,height:24,borderRadius:5,border:"none",background:T.red,color:"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={11} aria-hidden="true"/></button>
                     </div>
                   )}
-                  <div draggable onDragStart={()=>setDraggingBlock(idx)}
-                    style={{position:"absolute",left:4,top:"50%",transform:"translateY(-50%)",color:T.border2,cursor:"grab",opacity:selectedId===block.id?1:0,transition:"opacity 0.1s",display:"flex",alignItems:"center"}}>
-                    <GripVertical size={14} aria-hidden="true"/>
+ <div draggable
+                    onDragStart={()=>setDraggingBlock(idx)}
+                    onDragEnd={()=>{setDraggingBlock(null);setDragOver(null);}}
+                    title="Arrastar para reordenar"
+                    style={{position:"absolute",left:-2,top:"50%",transform:"translateY(-50%)",width:22,height:28,borderRadius:5,background:T.ink,color:"#fff",cursor:"grab",opacity:(selectedId===block.id||hoveredId===block.id)?1:0,transition:"opacity 0.12s",display:"flex",alignItems:"center",justifyContent:"center",zIndex:5}}>
+                    <GripVertical size={16} aria-hidden="true"/>
                   </div>
                 </div>
               ))}
@@ -634,6 +881,8 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     timezone:   "America/Sao_Paulo",
     throttle:   "1000",
     type:       campaign?.type       ||"newsletter",
+    htmlContent:campaign?.htmlContent||"",
+    emailBlocks:campaign?.emailBlocks||null,
   });
   const upd = (k,v)=>setForm(p=>({...p,[k]:v}));
   const audienceCount = {"Todos os leads":6284,"Newsletter":3820,"Demo Solicitada":91,"Inativos 30d":840,"MQL + SQL":2460,"Alto Valor B2B":420,"Leads Quentes":1200}[form.audience]||0;
@@ -651,7 +900,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
         </div>
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={onBack} variant="ghost" size="md">Cancelar</Btn>
-          <Btn onClick={onEdit} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
+          <Btn onClick={()=>onEdit(form)} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
           <Btn onClick={()=>onSave(form)} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
         </div>
       </div>
@@ -1076,6 +1325,10 @@ const SendModal = ({ campaign, onClose, onDone }) => {
   const [recipients, setRecipients] = useState(null); // null = não resolvido
   const [resolving, setResolving]   = useState(false);
 
+  // alterna entre "segmento" e "email(s) específico(s)" dentro do Envio Real
+  const [targetMode,  setTargetMode]  = useState("segment"); // segment | manual
+  const [manualInput, setManualInput] = useState("");
+
   useEffect(() => {
     loadEmailSegments().then(setSegments).catch(() => setSegments([]));
   }, []);
@@ -1092,12 +1345,26 @@ const SendModal = ({ campaign, onClose, onDone }) => {
       .finally(() => setResolving(false));
   }, [segId, segments]);
 
+  // transforma o texto digitado (vírgula, ponto-e-vírgula ou linha) em recipients válidos
+  const manualRecipients = useMemo(() => {
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const raw = manualInput.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    const seen = new Set();
+    return raw
+      .filter(e => emailRe.test(e))
+      .filter(e => { const k = e.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map(e => ({ person_id: null, email: e, name: null }));
+  }, [manualInput]);
+
+  // destinatários finais dependendo do modo escolhido
+  const activeRecipients = targetMode === "manual" ? manualRecipients : recipients;
+
   const invoke = async (isTest) => {
     setSending(true); setResult(null);
     try {
       const body = isTest
         ? { campaign_id: campaign.id, test_email: testEmail }
-        : { campaign_id: campaign.id, recipients: recipients || [] };
+        : { campaign_id: campaign.id, recipients: activeRecipients || [] };
       const { data, error: fnErr } = await supabase.functions.invoke("send-campaign", { body });
       if (fnErr) throw new Error(fnErr.message);
       if (data?.error) throw new Error(data.error);
@@ -1184,29 +1451,57 @@ const SendModal = ({ campaign, onClose, onDone }) => {
 
               {mode==="confirm" && (
                 <div>
-                  <label style={{display:"block",fontFamily:T.head,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>Enviar para o segmento</label>
-                  <select value={segId} onChange={e=>setSegId(e.target.value)}
-                    style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink,marginBottom:12}}>
-                    <option value="">— escolha um segmento —</option>
-                    {segments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                  {/* toggle: segmento vs email(s) específico(s) */}
+                  <div style={{display:"flex",gap:6,marginBottom:14}}>
+                    {[["segment","Por segmento"],["manual","Email(s) específico(s)"]].map(([m,lbl])=>(
+                      <button key={m} onClick={()=>setTargetMode(m)}
+                        style={{flex:1,padding:"7px",fontFamily:T.font,fontSize:12,fontWeight:700,border:`1px solid ${targetMode===m?T.blue:T.border}`,borderRadius:8,background:targetMode===m?T.blueL:T.white,color:targetMode===m?T.blue:T.ink,cursor:"pointer"}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
 
-                  {segId && (
-                    <div style={{background:T.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink}}>
-                      {resolving
-                        ? <span style={{color:T.muted}}>Resolvendo destinatários…</span>
-                        : <><strong>{(recipients?.length ?? 0).toLocaleString("pt-BR")}</strong> destinatário(s) com email</>}
-                    </div>
+                  {targetMode === "segment" ? (
+                    <>
+                      <label style={{display:"block",fontFamily:T.head,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>Enviar para o segmento</label>
+                      <select value={segId} onChange={e=>setSegId(e.target.value)}
+                        style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink,marginBottom:12}}>
+                        <option value="">— escolha um segmento —</option>
+                        {segments.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+
+                      {segId && (
+                        <div style={{background:T.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink}}>
+                          {resolving
+                            ? <span style={{color:T.muted}}>Resolvendo destinatários…</span>
+                            : <><strong>{(recipients?.length ?? 0).toLocaleString("pt-BR")}</strong> destinatário(s) com email</>}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <label style={{display:"block",fontFamily:T.head,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:5}}>Emails (um por linha ou separados por vírgula)</label>
+                      <textarea value={manualInput} onChange={e=>setManualInput(e.target.value)}
+                        placeholder={"catarina@vantari.com.br\nraquel@vantari.com.br"}
+                        rows={4}
+                        style={{width:"100%",boxSizing:"border-box",padding:"10px 13px",fontFamily:T.font,fontSize:13,fontWeight:600,border:`1px solid ${T.border}`,borderRadius:8,outline:"none",color:T.ink,marginBottom:12,resize:"vertical",fontFamily:T.mono}}/>
+
+                      <div style={{background:T.bg,borderRadius:8,padding:"10px 14px",marginBottom:14,fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink}}>
+                        <strong>{manualRecipients.length}</strong> email(s) válido(s) reconhecido(s)
+                      </div>
+                    </>
                   )}
 
                   <div style={{background:"#fff4e6",border:`0.5px solid ${T.amber}`,borderRadius:8,padding:"12px 14px",marginBottom:18,fontFamily:T.font,fontSize:12.5,fontWeight:600,color:"#92400e"}}>
-                    Disparo real, não pode ser desfeito. Quem revogou consentimento de email é descartado automaticamente.
+                    {targetMode === "segment"
+                      ? "Disparo real, não pode ser desfeito. Quem revogou consentimento de email é descartado automaticamente."
+                      : "Disparo real, não pode ser desfeito. Atenção: emails digitados manualmente NÃO passam pela checagem de consentimento — use só para endereços que você mesma controla (equipe, testes internos)."}
                   </div>
 
                   <div style={{display:"flex",gap:8}}>
                     <Btn onClick={onClose} variant="ghost" size="md" sx={{flex:1,justifyContent:"center"}}>Cancelar</Btn>
                     <Btn onClick={()=>invoke(false)} variant="success" size="md" icon={sending?undefined:Send}
-                      disabled={sending || resolving || !segId || !(recipients?.length)} sx={{flex:1,justifyContent:"center"}}>
+                      disabled={sending || resolving || !(activeRecipients?.length)} sx={{flex:1,justifyContent:"center"}}>
                       {sending
                         ? <><Loader2 size={14} style={{animation:"spin 0.7s linear infinite",marginRight:6}}/>Enviando...</>
                         : "Confirmar Envio"}
@@ -1639,6 +1934,7 @@ function LibraryTemplateCard({ tpl, onUse, onPreview }) {
 function TemplatesView({ onUseTemplate }) {
   const [tab,        setTab]        = useState("library");   // "library" | "imported"
   const [templates,  setTemplates]  = useState([]);
+  const [migratingId, setMigratingId] = useState(null); // controla qual template está migrando imagens agora
   const [loading,    setLoading]    = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [previewTpl, setPreviewTpl] = useState(null);
@@ -1662,7 +1958,13 @@ function TemplatesView({ onUseTemplate }) {
 
   const useDbTemplate = async (tpl) => {
     await supabase.from("email_templates").update({ use_count: (tpl.use_count || 0) + 1 }).eq("id", tpl.id);
-    onUseTemplate(tpl.blocks || []);
+    // Templates importados do RD Station nunca tiveram `blocks` (só html/bee_json) —
+    // sem isso, o editor abria em branco. Cai aqui pra qualquer template antigo
+    // que não tenha blocks: carrega o HTML como um bloco único "HTML bruto".
+    const blocks = tpl.blocks && tpl.blocks.length
+      ? tpl.blocks
+      : [{ id:`b${Date.now()}_${Math.random()}`, type:"html", content:{ html: tpl.html || "" } }];
+    onUseTemplate(blocks);
   };
 
   const deleteTpl = async (id) => {
@@ -1670,7 +1972,55 @@ function TemplatesView({ onUseTemplate }) {
     await supabase.from("email_templates").delete().eq("id", id);
     fetchTemplates();
   };
+const migrateExternalImages = async (tpl) => {
+  const externalHost = "email-editor-production.s3.amazonaws.com";
+  if (!tpl.blocks || !tpl.blocks.length) {
+    alert("Este template não tem blocos salvos — não há imagens pra migrar.");
+    return;
+  }
+  const imageBlocks = tpl.blocks.filter(b => b.type === "image" && b.content?.src?.includes(externalHost));
+  if (!imageBlocks.length) {
+    alert("Nenhuma imagem externa do RD Station encontrada neste template.");
+    return;
+  }
+  if (!window.confirm(`Encontrei ${imageBlocks.length} imagem(ns) hospedada(s) no RD Station. Vou baixar cada uma e subir pro nosso Storage. Continuar?`)) return;
 
+  setMigratingId(tpl.id);
+  const urlMap = {}; // src antigo -> src novo (evita subir a mesma imagem 2x, ex: logo repetido)
+  try {
+    for (const block of imageBlocks) {
+      const oldSrc = block.content.src;
+      if (urlMap[oldSrc]) continue;
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("migrate-image", { body: { url: oldSrc } });
+      if (fnError) throw new Error(fnError.message || "Erro ao chamar a função migrate-image");
+      if (!fnData?.publicUrl) throw new Error(fnData?.error || "A função não retornou uma URL válida");
+      urlMap[oldSrc] = fnData.publicUrl;
+    }
+
+    // Também troca dentro de blocos "html" (ícones de redes sociais vêm embutidos assim)
+    const newBlocks = tpl.blocks.map(b => {
+      if (b.type === "image" && urlMap[b.content?.src]) {
+        return { ...b, content: { ...b.content, src: urlMap[b.content.src] } };
+      }
+      if (b.type === "html" && b.content?.html) {
+        let html = b.content.html;
+        Object.entries(urlMap).forEach(([oldSrc, newSrc]) => { html = html.split(oldSrc).join(newSrc); });
+        return { ...b, content: { ...b.content, html } };
+      }
+      return b;
+    });
+
+    const { error: updError } = await supabase.from("email_templates").update({ blocks: newBlocks }).eq("id", tpl.id);
+    if (updError) throw updError;
+
+    alert(`Pronto! ${Object.keys(urlMap).length} imagem(ns) migrada(s) pro nosso Storage.`);
+    fetchTemplates();
+  } catch (err) {
+    alert("Erro na migração: " + err.message + "\n\nSe o erro mencionar 'CORS' ou 'Failed to fetch', me avisa — precisamos de outra abordagem.");
+  } finally {
+    setMigratingId(null);
+  }
+};
   return (
     <div>
       {/* Tab bar */}
@@ -1736,11 +2086,16 @@ function TemplatesView({ onUseTemplate }) {
                     {tpl.category || "general"} · usado {tpl.use_count || 0}x
                   </div>
                   <div style={{ fontFamily:T.font, fontSize:11.5, fontWeight:500, color:T.muted, marginBottom:11, minHeight:28 }}>{tpl.description || "Sem descrição"}</div>
-                  <div style={{ display:"flex", gap:6 }}>
-                    <Btn onClick={() => useDbTemplate(tpl)} variant="primary" size="xs" style={{ flex:1, justifyContent:"center" }}>Usar</Btn>
-                    <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" style={{ flex:1, justifyContent:"center" }}>Preview</Btn>
-                    <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
-                  </div>
+                  <div style={{ display:"flex", gap:6, marginBottom:6 }}>
+        <Btn onClick={() => useDbTemplate(tpl)} variant="primary" size="xs" style={{ flex:1, justifyContent:"center" }}>Usar</Btn>
+        <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" style={{ flex:1, justifyContent:"center" }}>Preview</Btn>
+        <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
+      </div>
+      {tpl.source === "rd_station" && (
+        <Btn onClick={() => migrateExternalImages(tpl)} variant="ghost" size="xs" style={{ width:"100%", justifyContent:"center" }} disabled={migratingId === tpl.id}>
+          {migratingId === tpl.id ? "Migrando imagens…" : "Migrar imagens do RD"}
+        </Btn>
+      )}
                 </div>
               </div>
             ))}
@@ -1753,6 +2108,94 @@ function TemplatesView({ onUseTemplate }) {
     </div>
   );
 }
+
+/* ═══════════════════════════════════════════════════
+   BEEFREE JSON (RD Station) → BLOCOS NATIVOS
+   Converte cada módulo do template exportado num bloco
+   editável de verdade (texto/imagem/botão/espaçador),
+   em vez de um HTML congelado. O que não tem bloco nativo
+   equivalente (lista, menu, ícones sociais, CSS solto) cai
+   num bloco "html" — mas isolado, não misturado com o resto.
+═══════════════════════════════════════════════════ */
+const RD_MERGETAGS = {
+  "*|PRIMEIRO_NOME|*": "{{lead.name}}",
+  "*|NOME|*":           "{{lead.name}}",
+  "*|EMAIL|*":          "{{lead.email}}",
+  "*|EMPRESA|*":        "{{lead.company}}",
+};
+
+/* remove tags e normaliza entidades/mergetags, sem inserir marcadores
+   de formatação — usado onde não faz sentido negrito/itálico (botão) */
+const stripToPlain = (html) => {
+  if (!html) return "";
+  let s = String(html);
+  Object.entries(RD_MERGETAGS).forEach(([k,v]) => { s = s.split(k).join(v); });
+  s = s.replace(/<code[^>]*>(.*?)<\/code>/gis, "$1");
+  s = s.replace(/<[^>]+>/g, " ");
+  s = s.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
+  return s.replace(/\s+/g," ").trim();
+};
+
+/* remove tags mas preserva negrito/itálico/sublinhado convertendo pros
+   nossos marcadores (negrito/itálico/sublinhado) — usado no bloco de Texto, que os entende */
+const stripToPlainWithMarks = (html) => {
+  if (!html) return "";
+  let s = String(html);
+  Object.entries(RD_MERGETAGS).forEach(([k,v]) => { s = s.split(k).join(v); });
+  s = s.replace(/<code[^>]*>(.*?)<\/code>/gis, "$1");
+  s = s.replace(/<\/(p|div|li|h[1-6])>/gi, "\n");
+  s = s.replace(/<br\s*\/?>/gi, "\n");
+  s = s.replace(/<(strong|b)>(.*?)<\/(strong|b)>/gis, "**$2**");
+  s = s.replace(/<(em|i)>(.*?)<\/(em|i)>/gis, "_$2_");
+  s = s.replace(/<u>(.*?)<\/u>/gis, "__$1__");
+  s = s.replace(/<[^>]+>/g, "");
+  s = s.replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&lt;/g,"<").replace(/&gt;/g,">");
+  return s.split("\n").map(l=>l.trim()).filter((l,i,arr)=> l!=="" || (i>0 && arr[i-1]!=="")).join("\n").trim();
+};
+
+const beeGenId = () => `b${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+const beeModuleToBlock = (m) => {
+  const type = m.type || "";
+const d = m.descriptor || {};
+console.log("MODULO BEE:", type, JSON.stringify(d));
+  if (type.includes("heading"))   return { id:beeGenId(), type:"text", content:{ text: stripToPlainWithMarks(d.heading?.text||""), align: d.heading?.style?.["text-align"]||"left" } };
+  if (type.includes("paragraph")) return { id:beeGenId(), type:"text", content:{ text: stripToPlainWithMarks(d.paragraph?.html||""), align: d.paragraph?.style?.["text-align"]||"left" } };
+  if (type.includes("list"))      return { id:beeGenId(), type:"html", content:{ html: d.list?.html||"" } };
+  if (type.includes("menu")) {
+    const items = d.menuItemsList?.items || [];
+    const html = items.map(it => `<a href="${it.link?.href||"#"}" style="color:${T.blue};text-decoration:none;margin:0 8px;">${it.text||it.link?.title||""}</a>`).join(" · ");
+    return { id:beeGenId(), type:"html", content:{ html: `<div style="text-align:center;">${html}</div>` } };
+  }
+  if (type.includes("social")) {
+    const icons = d.iconsList?.icons || [];
+    const html = icons.map(ic => `<a href="${ic.image?.href||"#"}" style="margin:0 6px;"><img src="${ic.image?.src||""}" width="${ic.image?.width||24}" height="${ic.image?.height||24}" alt="${ic.image?.alt||""}" style="display:inline-block;"/></a>`).join("");
+    return { id:beeGenId(), type:"html", content:{ html: `<div style="text-align:center;">${html}</div>` } };
+  }
+  if (type.includes("text"))    return { id:beeGenId(), type:"text", content:{ text: stripToPlainWithMarks(d.text?.html||""), align:"left" } };
+  if (type.includes("image"))   return { id:beeGenId(), type:"image", content:{ src: d.image?.src||"", caption: d.image?.alt||"", width: d.computedStyle?.width || d.image?.width || "" } };
+  if (type.includes("button"))  return { id:beeGenId(), type:"button", content:{ text: stripToPlain(d.button?.label||"")||"Clique aqui", url: d.button?.href||"#", color: d.button?.style?.["background-color"]||T.blue, align:"center" } };
+  if (type.includes("spacer")) {
+    const h = parseInt(String(d.spacer?.style?.height||"24"), 10);
+    return { id:beeGenId(), type:"spacer", content:{ height: isNaN(h)?24:h } };
+  }
+  if (type.includes("divider")) return { id:beeGenId(), type:"divider", content:{} };
+  if (type.includes("html"))    return { id:beeGenId(), type:"html", content:{ html: d.html?.html||"" } };
+  return null;
+};
+
+/* percorre page.rows > columns > modules e converte cada módulo num bloco */
+const beeJsonToBlocks = (json) => {
+  try {
+    const rows = json?.page?.rows || [];
+    const blocks = [];
+    rows.forEach(row => (row.columns||[]).forEach(col => (col.modules||[]).forEach(m => {
+      const b = beeModuleToBlock(m);
+      if (b) blocks.push(b);
+    })));
+    return blocks;
+  } catch (e) { return []; }
+};
 
 function RdImportModal({ onClose, onDone }) {
   const [mode, setMode] = useState("file"); // "paste" | "file"
@@ -1767,7 +2210,7 @@ function RdImportModal({ onClose, onDone }) {
   // Extrai HTML básico de um BeeFree JSON (text modules + image)
   const extractHtmlFromBee = (json) => {
     try {
-      const rows = json?.page?.body?.rows || [];
+      const rows = json?.page?.rows || [];
       let html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">';
       const walk = (modules) => {
         (modules || []).forEach(m => {
@@ -1841,11 +2284,15 @@ function RdImportModal({ onClose, onDone }) {
     if (!name.trim() || !html.trim()) { alert("Preencha nome e conteúdo."); return; }
     setSaving(true);
     const slug = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+    // se veio JSON do BeeFree, converte pra blocos editáveis de verdade;
+    // se foi só HTML colado/upload, não tem estrutura pra separar em blocos
+    const blocks = format === "bee_json" && beeJson ? beeJsonToBlocks(beeJson) : null;
     const { error } = await supabase.from("email_templates").insert({
       name: name.trim(),
       slug: slug + "-" + Date.now().toString(36),
       category, subject, html,
       bee_json: beeJson,
+      blocks,
       source: "rd_station",
       active: true,
     });
@@ -1957,6 +2404,7 @@ export default function VantariEmailMarketing() {
   const [editCamp,   setEditCamp]   = useState(null);
   const [reportCamp, setReportCamp] = useState(null);
   const [sendModal,  setSendModal]  = useState(null);
+  const [collapsed,  setCollapsed]  = useState(false);
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);
@@ -1965,7 +2413,7 @@ export default function VantariEmailMarketing() {
       const { data, error: err } = await supabase
         .schema("mkt")
         .from("campaigns")
-        .select(`id, name, subject, template_html, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+        .select(`id, name, subject, template_html, email_blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at,
                  campaign_sends(status, sent_at, opened_at, clicked_at, converted_at)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
@@ -1984,6 +2432,7 @@ export default function VantariEmailMarketing() {
           subject:       c.subject || "",
           sender:        c.from_email || "marketing@vantari.com.br",
           htmlContent:   c.template_html || "",
+          emailBlocks:   c.email_blocks || null,
           fromName:      c.from_name  || "Vantari",
           fromEmail:     c.from_email || "onboarding@resend.dev",
           status:        c.status || "draft",
@@ -2020,6 +2469,7 @@ export default function VantariEmailMarketing() {
       name:           data.name,
       subject:        data.subject,
       template_html:  data.htmlContent || null,
+      email_blocks:   data.emailBlocks || null,
       from_name:      data.fromName  || "Vantari",
       from_email:     data.fromEmail || data.sender || null,
       status:         data.status || "draft",
@@ -2042,7 +2492,7 @@ export default function VantariEmailMarketing() {
     const { error: err } = await supabase.schema("mkt").from("campaigns").insert({
       workspace_id: WORKSPACE_VANTARI,
       name: `${c.name} (cópia)`, subject: c.subject, from_email: c.fromEmail || c.sender,
-      from_name: c.fromName, template_html: c.htmlContent || null,
+      from_name: c.fromName, template_html: c.htmlContent || null, email_blocks: c.emailBlocks || null,
       status: "draft", type: c.type, audience: c.audience, audience_count: c.audienceCount,
       scheduled_at: null,
     });
@@ -2071,10 +2521,11 @@ export default function VantariEmailMarketing() {
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240,
+        width: collapsed ? 64 : 240,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display: "flex", flexDirection: "column", flexShrink: 0,
-        position: "relative", overflow: "hidden",
+        position: "relative", overflow: "visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -2083,33 +2534,41 @@ export default function VantariEmailMarketing() {
         }} />
 
         {/* Brand */}
-        <div style={{ padding: "20px 20px 0", position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+        <div style={{ padding: collapsed ? "20px 0 0" : "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
             <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
               <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
             </div>
-            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+            {!collapsed && <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>}
+            {!collapsed && <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
-          <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"          path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email" active />
-          <NavSection label="CRM" />
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
-          <NavItem icon={Zap}            label="Workflows"      path="/workflow"     />
-          <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed} />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email" active collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed} />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"   path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed} />
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" collapsed={collapsed} />
         </div>
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-          <NavItem icon={Settings} label="Configurações" path="/settings" />
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
@@ -2154,7 +2613,7 @@ export default function VantariEmailMarketing() {
           ) : (
             <>
               {view==="list"      && <CampaignList campaigns={campaigns} onNew={handleNew} onEdit={handleEdit} onReport={handleReport} onDuplicate={handleDuplicate} onDelete={handleDelete} onSend={handleSend}/>}
-              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={()=>handleOpenEditor(editCamp)} onBack={()=>setView("list")}/>}
+              {view==="form"      && <CampaignForm campaign={editCamp} onSave={handleSaveCampaign} onEdit={(formData)=>handleOpenEditor({...editCamp, ...formData})} onBack={()=>setView("list")}/>}
               {view==="report"&&reportCamp&&<ReportView campaign={reportCamp} onBack={()=>setView("list")}/>}
               {view==="templates"&&<TemplatesView onUseTemplate={(blocks)=>{setEditCamp({emailBlocks:blocks});setView("editor");}}/>}
             </>

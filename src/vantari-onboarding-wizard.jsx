@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "./supabase";
 import {
   Building2, Users, Settings2, Target, CheckCircle2,
   ChevronLeft, ChevronRight, Save, Plus, X,
-  BarChart2, Mail, Star, LayoutTemplate, Bot, Plug, Settings
+  BarChart2, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap, Filter, LogOut
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -145,11 +146,13 @@ const Card = ({ children, style:sx={} }) => (
 /* ═══════════════════════════════════════════════════════════
    SIDEBAR COMPONENTS
 ═══════════════════════════════════════════════════════════ */
-const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  )
 );
 
-const NavItem = ({ icon:Icon, label, active=false, path }) => {
+const NavItem = ({ icon:Icon, label, active=false, path, collapsed=false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
@@ -157,10 +160,12 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position:"relative",
         display:"flex",alignItems:"center",gap:9,
-        padding:"8px 20px",fontSize:13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize:13.5,
         fontWeight:active?700:600,fontFamily:T.font,
         color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
         background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
@@ -169,10 +174,72 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
       {active && (
         <span style={{position:"absolute",left:0,top:6,bottom:6,width:3,background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",borderRadius:"0 3px 3px 0"}} />
       )}
-      {Icon && <Icon size={16}/>}{label}
+      {Icon && <Icon size={16}/>}
+      {!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════
    WIZARD HEADER
@@ -783,6 +850,7 @@ export default function VantariOnboardingWizard() {
   const [verifyingDns, setVerifyingDns] = useState(false);
   const [newMembro, setNewMembro] = useState({ email:"", role:"analista" });
   const [newAlerta, setNewAlerta] = useState({ tipo:"sql", canal:"email", threshold:"85" });
+  const [collapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
 
   /* helpers */
@@ -909,37 +977,46 @@ export default function VantariOnboardingWizard() {
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');*{box-sizing:border-box;}::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#B3BFCA;border-radius:99px;}`}</style>
 
       {/* Sidebar */}
-      <div style={{width:240,background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"hidden"}}>
+      <div style={{width:collapsed?64:240,transition:"width 0.15s",background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"visible"}}>
         {/* glow topo-direito */}
         <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)"}} />
 
         {/* Brand */}
-        <div style={{padding:"20px 20px 0",position:"relative"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+        <div style={{padding:collapsed?"20px 0 0":"20px 20px 0",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:collapsed?"center":"flex-start",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
             <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
               <img src="/icone.png" alt="" style={{width:22,height:22}}/>
             </div>
-            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
-            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+            {!collapsed && <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>}
+            {!collapsed && <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>}
           </div>
         </div>
 
         <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"           path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
-          <NavSection label="CRM"/>
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" />
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações"     path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed}/>
+          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"           path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed}/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed}/>
+          <NavItem icon={Star}           label="Scoring"         path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"    path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed}/>
+          <NavItem icon={Plug}           label="Integrações"     path="/integrations" collapsed={collapsed} />
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings"/>
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed}/>
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{display:"flex",alignItems:"center",justifyContent:collapsed?"center":"flex-end",gap:6,padding:collapsed?"8px 0":"8px 20px",fontSize:12,fontWeight:600,color:"rgba(255,255,255,0.6)",cursor:"pointer",fontFamily:T.font}}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 

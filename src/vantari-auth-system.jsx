@@ -211,12 +211,19 @@ const Card = ({ children, style:sx={}, onClick, hoverable }) => {
 
 // ─── AUTH PROVIDER ────────────────────────────────────────────────────────────
 const AuthProvider = ({ children }) => {
-  const [user,setUser]       = useState(null);
-  const [loading,setLoading] = useState(true);
+  const [user,setUser]         = useState(null);
+  const [loading,setLoading]   = useState(true);
+  const [connError,setConnError] = useState(null);
   const toast = useContext(ToastContext);
 
   useEffect(()=>{
-    supabase.auth.getUser().then(({data})=>{ setUser(data.user); setLoading(false); });
+    supabase.auth.getUser()
+      .then(({data})=>{ setUser(data.user); setLoading(false); })
+      .catch((err)=>{
+        console.error("Falha ao conectar no Supabase:", err);
+        setConnError(err?.message || "Não foi possível conectar ao servidor.");
+        setLoading(false);
+      });
     const { data:{ subscription } } = supabase.auth.onAuthStateChange((_,session)=>{ setUser(session?.user||null); });
     return ()=>subscription.unsubscribe();
   },[]);
@@ -227,7 +234,7 @@ const AuthProvider = ({ children }) => {
   const signOut        = async () => { await supabase.auth.signOut(); toast?.add("Você saiu da sua conta.","info"); };
 
   return (
-    <AuthContext.Provider value={{user,loading,signIn,signUp,resetPassword,signOut}}>
+    <AuthContext.Provider value={{user,loading,connError,signIn,signUp,resetPassword,signOut}}>
       {children}
     </AuthContext.Provider>
   );
@@ -650,7 +657,7 @@ const MainApp = ({ user }) => {
 
 // ─── ROOT ──────────────────────────────────────────────────────────────────────
 const AppContent = () => {
-  const { user, loading } = useContext(AuthContext);
+  const { user, loading, connError } = useContext(AuthContext);
   const navigate = useNavigate();
 
   useEffect(()=>{
@@ -661,6 +668,14 @@ const AppContent = () => {
     <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.faint,flexDirection:"column",gap:16}}>
       <img src="/icone.png" alt="Vantari" style={{height:44,width:"auto",animation:"pulse 1.5s ease infinite"}}/>
       <span style={{fontFamily:FONT,fontWeight:600,color:T.muted,fontSize:14}}>Carregando...</span>
+    </div>
+  );
+  if(connError) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:T.faint,flexDirection:"column",gap:12,padding:24,textAlign:"center"}}>
+      <img src="/icone.png" alt="Vantari" style={{height:40,width:"auto",opacity:0.6}}/>
+      <span style={{fontFamily:FONT,fontWeight:700,color:"#B3261E",fontSize:15}}>Não foi possível conectar ao Supabase</span>
+      <span style={{fontFamily:FONT,color:T.muted,fontSize:13,maxWidth:420}}>{connError}</span>
+      <span style={{fontFamily:FONT,color:T.muted,fontSize:12,maxWidth:420}}>Verifique se o Supabase local está rodando (`supabase status` no terminal) e recarregue a página.</span>
     </div>
   );
   return user ? null : <LoginScreen/>;

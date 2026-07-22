@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, createElement, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
-import { Loader2, AlertCircle, BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap } from "lucide-react";
+import { Loader2, AlertCircle, BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap, Filter, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
@@ -16,7 +16,7 @@ const T = {
   brand2:  "#1F76BC",
   deep:    "#0A3D4D",
   gradient: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
-  sidebarBg: "linear-gradient(180deg, #EEF9FC 0%, #E6F5FB 100%)",
+  sidebarBg: "linear-gradient(180deg, #0D7491 0%, #0A5165 60%, #0A3D4D 100%)",
 
   // Data accents
   violet:  "#7C5CFF",
@@ -49,7 +49,7 @@ const T = {
 const SPIN_CSS = `@keyframes spin{to{transform:rotate(360deg)}}`;
 
 /* ─── sidebar ─── */
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
@@ -57,33 +57,98 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
-        position: "relative",
-        display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5,
-        fontWeight: active ? 700 : 600, fontFamily: T.font,
-        color: active ? T.teal : hov ? T.text : T.muted,
-        background: active ? `${T.teal}12` : hov ? `${T.teal}06` : "transparent",
+        position: "relative", display: "flex", alignItems: "center", gap: 9,
+        padding: collapsed ? "8px 0" : "8px 20px",
+        justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5, fontWeight: active ? 700 : 600, fontFamily: T.font,
+        color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
+        background: active ? "rgba(255,255,255,0.10)" : hov ? "rgba(255,255,255,0.06)" : "transparent",
         cursor: "pointer", transition: "all 0.15s", userSelect: "none",
       }}
     >
       {active && (
         <span style={{
           position: "absolute", left: 0, top: 6, bottom: 6, width: 3,
-          background: T.gradient,
+          background: "linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",
           borderRadius: "0 3px 3px 0",
         }} />
       )}
-      {Icon && <Icon size={16} aria-hidden="true" />}{label}
+      {Icon && <Icon size={16} aria-hidden="true" />}{!collapsed && label}
     </div>
   );
 };
-const NavSection = ({ label }) => (
-  <div style={{
-    fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
-    color: T.faint3, padding: "10px 20px 4px",
-    textTransform: "uppercase", fontFamily: T.head,
-  }}>{label}</div>
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{
+      fontSize: 10, fontWeight: 600, letterSpacing: "0.18em",
+      color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px",
+      textTransform: "uppercase", fontFamily: T.head,
+    }}>{label}</div>
+  )
 );
 
 /* ════════════════════════════════════════════
@@ -91,13 +156,40 @@ const NavSection = ({ label }) => (
 ════════════════════════════════════════════ */
 const NW = 200, NH = 68, CVW = 3000, CVH = 2000;
 const NC = {
-  trigger:   { label: "Trigger",   icon: "ti-bolt",        clr: "#185FA5", bg: "#E6F1FB", bdr: "#378ADD", tx: "#0C447C" },
-  condition: { label: "Condition", icon: "ti-git-branch",  clr: "#854F0B", bg: "#FAEEDA", bdr: "#EF9F27", tx: "#633806" },
+  trigger:   { label: "Gatilho",   icon: "ti-bolt",        clr: "#185FA5", bg: "#E6F1FB", bdr: "#378ADD", tx: "#0C447C" },
+  condition: { label: "Condição",  icon: "ti-git-branch",  clr: "#854F0B", bg: "#FAEEDA", bdr: "#EF9F27", tx: "#633806" },
   action:    { label: "Ação",      icon: "ti-player-play", clr: "#0F6E56", bg: "#E1F5EE", bdr: "#1D9E75", tx: "#085041" },
-  delay:     { label: "Delay",     icon: "ti-clock",       clr: "#993C1D", bg: "#FAECE7", bdr: "#D85A30", tx: "#4A1B0C" },
+  delay:     { label: "Espera",    icon: "ti-clock",       clr: "#993C1D", bg: "#FAECE7", bdr: "#D85A30", tx: "#4A1B0C" },
 };
-const TRIG = ["Form Submission","Tag Added","Tag Removed","Score Threshold","Email Opened","Email Clicked","Page Visit","Birthday","Days After Signup","Manual"];
-const ACTS = ["Send Email","Add Tag","Remove Tag","Change Stage","Webhook POST"];
+const TRIG = ["Envio de Formulário","Tag Adicionada","Tag Removida","Score Atingido","Email Aberto","Email Clicado","Visita à Página","Aniversário","Dias Após Cadastro","Manual"];
+const ACTS = ["Enviar Email","Adicionar Tag","Remover Tag","Mudar Etapa","Webhook POST"];
+const UNIT_LABELS  = { minutes: "minutos", hours: "horas", days: "dias", weeks: "semanas" };
+const FIELD_LABELS = { score: "Score", tag: "Tag", stage: "Etapa", email: "Email", source: "Origem", country: "País" };
+const STAGE_LABELS = { lead: "Lead", mql: "Lead Qualificado (MQL)", sql: "Pronto para Vendas (SQL)", opportunity: "Oportunidade", customer: "Cliente" };
+const OP_LABELS = { "=": "Igual a", "≠": "Diferente de", ">": "Maior que", "<": "Menor que", "≥": "Maior ou igual a", "≤": "Menor ou igual a", "contains": "Contém", "starts_with": "Começa com" };
+
+/* deriva o texto do card a partir da configuração escolhida — o nó não precisa
+   de um nome manual, o que foi selecionado já identifica a etapa */
+function computeLabel(type, cfg = {}) {
+  if (type === "trigger") return cfg.trigger || "Selecione o gatilho";
+  if (type === "condition") {
+    if (cfg.field && cfg.op && cfg.value) return `${FIELD_LABELS[cfg.field] || cfg.field} ${(OP_LABELS[cfg.op] || cfg.op).toLowerCase()} ${cfg.value}`;
+    return "Configure a condição";
+  }
+  if (type === "action") {
+    if (!cfg.action) return "Selecione a ação";
+    if (cfg.action === "Enviar Email" && cfg.template) return `${cfg.action} · ${cfg.template}`;
+    if ((cfg.action === "Adicionar Tag" || cfg.action === "Remover Tag") && cfg.tag) return `${cfg.action} · ${cfg.tag}`;
+    if (cfg.action === "Mudar Etapa" && cfg.stage) return `${cfg.action} · ${STAGE_LABELS[cfg.stage] || cfg.stage}`;
+    if (cfg.action === "Webhook POST" && cfg.url) return `${cfg.action} · ${cfg.url}`;
+    return cfg.action;
+  }
+  if (type === "delay") {
+    if (cfg.amount && cfg.unit) return `${cfg.amount} ${UNIT_LABELS[cfg.unit] || cfg.unit}`;
+    return "Configure o tempo";
+  }
+  return "";
+}
 
 let _ni = 20;
 const uid = () => `n${++_ni}`;
@@ -110,15 +202,19 @@ function bez(s, t) {
 }
 
 const BLANK_NODES = [
-  { id: "n1", type: "trigger", x: 60, y: 200, label: "Form Submitted", cfg: { trigger: "Form Submission" } },
+  { id: "n1", type: "trigger", x: 60, y: 200, label: "Envio de Formulário", cfg: { trigger: "Envio de Formulário" } },
 ];
 const BLANK_EDGES = [];
 
 /* ── canvas node ── */
-function CNode({ node, selected, isConn, onDragStart, onPortClick, onNodeClick }) {
+function CNode({ node, selected, isConn, isSource, onDragStart, onPortClick, onNodeClick }) {
   const [hov, setHov] = useState(false);
+  const [outHov, setOutHov] = useState(false);
+  const [inHov, setInHov] = useState(false);
   const c = NC[node.type];
   const e = createElement;
+  const dropTarget = isConn && !isSource; // this node is a valid target while a connection is being drawn
+  const borderColor = dropTarget && hov ? T.green : (selected || hov ? c.bdr : T.border);
   return e("div", {
     style: { position: "absolute", left: node.x, top: node.y, width: NW, height: NH, zIndex: selected ? 10 : 1, userSelect: "none" },
     onMouseEnter: () => setHov(true), onMouseLeave: () => setHov(false),
@@ -127,27 +223,45 @@ function CNode({ node, selected, isConn, onDragStart, onPortClick, onNodeClick }
     e("div", {
       style: {
         width: "100%", height: "100%",
-        background: selected ? c.bg : "#fff",
-        border: `1.5px solid ${selected || hov ? c.bdr : T.border}`,
+        background: dropTarget && hov ? `${T.green}12` : selected ? c.bg : "#fff",
+        border: `1.5px solid ${borderColor}`,
         borderLeft: `3px solid ${c.bdr}`,
         borderRadius: 8,
         display: "flex", alignItems: "center", gap: 10, padding: "0 12px",
-        cursor: isConn ? "pointer" : "grab", transition: "border-color .1s,background .1s",
-        boxShadow: selected ? `0 0 0 3px ${c.bdr}28` : "0 1px 4px rgba(0,0,0,.05)",
+        cursor: isConn ? (isSource ? "not-allowed" : "pointer") : "grab",
+        opacity: isConn && isSource ? 0.55 : 1,
+        transition: "border-color .12s,background .12s,opacity .12s,box-shadow .12s",
+        boxShadow: dropTarget && hov ? `0 0 0 3px ${T.green}30` : selected ? `0 0 0 3px ${c.bdr}28` : "0 1px 4px rgba(0,0,0,.05)",
       }
     },
       e("i", { className: `ti ${c.icon}`, "aria-hidden": "true", style: { fontSize: 17, color: c.clr, flexShrink: 0 } }),
       e("div", { style: { overflow: "hidden", flex: 1 } },
         e("div", { style: { fontSize: 9, fontWeight: 700, color: c.tx, textTransform: "uppercase", letterSpacing: ".07em", marginBottom: 2, fontFamily: T.head } }, c.label),
-        e("div", { style: { fontSize: 12, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: T.font } }, node.label)
+        e("div", { title: computeLabel(node.type, node.cfg), style: { fontSize: 12, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontFamily: T.font } }, computeLabel(node.type, node.cfg))
       )
     ),
     e("div", {
       className: "nport", onClick: onPortClick,
-      style: { position: "absolute", right: -7, top: "50%", transform: "translateY(-50%)", width: 14, height: 14, borderRadius: "50%", background: c.bdr, border: "2.5px solid #fff", cursor: "crosshair", zIndex: 5 }
+      onMouseEnter: () => setOutHov(true), onMouseLeave: () => setOutHov(false),
+      title: "Arraste para conectar a outro nó",
+      style: {
+        position: "absolute", right: outHov ? -9 : -7, top: "50%", transform: "translateY(-50%)",
+        width: outHov ? 18 : 14, height: outHov ? 18 : 14, borderRadius: "50%",
+        background: c.bdr, border: "2.5px solid #fff", cursor: "crosshair", zIndex: 5,
+        boxShadow: outHov ? `0 0 0 5px ${c.bdr}30` : "none", transition: "all .12s",
+      }
     }),
     e("div", {
-      style: { position: "absolute", left: -6, top: "50%", transform: "translateY(-50%)", width: 12, height: 12, borderRadius: "50%", background: T.border, border: "2px solid #fff", zIndex: 5 }
+      onClick: dropTarget ? onNodeClick : undefined,
+      onMouseEnter: () => setInHov(true), onMouseLeave: () => setInHov(false),
+      title: dropTarget ? "Soltar conexão aqui" : undefined,
+      style: {
+        position: "absolute", left: dropTarget && inHov ? -8 : -6, top: "50%", transform: "translateY(-50%)",
+        width: dropTarget && inHov ? 16 : 12, height: dropTarget && inHov ? 16 : 12, borderRadius: "50%",
+        background: dropTarget && inHov ? T.green : T.border,
+        border: "2px solid #fff", zIndex: 5, cursor: dropTarget ? "pointer" : "default",
+        boxShadow: dropTarget && inHov ? `0 0 0 5px ${T.green}30` : "none", transition: "all .12s",
+      }
     })
   );
 }
@@ -182,34 +296,102 @@ function Minimap({ nodes, edges, sel, pan, zoom, containerRef }) {
   );
 }
 
-/* ── palette ── */
-function Palette() {
+/* ── palette row (hoverable, click-to-add + drag-to-add) ── */
+function PaletteRow({ icon, iconColor, title, subtitle, onClick, onDragStart, compact }) {
+  const [hov, setHov] = useState(false);
   const e = createElement;
-  return e("div", { style: { padding: 10 } },
-    e("div", { style: { fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8, padding: "0 2px", fontFamily: T.head } }, "Elementos"),
-    ...Object.entries(NC).map(([type, c]) =>
-      e("div", {
-        key: type, draggable: true,
-        onDragStart: ev => ev.dataTransfer.setData("type", type),
-        style: { display: "flex", alignItems: "center", gap: 8, padding: "7px 10px", marginBottom: 4, borderRadius: 8, border: `0.5px solid ${T.border}`, background: T.bg, cursor: "grab" },
-      },
-        e("i", { className: `ti ${c.icon}`, "aria-hidden": "true", style: { fontSize: 15, color: c.clr } }),
-        e("div", null,
-          e("div", { style: { fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.font } }, c.label),
-          e("div", { style: { fontSize: 10, color: T.muted, fontFamily: T.font } }, { trigger: "Evento inicial", condition: "Se/senão", action: "Executar", delay: "Aguardar" }[type])
+  return e("div", {
+    draggable: true,
+    onDragStart,
+    onClick,
+    onMouseEnter: () => setHov(true), onMouseLeave: () => setHov(false),
+    style: {
+      display: "flex", alignItems: "center", gap: 8,
+      padding: compact ? "6px 8px" : "7px 10px",
+      marginBottom: 4, borderRadius: 8,
+      border: `0.5px solid ${hov ? `${T.teal}70` : T.border}`,
+      background: hov ? T.bg : (compact ? "transparent" : T.bg),
+      cursor: "pointer", transition: "border-color .12s, background .12s",
+    },
+  },
+    e("i", { className: `ti ${icon}`, "aria-hidden": "true", style: { fontSize: compact ? 12 : 15, color: iconColor, flexShrink: 0 } }),
+    subtitle
+      ? e("div", { style: { overflow: "hidden" } },
+          e("div", { style: { fontSize: 12, fontWeight: 600, color: T.text, fontFamily: T.font } }, title),
+          e("div", { style: { fontSize: 10, color: T.muted, fontFamily: T.font } }, subtitle)
         )
+      : e("div", { style: { fontSize: 11.5, color: T.text, fontFamily: T.font, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, title)
+  );
+}
+
+/* ── palette ── */
+function Palette({ onAdd }) {
+  const e = createElement;
+  const [q, setQ] = useState("");
+  const ql = q.trim().toLowerCase();
+  const filteredTrig = ql ? TRIG.filter(t => t.toLowerCase().includes(ql)) : TRIG;
+  const filteredActs = ql ? ACTS.filter(a => a.toLowerCase().includes(ql)) : ACTS;
+  const noResults = !!ql && filteredTrig.length === 0 && filteredActs.length === 0;
+
+  return e("div", { style: { padding: 10 } },
+    e("div", { style: { position: "relative", marginBottom: 12 } },
+      e("i", { className: "ti ti-search", "aria-hidden": "true", style: { position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: T.muted, pointerEvents: "none" } }),
+      e("input", {
+        value: q, onChange: ev => setQ(ev.target.value),
+        placeholder: "Buscar gatilhos e ações...",
+        style: { width: "100%", boxSizing: "border-box", padding: "6px 8px 6px 26px", fontSize: 11.5, border: `1px solid ${T.border}`, borderRadius: 7, outline: "none", fontFamily: T.font, color: T.text },
+      })
+    ),
+
+    !ql && e(Fragment, null,
+      e("div", { style: { fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em", marginBottom: 8, padding: "0 2px", fontFamily: T.head } }, "Elementos"),
+      ...Object.entries(NC).map(([type, c]) =>
+        e(PaletteRow, {
+          key: type,
+          icon: c.icon, iconColor: c.clr,
+          title: c.label,
+          subtitle: { trigger: "Evento inicial", condition: "Se/senão", action: "Executar", delay: "Aguardar" }[type],
+          onDragStart: ev => ev.dataTransfer.setData("type", type),
+          onClick: () => onAdd?.(type),
+        })
       )
     ),
-    e("div", { style: { fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em", margin: "12px 2px 7px", fontFamily: T.head } }, "Triggers"),
-    ...TRIG.slice(0, 7).map(t =>
-      e("div", {
-        key: t, draggable: true,
-        onDragStart: ev => ev.dataTransfer.setData("type", "trigger"),
-        style: { padding: "5px 8px", fontSize: 11, color: T.muted, cursor: "grab", borderRadius: 4, fontFamily: T.font },
-      },
-        e("i", { className: "ti ti-bolt", "aria-hidden": "true", style: { fontSize: 10, marginRight: 5, color: NC.trigger.clr } }), t
+
+    filteredTrig.length > 0 && e(Fragment, null,
+      e("div", { style: { fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em", margin: "12px 2px 7px", fontFamily: T.head } }, `Gatilhos${ql ? ` (${filteredTrig.length})` : ""}`),
+      ...filteredTrig.map(t =>
+        e(PaletteRow, {
+          key: t, compact: true,
+          icon: "ti-bolt", iconColor: NC.trigger.clr,
+          title: t,
+          onDragStart: ev => {
+            ev.dataTransfer.setData("type", "trigger");
+            ev.dataTransfer.setData("label", t);
+            ev.dataTransfer.setData("cfg", JSON.stringify({ trigger: t }));
+          },
+          onClick: () => onAdd?.("trigger", { trigger: t }),
+        })
       )
-    )
+    ),
+
+    filteredActs.length > 0 && e(Fragment, null,
+      e("div", { style: { fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".08em", margin: "12px 2px 7px", fontFamily: T.head } }, `Ações${ql ? ` (${filteredActs.length})` : ""}`),
+      ...filteredActs.map(a =>
+        e(PaletteRow, {
+          key: a, compact: true,
+          icon: "ti-player-play", iconColor: NC.action.clr,
+          title: a,
+          onDragStart: ev => {
+            ev.dataTransfer.setData("type", "action");
+            ev.dataTransfer.setData("label", a);
+            ev.dataTransfer.setData("cfg", JSON.stringify({ action: a }));
+          },
+          onClick: () => onAdd?.("action", { action: a }),
+        })
+      )
+    ),
+
+    noResults && e("div", { style: { textAlign: "center", padding: "20px 8px", color: T.muted, fontSize: 11.5, fontFamily: T.font } }, "Nenhum resultado encontrado.")
   );
 }
 
@@ -222,13 +404,18 @@ function NodeConfig({ node, onChange, onClose, onDelete }) {
     child
   );
   const inpStyle = { width: "100%", boxSizing: "border-box", padding: "6px 8px", fontSize: 12, border: `1px solid ${T.border}`, borderRadius: 6, outline: "none", fontFamily: T.font, color: T.text };
-  const inp = (k, ph) => e("input", { value: node.cfg?.[k] || "", placeholder: ph || "", style: inpStyle, onChange: ev => onChange({ cfg: { ...node.cfg, [k]: ev.target.value } }) });
-  const sel = (k, opts) => e("select", { value: node.cfg?.[k] || "", style: inpStyle, onChange: ev => onChange({ cfg: { ...node.cfg, [k]: ev.target.value } }) },
+  const applyCfg = (newCfg) => onChange({ cfg: newCfg, label: computeLabel(node.type, newCfg) });
+  const inp = (k, ph) => e("input", { value: node.cfg?.[k] || "", placeholder: ph || "", style: inpStyle, onChange: ev => applyCfg({ ...node.cfg, [k]: ev.target.value }) });
+  const sel = (k, opts) => e("select", { value: node.cfg?.[k] || "", style: inpStyle, onChange: ev => applyCfg({ ...node.cfg, [k]: ev.target.value }) },
     e("option", { value: "" }, "— selecionar —"),
-    ...opts.map(o => e("option", { key: o, value: o }, o))
+    ...opts.map(o => {
+      const v = typeof o === "object" ? o.value : o;
+      const l = typeof o === "object" ? o.label : o;
+      return e("option", { key: v, value: v }, l);
+    })
   );
   return e("div", { style: { padding: 12 } },
-    e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } },
+    e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 } },
       e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
         e("i", { className: `ti ${c.icon}`, "aria-hidden": "true", style: { fontSize: 14, color: c.clr } }),
         e("span", { style: { fontSize: 12, fontWeight: 700, color: c.tx, fontFamily: T.head } }, c.label)
@@ -237,30 +424,30 @@ function NodeConfig({ node, onChange, onClose, onDelete }) {
         e("i", { className: "ti ti-x", "aria-hidden": "true", style: { fontSize: 13 } })
       )
     ),
-    fld("Label", e("input", { value: node.label, style: inpStyle, onChange: ev => onChange({ label: ev.target.value }) })),
+    e("div", { style: { fontSize: 11, color: T.muted, fontFamily: T.font, marginBottom: 12 } }, "O card no canvas mostra a opção selecionada abaixo automaticamente."),
     node.type === "trigger" && e(Fragment, null,
       fld("Tipo", sel("trigger", TRIG)),
-      node.cfg?.trigger === "Form Submission" && fld("Formulário", inp("form", "Contact Form")),
-      node.cfg?.trigger === "Score Threshold" && fld("Score ≥", inp("score", "50")),
-      node.cfg?.trigger === "Page Visit"       && fld("URL contém", inp("url", "/pricing")),
-      node.cfg?.trigger === "Days After Signup"&& fld("Dias", inp("days", "7")),
-      node.cfg?.trigger === "Tag Added"        && fld("Tag", inp("tag", "hot-lead")),
+      node.cfg?.trigger === "Envio de Formulário" && fld("Formulário", inp("form", "Formulário de Contato")),
+      node.cfg?.trigger === "Score Atingido" && fld("Score ≥", inp("score", "50")),
+      node.cfg?.trigger === "Visita à Página"       && fld("URL contém", inp("url", "/pricing")),
+      node.cfg?.trigger === "Dias Após Cadastro"&& fld("Dias", inp("days", "7")),
+      node.cfg?.trigger === "Tag Adicionada"        && fld("Tag", inp("tag", "hot-lead")),
     ),
     node.type === "condition" && e(Fragment, null,
-      fld("Campo",    sel("field", ["score","tag","stage","email","source","country"])),
-      fld("Operador", sel("op",    ["=","≠",">","<","≥","≤","contains","starts_with"])),
+      fld("Campo",    sel("field", Object.entries(FIELD_LABELS).map(([value, label]) => ({ value, label })))),
+      fld("Operador", sel("op",    Object.entries(OP_LABELS).map(([value, label]) => ({ value, label })))),
       fld("Valor",    inp("value", "50")),
     ),
     node.type === "action" && e(Fragment, null,
       fld("Ação", sel("action", ACTS)),
-      node.cfg?.action === "Send Email"  && fld("Template", inp("template", "welcome_v2")),
-      (node.cfg?.action === "Add Tag" || node.cfg?.action === "Remove Tag") && fld("Tag", inp("tag", "nurture")),
-      node.cfg?.action === "Change Stage"  && fld("Stage", sel("stage", ["lead","mql","sql","opportunity","customer"])),
+      node.cfg?.action === "Enviar Email"  && fld("Template", inp("template", "welcome_v2")),
+      (node.cfg?.action === "Adicionar Tag" || node.cfg?.action === "Remover Tag") && fld("Tag", inp("tag", "nurture")),
+      node.cfg?.action === "Mudar Etapa"  && fld("Etapa", sel("stage", ["lead","mql","sql","opportunity","customer"].map(v => ({ value: v, label: STAGE_LABELS[v] })))),
       node.cfg?.action === "Webhook POST"  && fld("URL", inp("url", "https://")),
     ),
     node.type === "delay" && e(Fragment, null,
       fld("Quantidade", inp("amount", "3")),
-      fld("Unidade",    sel("unit",   ["minutes","hours","days","weeks"])),
+      fld("Unidade",    sel("unit",   Object.entries(UNIT_LABELS).map(([value, label]) => ({ value, label })))),
     ),
     e("div", { style: { marginTop: 14, paddingTop: 12, borderTop: `0.5px solid ${T.border}` } },
       e("div", { style: { fontSize: 9, color: T.muted, marginBottom: 8, fontFamily: T.font } }, `ID: ${node.id}`),
@@ -297,7 +484,7 @@ function WFView({ onEdit }) {
     setCreating(true);
     const { data, error: err } = await supabase
       .from("automation_flows")
-      .insert({ name: "Novo Workflow", status: "draft", definition: { nodes: BLANK_NODES, edges: BLANK_EDGES } })
+      .insert({ name: "Novo Fluxo", status: "draft", definition: { nodes: BLANK_NODES, edges: BLANK_EDGES } })
       .select()
       .single();
     setCreating(false);
@@ -328,9 +515,9 @@ function WFView({ onEdit }) {
       <style>{SPIN_CSS}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px", fontFamily: T.head, color: T.text }}>Workflows</h2>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 4px", fontFamily: T.head, color: T.text }}>Fluxos</h2>
           <p style={{ fontSize: 13, color: T.muted, margin: 0, fontFamily: T.font }}>
-            {loading ? "Carregando..." : `${flows.length} workflow${flows.length !== 1 ? "s" : ""} · ${flows.filter(f => f.status === "active").length} ativo${flows.filter(f => f.status === "active").length !== 1 ? "s" : ""}`}
+            {loading ? "Carregando..." : `${flows.length} fluxo${flows.length !== 1 ? "s" : ""} · ${flows.filter(f => f.status === "active").length} ativo${flows.filter(f => f.status === "active").length !== 1 ? "s" : ""}`}
           </p>
         </div>
         <button onClick={handleNew} disabled={creating} style={{ display: "flex", alignItems: "center", gap: 6, background: T.gradient, color: "#fff", border: "none", borderRadius: 10, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: creating ? "not-allowed" : "pointer", opacity: creating ? 0.7 : 1, fontFamily: T.font, boxShadow: "0 4px 14px -4px rgba(13,116,145,.4)" }}>
@@ -338,7 +525,7 @@ function WFView({ onEdit }) {
             ? <Loader2 size={14} style={{ animation: "spin 0.7s linear infinite" }} />
             : <i className="ti ti-plus" style={{ fontSize: 13 }} />
           }
-          Novo Workflow
+          Novo Fluxo
         </button>
       </div>
 
@@ -352,13 +539,13 @@ function WFView({ onEdit }) {
       {loading ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: 60, gap: 10, color: T.muted }}>
           <Loader2 size={20} style={{ animation: "spin 0.7s linear infinite" }} />
-          <span style={{ fontFamily: T.font, fontSize: 14 }}>Carregando workflows...</span>
+          <span style={{ fontFamily: T.font, fontSize: 14 }}>Carregando fluxos...</span>
         </div>
       ) : flows.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 20px", color: T.muted }}>
           <i className="ti ti-webhook" style={{ fontSize: 48, display: "block", marginBottom: 16, opacity: 0.4 }} />
-          <p style={{ fontFamily: T.font, fontSize: 14, margin: "0 0 16px" }}>Nenhum workflow criado ainda.</p>
-          <button onClick={handleNew} style={{ background: T.gradient, color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>Criar primeiro workflow</button>
+          <p style={{ fontFamily: T.font, fontSize: 14, margin: "0 0 16px" }}>Nenhum fluxo criado ainda.</p>
+          <button onClick={handleNew} style={{ background: T.gradient, color: "#fff", border: "none", borderRadius: 10, padding: "8px 20px", fontSize: 13, cursor: "pointer", fontFamily: T.font, fontWeight: 700 }}>Criar primeiro fluxo</button>
         </div>
       ) : (
         <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
@@ -377,7 +564,7 @@ function WFView({ onEdit }) {
                 <div>
                   <span style={{ fontSize: 11, padding: "3px 9px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, fontFamily: T.font }}>
                     <span style={{ width: 5, height: 5, borderRadius: "50%", background: s.cl, display: "inline-block" }} />
-                    {wf.status}
+                    {{ active: "ativo", paused: "pausado", draft: "rascunho" }[wf.status] || wf.status}
                   </span>
                 </div>
                 <div style={{ fontFamily: T.font, fontSize: 12, color: T.muted }}>{updatedAt}</div>
@@ -411,8 +598,8 @@ function LogView() {
       setLoading(true); setError(null);
       const { data, error: err } = await supabase
         .from("flow_runs")
-        .select("id, step, status, created_at, log, automation_flows(name), leads(email)")
-        .order("created_at", { ascending: false })
+        .select("id, step, status, started_at, log, automation_flows(name), leads(email)")
+        .order("started_at", { ascending: false })
         .limit(100);
       if (err) setError(err.message);
       else setRuns(data || []);
@@ -439,7 +626,7 @@ function LogView() {
         <div style={{ display: "flex", gap: 4 }}>
           {["all","success","error","waiting"].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 20, fontWeight: filter === f ? 700 : 600, background: filter === f ? T.teal : "none", color: filter === f ? "#fff" : T.muted, border: filter === f ? "none" : `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.font }}>
-              {f === "all" ? "Todos" : f}
+              {{ all: "Todos", success: "sucesso", error: "erro", waiting: "aguardando" }[f]}
             </button>
           ))}
         </div>
@@ -461,24 +648,24 @@ function LogView() {
         <div style={{ textAlign: "center", padding: "60px 20px", color: T.muted }}>
           <i className="ti ti-terminal-2" style={{ fontSize: 48, display: "block", marginBottom: 16, opacity: 0.4 }} />
           <p style={{ fontFamily: T.font, fontSize: 14, margin: 0 }}>
-            {runs.length === 0 ? "Nenhuma execução registrada ainda. Ative um workflow para começar." : `Nenhum log com status "${filter}".`}
+            {runs.length === 0 ? "Nenhuma execução registrada ainda. Ative um fluxo para começar." : `Nenhum log com status "${{ success: "sucesso", error: "erro", waiting: "aguardando" }[filter] || filter}".`}
           </p>
         </div>
       ) : (
         <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
           <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1fr 80px", padding: "9px 16px", background: T.bg, fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", fontFamily: T.head }}>
-            {["Hora","Lead","Workflow","Step","Status"].map((h, i) => <span key={i}>{h}</span>)}
+            {["Hora","Lead","Fluxo","Etapa","Status"].map((h, i) => <span key={i}>{h}</span>)}
           </div>
           {filtered.map((run, i) => {
             const s = statusStyle(run.status);
-            const time = new Date(run.created_at).toLocaleTimeString("pt-BR");
+            const time = new Date(run.started_at).toLocaleTimeString("pt-BR");
             return (
               <div key={run.id} style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1fr 80px", padding: "11px 16px", borderTop: `1px solid ${T.border}`, alignItems: "center", fontSize: 12, background: i % 2 ? T.bg : "#fff", fontFamily: T.font }}>
                 <div style={{ color: T.muted, fontSize: 11 }}>{time}</div>
                 <div style={{ color: T.teal, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.leads?.email || "—"}</div>
                 <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.automation_flows?.name || "—"}</div>
                 <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.step || "—"}</div>
-                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700 }}>{run.status}</span>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700 }}>{{ success: "sucesso", error: "erro", waiting: "aguardando" }[run.status] || run.status}</span>
               </div>
             );
           })}
@@ -527,7 +714,7 @@ function AnaView() {
 
   const cards = [
     { lbl: "Total Execuções",  val: kpis.total,   sub: `${kpis.success} sucesso · ${kpis.errors} erro`, icon: "ti-chart-bar", cl: T.teal  },
-    { lbl: "Workflows Ativos", val: kpis.active,  sub: `${kpis.paused} pausado · ${kpis.draft} rascunho`, icon: "ti-webhook", cl: T.green },
+    { lbl: "Fluxos Ativos",    val: kpis.active,  sub: `${kpis.paused} pausado · ${kpis.draft} rascunho`, icon: "ti-webhook", cl: T.green },
     { lbl: "Erros",            val: kpis.errors,  sub: kpis.total > 0 ? `${((kpis.errors/kpis.total)*100).toFixed(1)}% error rate` : "—", icon: "ti-alert-circle", cl: T.coral },
     { lbl: "Em Espera",        val: kpis.waiting, sub: "aguardando condição", icon: "ti-clock",  cl: T.amber },
   ];
@@ -550,13 +737,14 @@ function AnaView() {
 
       {flows.length > 0 && (
         <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: 20 }}>
-          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 16px", fontFamily: T.head, color: T.text }}>Workflows</h3>
+          <h3 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 16px", fontFamily: T.head, color: T.text }}>Fluxos</h3>
           {flows.map(f => {
             const statusCl = { active: T.green, paused: T.amber, draft: T.muted }[f.status] || T.muted;
+            const statusLbl = { active: "ativo", paused: "pausado", draft: "rascunho" }[f.status] || f.status;
             return (
               <div key={f.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <span style={{ fontSize: 13, color: T.text, fontFamily: T.font }}>{f.name}</span>
-                <span style={{ fontSize: 11, fontWeight: 700, color: statusCl, fontFamily: T.font }}>{f.status}</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: statusCl, fontFamily: T.font }}>{statusLbl}</span>
               </div>
             );
           })}
@@ -566,7 +754,7 @@ function AnaView() {
       {flows.length === 0 && (
         <div style={{ textAlign: "center", padding: "40px 20px", color: T.muted }}>
           <i className="ti ti-chart-bar" style={{ fontSize: 40, display: "block", marginBottom: 12, opacity: 0.3 }} />
-          <p style={{ fontFamily: T.font, fontSize: 13 }}>Crie e ative workflows para ver analytics aqui.</p>
+          <p style={{ fontFamily: T.font, fontSize: 13 }}>Crie e ative fluxos para ver analytics aqui.</p>
         </div>
       )}
     </div>
@@ -579,7 +767,7 @@ function AnaView() {
 function BuilderCanvas({ flowId, onFlowIdChange }) {
   const [nodes, setNodes]     = useState(BLANK_NODES);
   const [edges, setEdges]     = useState(BLANK_EDGES);
-  const [wfName, setWfName]   = useState("Novo Workflow");
+  const [wfName, setWfName]   = useState("Novo Fluxo");
   const [wfStatus, setWfStatus] = useState("draft");
   const [sel, setSel]         = useState(null);
   const [zoom, setZoom]       = useState(0.82);
@@ -592,27 +780,6 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
   const [saving, setSaving]   = useState(false);
   const [loadingFlow, setLoadingFlow] = useState(false);
   const ref = useRef(null);
-
-  /* load flow when flowId changes */
-  useEffect(() => {
-    if (!flowId) {
-      setNodes(BLANK_NODES); setEdges(BLANK_EDGES);
-      setWfName("Novo Workflow"); setWfStatus("draft"); setSaved(true);
-      return;
-    }
-    setLoadingFlow(true);
-    supabase.from("automation_flows").select("*").eq("id", flowId).single()
-      .then(({ data, error }) => {
-        if (!error && data) {
-          setWfName(data.name);
-          setWfStatus(data.status);
-          if (data.definition?.nodes?.length) setNodes(data.definition.nodes);
-          if (data.definition?.edges)         setEdges(data.definition.edges);
-        }
-        setLoadingFlow(false);
-        setSaved(true);
-      });
-  }, [flowId]);
 
   /* auto-save */
   const saveFlow = useCallback(async (currentNodes, currentEdges, currentName, currentFlowId) => {
@@ -636,10 +803,44 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
   const edgesRef  = useRef(edges);
   const nameRef   = useRef(wfName);
   const flowIdRef = useRef(flowId);
+  const savedRef  = useRef(saved);
   nodesRef.current  = nodes;
   edgesRef.current  = edges;
   nameRef.current   = wfName;
   flowIdRef.current = flowId;
+  savedRef.current  = saved;
+
+  /* load flow when flowId changes — and flush any unsaved edits from the flow we're leaving
+     (fixes losing the last edit when switching flows or leaving the Builder before the
+     1.5s auto-save debounce has a chance to fire) */
+  useEffect(() => {
+    if (!flowId) {
+      setNodes(BLANK_NODES); setEdges(BLANK_EDGES);
+      setWfName("Novo Fluxo"); setWfStatus("draft"); setSaved(true);
+      return () => {
+        if (!savedRef.current) {
+          saveFlow(nodesRef.current, edgesRef.current, nameRef.current, null);
+        }
+      };
+    }
+    setLoadingFlow(true);
+    supabase.from("automation_flows").select("*").eq("id", flowId).single()
+      .then(({ data, error }) => {
+        if (!error && data) {
+          setWfName(data.name);
+          setWfStatus(data.status);
+          if (data.definition?.nodes?.length) setNodes(data.definition.nodes);
+          if (data.definition?.edges)         setEdges(data.definition.edges);
+        }
+        setLoadingFlow(false);
+        setSaved(true);
+      });
+    return () => {
+      if (!savedRef.current) {
+        saveFlow(nodesRef.current, edgesRef.current, nameRef.current, flowId);
+      }
+    };
+  }, [flowId, saveFlow]);
 
   useEffect(() => {
     if (saved) return;
@@ -647,7 +848,20 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
       saveFlow(nodesRef.current, edgesRef.current, nameRef.current, flowIdRef.current);
     }, 1500);
     return () => clearTimeout(t);
-  }, [saved, saveFlow]);
+  }, [saved, saveFlow, flowId]);
+
+  /* also flush on tab close / hard refresh so a change made seconds before leaving isn't lost */
+  useEffect(() => {
+    const onBeforeUnload = (ev) => {
+      if (!savedRef.current) {
+        saveFlow(nodesRef.current, edgesRef.current, nameRef.current, flowIdRef.current);
+        ev.preventDefault();
+        ev.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [saveFlow]);
 
   const handleStatusToggle = async () => {
     if (!flowId) return;
@@ -701,10 +915,26 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
     e.preventDefault();
     const type = e.dataTransfer.getData("type");
     if (!type) return;
+    const cfgRaw = e.dataTransfer.getData("cfg");
+    const cfg = cfgRaw ? JSON.parse(cfgRaw) : {};
     const cp = toC(e.clientX, e.clientY);
-    setNodes(ns => [...ns, { id: uid(), type, x: cp.x - NW / 2, y: cp.y - NH / 2, label: NC[type].label, cfg: {} }]);
+    const id = uid();
+    setNodes(ns => [...ns, { id, type, x: cp.x - NW / 2, y: cp.y - NH / 2, label: computeLabel(type, cfg), cfg }]);
     setSaved(false);
+    setSel(id);
   }, [toC]);
+
+  /* click-to-add from the palette — places the node just right of the current rightmost node */
+  const onAdd = useCallback((type, cfg = {}) => {
+    const id = uid();
+    setNodes(ns => {
+      const x = ns.length ? Math.max(...ns.map(n => n.x)) + NW + 40 : 60;
+      const y = ns.length ? ns[ns.length - 1].y : 200;
+      return [...ns, { id, type, x, y, label: computeLabel(type, cfg), cfg }];
+    });
+    setSaved(false);
+    setSel(id);
+  }, []);
 
   useEffect(() => {
     const h = e => {
@@ -726,7 +956,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
     <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: T.muted }}>
       <style>{SPIN_CSS}</style>
       <Loader2 size={20} style={{ animation: "spin 0.7s linear infinite" }} />
-      <span style={{ fontFamily: T.font, fontSize: 14 }}>Carregando workflow...</span>
+      <span style={{ fontFamily: T.font, fontSize: 14 }}>Carregando fluxo...</span>
     </div>
   );
 
@@ -743,6 +973,14 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           {saving ? "Salvando…" : saved ? "Salvo" : "Não salvo"}
         </span>
         <button
+          onClick={() => saveFlow(nodes, edges, wfName, flowId)}
+          disabled={saving || saved}
+          title="Salvar agora"
+          style={{ background: "none", border: `1px solid ${T.border}`, color: T.text, borderRadius: 8, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: (saving || saved) ? "default" : "pointer", opacity: (saving || saved) ? 0.5 : 1, fontFamily: T.font }}
+        >
+          Salvar
+        </button>
+        <button
           onClick={handleStatusToggle}
           disabled={!flowId}
           style={{ background: wfStatus === "active" ? `${T.amber}18` : T.gradient, color: wfStatus === "active" ? T.amber : "#fff", border: "none", borderRadius: 8, padding: "5px 14px", fontSize: 12, fontWeight: 700, cursor: flowId ? "pointer" : "not-allowed", opacity: flowId ? 1 : 0.5, fontFamily: T.font }}
@@ -754,7 +992,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
       {/* sidebar panel */}
       {e("div", { style: { width: 196, borderRight: `0.5px solid ${T.border}`, background: "#fff", overflow: "auto", flexShrink: 0 } },
         !selNode
-          ? e(Palette, null)
+          ? e(Palette, { onAdd })
           : e(NodeConfig, {
               node: selNode,
               onClose: () => setSel(null),
@@ -799,12 +1037,31 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           ),
           ...nodes.map(node =>
             e(CNode, {
-              key: node.id, node, selected: sel === node.id, isConn: !!conn,
+              key: node.id, node, selected: sel === node.id, isConn: !!conn, isSource: conn?.src === node.id,
               onDragStart: ev => startDrag(ev, node.id),
               onPortClick: ev => startConn(ev, node.id),
-              onNodeClick: ev => { conn ? finishConn(ev, node.id) : (ev.stopPropagation(), setSel(node.id)); },
+              onNodeClick: ev => {
+                if (conn) {
+                  if (conn.src === node.id) { ev.stopPropagation(); setConn(null); }
+                  else finishConn(ev, node.id);
+                } else { ev.stopPropagation(); setSel(node.id); }
+              },
             })
           )
+        ),
+        /* connecting hint */
+        conn && e("div", {
+          style: {
+            position: "absolute", top: 14, left: "50%", transform: "translateX(-50%)",
+            background: T.ink, color: "#fff", padding: "7px 16px", borderRadius: 20,
+            fontSize: 12, fontWeight: 600, fontFamily: T.font, zIndex: 15,
+            display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap",
+            boxShadow: "0 8px 20px -8px rgba(0,0,0,.4)",
+          }
+        },
+          e("i", { className: "ti ti-arrow-guide", "aria-hidden": "true", style: { fontSize: 14 } }),
+          "Clique em outro nó para conectar",
+          e("span", { style: { opacity: 0.55, fontWeight: 500 } }, "· Esc ou clique fora para cancelar")
         ),
         /* zoom controls */
         e("div", { style: { position: "absolute", bottom: 12, left: 12, display: "flex", flexDirection: "column", gap: 3, zIndex: 10 } },
@@ -836,44 +1093,25 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
 /* ════════════════════════════════════════════
    TAB MANAGER
 ════════════════════════════════════════════ */
-function WorkflowWidget() {
-  const [tab, setTab]           = useState("workflows");
-  const [editFlowId, setEditFlowId] = useState(null);
+const WORKFLOW_TABS = [
+  { id: "builder",   icon: "ti-layout-kanban", lbl: "Builder"   },
+  { id: "workflows", icon: "ti-list",           lbl: "Fluxos" },
+  { id: "logs",      icon: "ti-terminal-2",     lbl: "Logs"      },
+  { id: "analytics", icon: "ti-chart-bar",      lbl: "Analytics" },
+];
 
+function WorkflowWidget({ tab, setTab, editFlowId, setEditFlowId }) {
   const handleEdit = (id) => {
     setEditFlowId(id);
     setTab("builder");
   };
 
-  const TABS = [
-    { id: "builder",   icon: "ti-layout-kanban", lbl: "Builder"   },
-    { id: "workflows", icon: "ti-list",           lbl: "Workflows" },
-    { id: "logs",      icon: "ti-terminal-2",     lbl: "Logs"      },
-    { id: "analytics", icon: "ti-chart-bar",      lbl: "Analytics" },
-  ];
-
   return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", border: `0.5px solid ${T.border}`, borderRadius: 10, overflow: "hidden", background: "#fff" }}>
-      {/* tab bar */}
-      <div style={{ display: "flex", alignItems: "center", height: 46, borderBottom: `0.5px solid ${T.border}`, background: "#fff", padding: "0 14px", gap: 0, flexShrink: 0, position: "relative" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginRight: 20 }}>
-          <i className="ti ti-webhook" aria-hidden="true" style={{ fontSize: 18, color: T.teal }} />
-          <span style={{ fontWeight: 700, fontSize: 13, fontFamily: T.head, color: T.text }}>AutoFlow</span>
-        </div>
-        {TABS.map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ background: "none", border: "none", padding: "0 12px", height: "100%", fontSize: 12, fontWeight: tab === t.id ? 700 : 600, fontFamily: T.font, color: tab === t.id ? T.teal : T.muted, borderBottom: tab === t.id ? `2px solid ${T.teal}` : "2px solid transparent", display: "flex", alignItems: "center", gap: 5, cursor: "pointer" }}>
-            <i className={`ti ${t.icon}`} aria-hidden="true" style={{ fontSize: 14 }} /> {t.lbl}
-          </button>
-        ))}
-      </div>
-
-      {/* content */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
-        {tab === "builder"   && <BuilderCanvas flowId={editFlowId} onFlowIdChange={setEditFlowId} />}
-        {tab === "workflows" && <WFView onEdit={handleEdit} />}
-        {tab === "logs"      && <LogView />}
-        {tab === "analytics" && <AnaView />}
-      </div>
+    <div style={{ flex: 1, width: "100%", height: "100%", display: "flex", overflow: "hidden", position: "relative", background: "#fff", borderRadius: 10, border: `0.5px solid ${T.border}` }}>
+      {tab === "builder"   && <BuilderCanvas flowId={editFlowId} onFlowIdChange={setEditFlowId} />}
+      {tab === "workflows" && <WFView onEdit={handleEdit} />}
+      {tab === "logs"      && <LogView />}
+      {tab === "analytics" && <AnaView />}
     </div>
   );
 }
@@ -882,50 +1120,80 @@ function WorkflowWidget() {
    PAGE WRAPPER (sidebar + content)
 ════════════════════════════════════════════ */
 export default function WorkflowBuilderPage() {
+  const [collapsed, setCollapsed]   = useState(false);
+  const [tab, setTab]               = useState("workflows");
+  const [editFlowId, setEditFlowId] = useState(null);
+  const sidebarW = collapsed ? 64 : 240;
+
   return (
     <div style={{ display: "flex", height: "100vh", fontFamily: T.font, background: T.bg }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');*{box-sizing:border-box;}::-webkit-scrollbar{width:6px;height:6px;}::-webkit-scrollbar-track{background:transparent;}::-webkit-scrollbar-thumb{background:#B3BFCA;border-radius:99px;}`}</style>
 
-      {/* sidebar */}
-      <div style={{ width: 240, flexShrink: 0, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, borderRight: `1px solid ${T.border}` }}>
+      {/* sidebar — colapsável para dar mais espaço ao canvas do builder */}
+      <div style={{ width: sidebarW, flexShrink: 0, background: T.sidebarBg, display: "flex", flexDirection: "column", height: "100vh", position: "sticky", top: 0, transition: "width 0.15s", overflow: "visible" }}>
 
         {/* Brand */}
-        <div style={{ padding: "20px 20px 0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: `1px solid ${T.border}`, marginBottom: 16 }}>
-            <div style={{ width: 32, height: 32, background: T.teal, borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <div style={{ padding: collapsed ? "20px 8px 0" : "20px 20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16, justifyContent: collapsed ? "center" : "flex-start" }}>
+            <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
               <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
             </div>
-            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: T.ink }}>vantari</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, background: `${T.teal}14`, padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: T.teal }}>PRO</span>
+            {!collapsed && <>
+              <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
+              <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+            </>}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px" }}>
-          <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"           path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
-          <NavSection label="CRM" />
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"         path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" />
-          <NavItem icon={Zap}            label="Workflows"       path="/workflow" active />
-          <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"     path="/integrations" />
-          <NavItem icon={Settings}       label="Configurações"   path="/settings"     />
+          <NavSection label="Principal" collapsed={collapsed} />
+          <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"           path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed} />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Star}           label="Scoring"         path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"    path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação"  path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" active collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed} />
+          <NavItem icon={Plug}           label="Integrações"     path="/integrations" collapsed={collapsed} />
+        </div>
+
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0" }}>
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings}       label="Configurações"   path="/settings"     collapsed={collapsed} />
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0" }}>
+          <div
+            onClick={() => setCollapsed(c => !c)}
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}
+          >
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
       {/* main */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ padding: "20px 28px 16px", borderBottom: `1px solid ${T.border}`, background: T.surface, flexShrink: 0 }}>
-          <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.ink, margin: 0, letterSpacing: "-0.02em" }}>Automação de Workflows</h1>
-          <p style={{ fontSize: 13, color: T.muted, margin: "4px 0 0", fontFamily: T.font }}>Crie e gerencie fluxos de automação de marketing</p>
+        <div style={{ padding: "16px 24px", borderBottom: `1px solid ${T.border}`, background: T.surface, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
+          <div>
+            <h1 style={{ fontFamily: T.head, fontSize: 20, fontWeight: 700, color: T.ink, margin: 0, letterSpacing: "-0.02em" }}>Automação de Marketing</h1>
+            <p style={{ fontSize: 12.5, color: T.muted, margin: "3px 0 0", fontFamily: T.font }}>Crie e gerencie fluxos de automação de marketing</p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 2, background: T.bg, padding: 4, borderRadius: 10, border: `0.5px solid ${T.border}` }}>
+            {WORKFLOW_TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{ background: tab === t.id ? "#fff" : "none", boxShadow: tab === t.id ? "0 1px 0 rgba(14,26,36,.03), 0 4px 12px -6px rgba(14,26,36,.15)" : "none", border: "none", borderRadius: 7, padding: "7px 14px", fontSize: 12.5, fontWeight: tab === t.id ? 700 : 600, fontFamily: T.font, color: tab === t.id ? T.teal : T.muted, display: "flex", alignItems: "center", gap: 6, cursor: "pointer", transition: "all 0.15s" }}>
+                <i className={`ti ${t.icon}`} aria-hidden="true" style={{ fontSize: 14 }} /> {t.lbl}
+              </button>
+            ))}
+          </div>
         </div>
-        <div style={{ flex: 1, padding: 24, overflow: "hidden", display: "flex", background: T.bg }}>
-          <WorkflowWidget />
+        <div style={{ flex: 1, padding: 16, overflow: "hidden", display: "flex", background: T.bg }}>
+          <WorkflowWidget tab={tab} setTab={setTab} editFlowId={editFlowId} setEditFlowId={setEditFlowId} />
         </div>
       </div>
     </div>

@@ -8,7 +8,8 @@ import {
   FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
   Loader2, AlertTriangle, ArrowUp,
   Database, Edit3, Trash2, Search, X, Copy as CopyIcon,
-  Activity, Globe,
+  Activity, Globe, Filter,
+  ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -224,6 +225,29 @@ const pct = (u,l) => Math.min(Math.round((u/l)*100),100);
 const fmt = n => n>=1000?(n/1000).toFixed(1)+"k":String(n);
 const avatarBg = s => { const p=[T.blue,T.teal,T.green,T.purple,"#E91E8C",T.orange]; let h=0; for(const c of s)h=(h*31+c.charCodeAt(0))%p.length; return p[h]; };
 
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+
+/* log de auditoria real — nunca lança erro pro chamador, só registra em console se falhar */
+async function logAudit({ action, resource, resource_id, details }) {
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    await supabase.from("audit_logs").insert({
+      workspace_id: WORKSPACE_VANTARI,
+      user_email: userData?.user?.email || null,
+      action, resource, resource_id: resource_id != null ? String(resource_id) : null,
+      details: details || null,
+    });
+  } catch (e) { console.error("logAudit failed", e); }
+}
+
+/* banner de aviso — usado em abas que ainda dependem de sistema externo (Stripe, helpdesk) */
+const PreviewBanner = ({ children }) => (
+  <div style={{display:"flex",gap:8,alignItems:"flex-start",padding:"10px 14px",marginBottom:16,background:"#fef3c7",border:`0.5px solid ${T.amber}50`,borderRadius:10,fontSize:12.5,fontWeight:600,color:"#92400e",fontFamily:T.font}}>
+    <AlertTriangle size={14} color={T.amber} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
+    <span>{children}</span>
+  </div>
+);
+
 /* ───── TOAST ───── */
 const useToast = () => {
   const [toasts,setToasts] = useState([]);
@@ -239,7 +263,7 @@ const Toasts = ({toasts}) => (
 );
 
 /* ───── BASE COMPONENTS — same spec as analytics-dashboard ───── */
-const Btn = ({children,onClick,variant="primary",size="sm",icon,disabled,style:sx={}}) => {
+const Btn = ({children,onClick,variant="primary",size="sm",icon,disabled,style:sx={},...rest}) => {
   const [hov,setHov] = useState(false);
   const v = {
     primary:  {bg:hov?"linear-gradient(135deg, #0A5F7A 0%, #108A60 100%)":"linear-gradient(135deg, #0D7491 0%, #14A273 100%)",color:"#fff",border:"none",shadow:hov?"0 8px 22px -6px rgba(13,116,145,.5)":"0 4px 14px -4px rgba(13,116,145,.4)"},
@@ -251,7 +275,7 @@ const Btn = ({children,onClick,variant="primary",size="sm",icon,disabled,style:s
   }[variant]||{};
   const pad={xs:"4px 8px",sm:"7px 14px",md:"9px 18px",lg:"11px 22px"}[size];
   const fs={xs:10,sm:12,md:13,lg:14}[size];
-  return <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:"inline-flex",alignItems:"center",gap:6,background:v.bg,color:v.color,border:v.border||"none",borderRadius:10,padding:pad,fontSize:fs,fontWeight:700,fontFamily:T.font,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,boxShadow:v.shadow,transition:"all 0.15s",whiteSpace:"nowrap",...sx}}>{icon&&<span style={{fontSize:fs+1}}>{icon}</span>}{children}</button>;
+  return <button onClick={onClick} disabled={disabled} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{display:"inline-flex",alignItems:"center",gap:6,background:v.bg,color:v.color,border:v.border||"none",borderRadius:10,padding:pad,fontSize:fs,fontWeight:700,fontFamily:T.font,cursor:disabled?"not-allowed":"pointer",opacity:disabled?0.5:1,boxShadow:v.shadow,transition:"all 0.15s",whiteSpace:"nowrap",...sx}} {...rest}>{icon&&<span style={{fontSize:fs+1}}>{icon}</span>}{children}</button>;
 };
 
 const Card = ({children,style:s={}}) => <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:20,boxShadow:"0 1px 0 rgba(14,26,36,.03), 0 8px 24px -16px rgba(14,26,36,.08)",...s}}>{children}</div>;
@@ -381,11 +405,44 @@ const OnboardingCard = () => {
 };
 
 const WorkspaceTab = ({toast}) => {
-  const [f,setF] = useState({companyName:"Empresa LTDA",domain:"empresa.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491"});
+  const [f,setF] = useState({companyName:"Vantari",domain:"vantari.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491"});
+  const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
   const fileRef = useRef();
   const u=(k,v)=>setF(x=>({...x,[k]:v}));
-  const save=async()=>{setSaving(true);await new Promise(r=>setTimeout(r,900));setSaving(false);toast("Configurações salvas!","success");};
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.from("workspace_settings").select("*").eq("workspace_id", WORKSPACE_VANTARI).maybeSingle();
+      if (data) setF({
+        companyName: data.company_name || "Vantari",
+        domain: data.domain || "",
+        timezone: data.timezone || "America/Sao_Paulo",
+        dateFormat: data.date_format || "DD/MM/YYYY",
+        language: data.language || "pt-BR",
+        primaryColor: data.primary_color || "#0D7491",
+      });
+      setLoading(false);
+    })();
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    const { error } = await supabase.from("workspace_settings").upsert({
+      workspace_id: WORKSPACE_VANTARI,
+      company_name: f.companyName,
+      domain: f.domain,
+      timezone: f.timezone,
+      date_format: f.dateFormat,
+      language: f.language,
+      primary_color: f.primaryColor,
+      updated_at: new Date().toISOString(),
+    });
+    setSaving(false);
+    if (error) { toast("Erro: " + error.message, "error"); return; }
+    logAudit({ action:"updated", resource:"workspace_settings", resource_id: WORKSPACE_VANTARI, details:{ company_name:f.companyName, domain:f.domain } });
+    toast("Configurações salvas!","success");
+  };
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
@@ -400,7 +457,7 @@ const WorkspaceTab = ({toast}) => {
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <div style={{width:56,height:56,borderRadius:12,background:T.faint,border:`2px dashed ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center"}}><Building2 size={22} color={T.muted}/></div>
           <div>
-            <Btn variant="outline" size="sm" onClick={()=>fileRef.current?.click()} icon={<FolderOpen size={12}/>}>Escolher arquivo</Btn>
+            <Btn variant="outline" size="sm" disabled title="Em breve — upload de logo ainda não foi construído (falta bucket de storage)" icon={<FolderOpen size={12}/>}>Escolher arquivo</Btn>
             <input ref={fileRef} type="file" accept="image/*" style={{display:"none"}}/>
             <div style={{fontSize:11,color:T.muted,marginTop:4,fontFamily:T.font}}>PNG, SVG ou JPG — máx. 2 MB</div>
           </div>
@@ -438,7 +495,7 @@ const WorkspaceTab = ({toast}) => {
       </Card>
 
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={save} disabled={saving} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Configurações"}</Btn>
+        <Btn onClick={save} disabled={saving||loading} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Configurações"}</Btn>
       </div>
     </div>
   );
@@ -472,14 +529,20 @@ const TeamTab = ({toast}) => {
       status: "invited",
     });
     if (error) toast("Erro: " + error.message, "error");
-    else { toast(`Convite registado para ${invEmail}`,"success"); fetchMembers(); }
+    else {
+      logAudit({ action:"invited", resource:"team_members", resource_id: invEmail, details:{ role: invRole } });
+      toast(`Convite registado para ${invEmail}`,"success"); fetchMembers();
+    }
     setInvEmail(""); setInviting(false);
   };
 
-  const removeMember = async (id) => {
+  const removeMember = async (id, email) => {
     const { error } = await supabase.from("team_members").delete().eq("id", id);
     if (error) toast("Erro ao remover", "error");
-    else { toast("Membro removido","success"); fetchMembers(); }
+    else {
+      logAudit({ action:"deleted", resource:"team_members", resource_id: id, details:{ email } });
+      toast("Membro removido","success"); fetchMembers();
+    }
   };
 
   const openPerms=m=>{setPerms(ROLE_DEFAULTS[m.role]||{});setPermTarget(m);};
@@ -536,7 +599,7 @@ const TeamTab = ({toast}) => {
                 <td style={{padding:"13px 18px"}}>
                   <div style={{display:"flex",gap:6}}>
                     <Btn variant="outline" size="xs" onClick={()=>openPerms(m)}>Permissões</Btn>
-                    {m.role!=="admin"&&<Btn variant="danger" size="xs" onClick={()=>removeMember(m.id)}>Remover</Btn>}
+                    {m.role!=="admin"&&<Btn variant="danger" size="xs" onClick={()=>removeMember(m.id, m.email)}>Remover</Btn>}
                   </div>
                 </td>
               </tr>
@@ -557,6 +620,9 @@ const TeamTab = ({toast}) => {
               <button onClick={()=>setPermTarget(null)} style={{background:"none",border:"none",cursor:"pointer",color:T.muted,display:"flex",alignItems:"center"}}><Plus size={16} style={{transform:"rotate(45deg)"}}/></button>
             </div>
             <div style={{padding:22}}>
+              <div style={{fontSize:11.5,color:T.muted,fontFamily:T.font,marginBottom:14,padding:"8px 10px",background:T.faint,borderRadius:8}}>
+                Prévia — o controle abaixo ainda não bloqueia acesso de verdade em nenhuma página; hoje o app só diferencia Admin de não-Admin.
+              </div>
               {Object.entries(PERMISSIONS).map(([res,label])=>(
                 <div key={res} style={{marginBottom:12,padding:12,background:T.faint,borderRadius:10}}>
                   <div style={{fontSize:12,fontWeight:700,color:T.text,fontFamily:T.font,marginBottom:8}}>{label}</div>
@@ -597,6 +663,7 @@ const EmailTab = ({toast}) => {
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <PreviewBanner>Prévia — envio de campanhas já usa o Supabase (Resend/SMTP interno via Edge Function). SMTP próprio e verificação de domínio (SPF/DKIM/DMARC) ainda não estão conectados a um provedor real; os dados abaixo são de exemplo.</PreviewBanner>
       <Card>
         <SectionTitle sub="SMTP customizado ou padrão Supabase">Servidor de Email</SectionTitle>
         <Toggle checked={useSmtp} onChange={setUseSmtp} label="Usar SMTP próprio"/>
@@ -606,13 +673,13 @@ const EmailTab = ({toast}) => {
             <Input label="Porta"     value={smtp.port} onChange={e=>su("port",e.target.value)}/>
             <Input label="Usuário"   value={smtp.user} onChange={e=>su("user",e.target.value)} placeholder="usuario@empresa.com.br"/>
             <Input label="Senha"     value={smtp.pass} onChange={e=>su("pass",e.target.value)} type="password"/>
-            <Btn variant="outline" onClick={async()=>{setTesting(true);await new Promise(r=>setTimeout(r,1100));setTesting(false);toast("SMTP conectado!","success");}} disabled={testing} icon={testing?<Loader2 size={12}/>:<Plug size={12}/>}>{testing?"Testando...":"Testar Conexão"}</Btn>
+            <Btn variant="outline" disabled title="Em breve — teste de conexão SMTP real ainda não foi construído" icon={<Plug size={12}/>}>Testar Conexão</Btn>
           </div>
         )}
       </Card>
 
       <Card>
-        <SectionTitle sub="Configuração SPF, DKIM e DMARC">Domínio de Envio Verificado</SectionTitle>
+        <SectionTitle sub="Configuração SPF, DKIM e DMARC (exemplo)">Domínio de Envio Verificado</SectionTitle>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
           <Input label="Nome do Remetente" value={smtp.fromName}  onChange={e=>su("fromName",e.target.value)}/>
           <Input label="Email Remetente"   value={smtp.fromEmail} onChange={e=>su("fromEmail",e.target.value)}/>
@@ -639,20 +706,21 @@ const EmailTab = ({toast}) => {
       </Card>
 
       <div style={{display:"flex",justifyContent:"flex-end"}}>
-        <Btn onClick={async()=>{setSaving(true);await new Promise(r=>setTimeout(r,800));setSaving(false);toast("Email Config salvo!","success");}} disabled={saving} size="md" icon={saving?<Loader2 size={12}/>:<Save size={12}/>}>{saving?"Salvando...":"Salvar Email Config"}</Btn>
+        <Btn disabled title="Em breve — configuração de email ainda não persiste (depende de provedor SMTP real)" size="md" icon={<Save size={12}/>}>Salvar Email Config</Btn>
       </div>
     </div>
   );
 };
 
 const BillingTab = ({toast}) => {
-  const plan={name:"Growth",price:"R$ 497/mês",nextBilling:"01/06/2025",card:"**** **** **** 4242"};
+  const plan={name:"Growth",price:"R$ 497/mês",nextBilling:"—",card:"**** **** **** 4242"};
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <PreviewBanner>Prévia — não há integração de cobrança real (Stripe ou similar) conectada ainda. Plano, uso e faturas abaixo são dados de exemplo para referência de layout.</PreviewBanner>
       <Card>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
           <div>
-            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.font,marginBottom:4}}>Plano Atual</div>
+            <div style={{fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.font,marginBottom:4}}>Plano Atual (exemplo)</div>
             <div style={{fontSize:26,fontWeight:800,color:T.text,fontFamily:T.font,letterSpacing:"-0.03em"}}>{plan.name}</div>
             <div style={{fontSize:15,color:T.muted,fontFamily:T.font}}>{plan.price}</div>
           </div>
@@ -663,21 +731,21 @@ const BillingTab = ({toast}) => {
           </div>
         </div>
         <div style={{display:"flex",gap:8}}>
-          <Btn variant="secondary" size="md" icon={<ArrowUp size={12}/>}>Fazer Upgrade</Btn>
-          <Btn variant="outline"   size="md" icon={<CreditCard size={12}/>}>Atualizar Cartão</Btn>
-          <Btn variant="danger"    size="sm">Cancelar Plano</Btn>
+          <Btn variant="secondary" size="md" disabled title="Em breve — sem integração de cobrança conectada" icon={<ArrowUp size={12}/>}>Fazer Upgrade</Btn>
+          <Btn variant="outline"   size="md" disabled title="Em breve — sem integração de cobrança conectada" icon={<CreditCard size={12}/>}>Atualizar Cartão</Btn>
+          <Btn variant="danger"    size="sm" disabled title="Em breve — sem integração de cobrança conectada">Cancelar Plano</Btn>
         </div>
       </Card>
 
       <Card>
-        <SectionTitle sub="Maio 2025 · Atualizado em tempo real">Uso do Período</SectionTitle>
+        <SectionTitle sub="Exemplo de layout — sem métricas de uso reais ainda">Uso do Período</SectionTitle>
         {Object.values(MOCK_USAGE).map((d,i)=><UsageBar key={i} data={d}/>)}
       </Card>
 
       <Card style={{padding:0,overflow:"hidden"}}>
         <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:15,fontWeight:700,color:T.text,fontFamily:T.font}}>Histórico de Faturas</div>
-          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Todas</Btn>
+          <Btn variant="outline" size="sm" disabled title="Em breve — sem faturas reais ainda" icon={<Download size={12}/>}>Exportar Todas</Btn>
         </div>
         <table style={{width:"100%",borderCollapse:"collapse"}}>
           <thead><tr style={{background:T.faint}}>
@@ -686,13 +754,16 @@ const BillingTab = ({toast}) => {
             ))}
           </tr></thead>
           <tbody>
+            {MOCK_INVOICES.length===0 && (
+              <tr><td colSpan={5} style={{padding:30,textAlign:"center",fontSize:13,color:T.muted,fontFamily:T.font}}>Nenhuma fatura ainda — aparecem aqui quando a cobrança real estiver conectada.</td></tr>
+            )}
             {MOCK_INVOICES.map(inv=>(
               <tr key={inv.id} style={{borderTop:`1px solid ${T.border}`}}>
                 <td style={{padding:"13px 18px",fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{inv.period}</td>
                 <td style={{padding:"13px 18px",fontSize:13,color:T.text,fontFamily:T.font}}>{inv.amount}</td>
                 <td style={{padding:"13px 18px"}}><Badge color={T.green} bg="#ecfdf5">Pago</Badge></td>
                 <td style={{padding:"13px 18px",fontSize:13,color:T.muted,fontFamily:T.font}}>{inv.date}</td>
-                <td style={{padding:"13px 18px"}}><Btn variant="outline" size="xs" onClick={()=>toast("Fatura baixada!","success")} icon={<FileText size={10}/>}>PDF</Btn></td>
+                <td style={{padding:"13px 18px"}}><Btn variant="outline" size="xs" disabled icon={<FileText size={10}/>}>PDF</Btn></td>
               </tr>
             ))}
           </tbody>
@@ -702,33 +773,100 @@ const BillingTab = ({toast}) => {
   );
 };
 
+/* hash simples via Web Crypto — nunca guardamos a chave em texto puro depois de criada */
+async function sha256Hex(str) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
 const AdvancedTab = ({toast}) => {
-  const [keys,setKeys]=useState(MOCK_KEYS);
-  const [hooks,setHooks]=useState(MOCK_WEBHOOKS);
+  const [keys,setKeys]=useState([]);
+  const [hooks,setHooks]=useState([]);
+  const [loading,setLoading]=useState(true);
   const [nk,setNk]=useState({name:"",scopes:[]});
   const [createdKey,setCreatedKey]=useState(null);
   const [creating,setCreating]=useState(false);
   const [retention,setRetention]=useState("365");
   const [lgpd,setLgpd]=useState(true);
   const [flags,setFlags]=useState({ai_assistant:true,beta_scoring:false,dark_mode:false,bulk_import:true});
+  const [addingHook,setAddingHook]=useState(false);
+  const [nh,setNh]=useState({name:"",url:"",events:[]});
+  const [savingHook,setSavingHook]=useState(false);
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    const [{data:ks},{data:hs},{data:ws}] = await Promise.all([
+      supabase.from("api_keys").select("*").eq("workspace_id",WORKSPACE_VANTARI).is("revoked_at",null).order("created_at",{ascending:false}),
+      supabase.from("webhook_endpoints").select("*").eq("workspace_id",WORKSPACE_VANTARI).order("created_at",{ascending:false}),
+      supabase.from("workspace_settings").select("*").eq("workspace_id",WORKSPACE_VANTARI).maybeSingle(),
+    ]);
+    setKeys(ks||[]); setHooks(hs||[]);
+    if (ws) { setRetention(ws.retention_days||"365"); setLgpd(ws.lgpd_enabled??true); setFlags(ws.feature_flags||flags); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const createKey=async()=>{
     if(!nk.name)return toast("Nome obrigatório","error");
-    setCreating(true);await new Promise(r=>setTimeout(r,700));
-    const full="vnt_live_"+Math.random().toString(36).substring(2,34);
+    setCreating(true);
+    const full="vnt_live_"+Math.random().toString(36).substring(2,34)+Math.random().toString(36).substring(2,10);
+    const hash = await sha256Hex(full);
+    const { error } = await supabase.from("api_keys").insert({
+      workspace_id: WORKSPACE_VANTARI, name: nk.name, key_hash: hash, key_prefix:"vnt_live", scopes: nk.scopes,
+    });
+    setCreating(false);
+    if (error) return toast("Erro: "+error.message,"error");
     setCreatedKey(full);
-    setKeys(k=>[...k,{id:"k"+Date.now(),name:nk.name,prefix:"vnt_live",scopes:nk.scopes,lastUsed:"Nunca",created:new Date().toLocaleDateString("pt-BR")}]);
-    setNk({name:"",scopes:[]});setCreating(false);
+    logAudit({ action:"created", resource:"api_keys", details:{ name:nk.name, scopes:nk.scopes } });
+    setNk({name:"",scopes:[]});
+    fetchAll();
+  };
+
+  const revokeKey = async (k) => {
+    const { error } = await supabase.from("api_keys").update({ revoked_at: new Date().toISOString() }).eq("id",k.id);
+    if (error) return toast("Erro: "+error.message,"error");
+    logAudit({ action:"deleted", resource:"api_keys", resource_id:k.id, details:{ name:k.name } });
+    toast("Chave revogada","success"); fetchAll();
   };
 
   const tScope=s=>setNk(k=>({...k,scopes:k.scopes.includes(s)?k.scopes.filter(x=>x!==s):[...k.scopes,s]}));
   const flagLabels={ai_assistant:"Assistente IA (beta)",beta_scoring:"Novo Scoring Engine",dark_mode:"Dark Mode",bulk_import:"Importação em Massa"};
 
+  const HOOK_EVENTS = ["lead.created","lead.updated","deal.stage_changed","form.submitted"];
+  const tHookEvent = e => setNh(h=>({...h,events:h.events.includes(e)?h.events.filter(x=>x!==e):[...h.events,e]}));
+
+  const saveHook = async () => {
+    if (!nh.name || !nh.url) return toast("Nome e URL são obrigatórios","error");
+    setSavingHook(true);
+    const { error } = await supabase.from("webhook_endpoints").insert({
+      workspace_id: WORKSPACE_VANTARI, name: nh.name, url: nh.url, events: nh.events,
+    });
+    setSavingHook(false);
+    if (error) return toast("Erro: "+error.message,"error");
+    logAudit({ action:"created", resource:"webhook_endpoints", details:{ name:nh.name, url:nh.url } });
+    toast("Webhook adicionado!","success"); setNh({name:"",url:"",events:[]}); setAddingHook(false); fetchAll();
+  };
+
+  const toggleHook = async (w) => {
+    const { error } = await supabase.from("webhook_endpoints").update({ enabled: !w.enabled }).eq("id",w.id);
+    if (error) return toast("Erro: "+error.message,"error");
+    fetchAll();
+  };
+
+  const persistWorkspaceExtra = async (patch) => {
+    await supabase.from("workspace_settings").upsert({ workspace_id: WORKSPACE_VANTARI, ...patch, updated_at:new Date().toISOString() });
+  };
+
+  const onLgpdChange = (v) => { setLgpd(v); persistWorkspaceExtra({ lgpd_enabled:v }); };
+  const onRetentionChange = (v) => { setRetention(v); persistWorkspaceExtra({ retention_days:v }); };
+  const onFlagChange = (k,v) => { const next={...flags,[k]:v}; setFlags(next); persistWorkspaceExtra({ feature_flags:next }); };
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       {/* API Keys */}
       <Card>
-        <SectionTitle sub="Autorize integrações externas com escopos granulares">Chaves de API</SectionTitle>
+        <SectionTitle sub="Autorize integrações externas com escopos granulares — nenhum endpoint da API valida essas chaves ainda, mas a lista persiste">Chaves de API</SectionTitle>
         <div style={{display:"flex",gap:10,marginBottom:12,alignItems:"flex-end"}}>
           <div style={{flex:1}}><Input label="Nome da Chave" value={nk.name} onChange={e=>setNk(k=>({...k,name:e.target.value}))} placeholder="Ex: Integração HubSpot"/></div>
           <Btn onClick={createKey} disabled={creating} size="md" icon={creating?<Loader2 size={12}/>:<Key size={12}/>}>{creating?"Gerando...":"Nova Chave"}</Btn>
@@ -746,43 +884,71 @@ const AdvancedTab = ({toast}) => {
             </div>
           </div>
         )}
+        {loading ? (
+          <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Carregando...</div>
+        ) : keys.length===0 ? (
+          <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Nenhuma chave criada ainda.</div>
+        ) : (
         <div style={{display:"flex",flexDirection:"column",gap:8}}>
           {keys.map(k=>(
             <div key={k.id} style={{padding:14,background:T.faint,borderRadius:10,border:`1px solid ${T.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <div>
                 <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font}}>{k.name}</div>
-                <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{k.prefix}_••••••••••••••••</code>
-                <div style={{display:"flex",gap:4,marginTop:4}}>{k.scopes.map(s=><Badge key={s} color={T.muted}>{s}</Badge>)}</div>
+                <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{k.key_prefix}_••••••••••••••••</code>
+                <div style={{display:"flex",gap:4,marginTop:4}}>{(k.scopes||[]).map(s=><Badge key={s} color={T.muted}>{s}</Badge>)}</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-                <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>Usado: {k.lastUsed}</div>
-                <Btn variant="danger" size="xs" onClick={()=>{setKeys(ks=>ks.filter(x=>x.id!==k.id));toast("Chave revogada","success");}}>Revogar</Btn>
+                <div style={{fontSize:11,color:T.muted,fontFamily:T.font}}>Usado: {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString("pt-BR") : "Nunca"}</div>
+                <Btn variant="danger" size="xs" onClick={()=>revokeKey(k)}>Revogar</Btn>
               </div>
             </div>
           ))}
         </div>
+        )}
       </Card>
 
       {/* Webhooks */}
       <Card>
-        <SectionTitle sub="Endpoints para eventos em tempo real">Webhooks</SectionTitle>
+        <SectionTitle sub="Endpoints para eventos em tempo real — cadastro persiste; disparo automático ainda não foi construído">Webhooks</SectionTitle>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {!loading && hooks.length===0 && !addingHook && (
+            <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>Nenhum webhook cadastrado ainda.</div>
+          )}
           {hooks.map(w=>(
             <div key={w.id} style={{padding:14,background:T.faint,borderRadius:10,border:`1px solid ${T.border}`}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
                   <div style={{fontSize:13,fontWeight:600,color:T.text,fontFamily:T.font,display:"flex",alignItems:"center",gap:8}}>
-                    {w.name}{w.failCount>0&&<Badge color={T.red} bg="#fee2e2">{w.failCount} falhas</Badge>}
+                    {w.name}{w.fail_count>0&&<Badge color={T.red} bg="#fee2e2">{w.fail_count} falhas</Badge>}
                   </div>
                   <code style={{fontSize:11,color:T.muted,fontFamily:"monospace"}}>{w.url}</code>
-                  <div style={{display:"flex",gap:4,marginTop:6}}>{w.events.map(e=><Badge key={e} color={T.teal}>{e}</Badge>)}</div>
+                  <div style={{display:"flex",gap:4,marginTop:6}}>{(w.events||[]).map(e=><Badge key={e} color={T.teal}>{e}</Badge>)}</div>
                 </div>
-                <Toggle checked={w.enabled} onChange={()=>setHooks(h=>h.map(x=>x.id===w.id?{...x,enabled:!x.enabled}:x))}/>
+                <Toggle checked={w.enabled} onChange={()=>toggleHook(w)}/>
               </div>
-              <div style={{fontSize:11,color:T.muted,marginTop:6,fontFamily:T.font}}>Último disparo: {w.lastTriggered}</div>
+              <div style={{fontSize:11,color:T.muted,marginTop:6,fontFamily:T.font}}>Último disparo: {w.last_triggered ? new Date(w.last_triggered).toLocaleDateString("pt-BR") : "Nunca"}</div>
             </div>
           ))}
-          <Btn variant="outline" size="sm" icon={<Plus size={12}/>}>Adicionar Webhook</Btn>
+          {addingHook ? (
+            <div style={{padding:14,background:T.faint,borderRadius:10,border:`1px solid ${T.border}`,display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <Input label="Nome" value={nh.name} onChange={e=>setNh(h=>({...h,name:e.target.value}))} placeholder="Ex: CRM externo"/>
+                <Input label="URL" value={nh.url} onChange={e=>setNh(h=>({...h,url:e.target.value}))} placeholder="https://exemplo.com/webhook"/>
+              </div>
+              <div>
+                <FL>Eventos</FL>
+                <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                  {HOOK_EVENTS.map(e=>{const has=nh.events.includes(e);return <button key={e} onClick={()=>tHookEvent(e)} style={{padding:"3px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",border:`1.5px solid ${has?T.teal:T.border}`,background:has?T.teal+"15":"#fff",color:has?T.teal:T.muted,fontFamily:T.font}}>{e}</button>;})}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                <Btn variant="outline" size="sm" onClick={()=>{setAddingHook(false);setNh({name:"",url:"",events:[]});}}>Cancelar</Btn>
+                <Btn size="sm" onClick={saveHook} disabled={savingHook} icon={savingHook?<Loader2 size={12}/>:<Save size={12}/>}>{savingHook?"Salvando...":"Salvar Webhook"}</Btn>
+              </div>
+            </div>
+          ) : (
+            <Btn variant="outline" size="sm" icon={<Plus size={12}/>} onClick={()=>setAddingHook(true)}>Adicionar Webhook</Btn>
+          )}
         </div>
       </Card>
 
@@ -790,11 +956,11 @@ const AdvancedTab = ({toast}) => {
       <Card>
         <SectionTitle sub="Conformidade com a Lei Geral de Proteção de Dados">LGPD & Retenção de Dados</SectionTitle>
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <Toggle checked={lgpd} onChange={setLgpd} label="Modo LGPD ativo — anonimiza dados ao excluir"/>
-          <Sel label="Retenção de Dados" value={retention} onChange={e=>setRetention(e.target.value)} options={[{value:"90",label:"90 dias"},{value:"180",label:"180 dias"},{value:"365",label:"1 ano"},{value:"730",label:"2 anos"},{value:"never",label:"Indefinido"}]}/>
+          <Toggle checked={lgpd} onChange={onLgpdChange} label="Modo LGPD ativo — anonimiza dados ao excluir"/>
+          <Sel label="Retenção de Dados" value={retention} onChange={e=>onRetentionChange(e.target.value)} options={[{value:"90",label:"90 dias"},{value:"180",label:"180 dias"},{value:"365",label:"1 ano"},{value:"730",label:"2 anos"},{value:"never",label:"Indefinido"}]}/>
           <div style={{display:"flex",gap:8}}>
-            <Btn variant="outline" size="sm" icon={<Package size={12}/>} onClick={()=>toast("Backup iniciado!","success")}>Exportar Backup</Btn>
-            <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={()=>toast("Restauração iniciada","success")}>Restaurar Config</Btn>
+            <Btn variant="outline" size="sm" icon={<Package size={12}/>} disabled title="Em breve — exportação/restauração de backup ainda não foi construída">Exportar Backup</Btn>
+            <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} disabled title="Em breve — exportação/restauração de backup ainda não foi construída">Restaurar Config</Btn>
           </div>
         </div>
       </Card>
@@ -803,42 +969,86 @@ const AdvancedTab = ({toast}) => {
       <Card>
         <SectionTitle sub="Funcionalidades em beta">Feature Flags</SectionTitle>
         <div style={{display:"flex",flexDirection:"column",gap:13}}>
-          {Object.entries(flags).map(([k,v])=><Toggle key={k} checked={v} onChange={val=>setFlags(f=>({...f,[k]:val}))} label={flagLabels[k]}/>)}
+          {Object.entries(flags).map(([k,v])=><Toggle key={k} checked={v} onChange={val=>onFlagChange(k,val)} label={flagLabels[k]}/>)}
         </div>
       </Card>
     </div>
   );
 };
 
+const ACTION_LABEL = { created:"criou", updated:"atualizou", deleted:"removeu", invited:"convidou" };
+const RESOURCE_LABEL = { team_members:"membro da equipe", custom_fields:"campo personalizado", tracked_pages:"página rastreada", workspace_settings:"configurações do workspace", api_keys:"chave de API", webhook_endpoints:"webhook" };
+
+const timeAgo = (iso) => {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diffMs/60000);
+  if (min<1) return "agora";
+  if (min<60) return `${min}min`;
+  const h = Math.floor(min/60);
+  if (h<24) return `${h}h`;
+  return `${Math.floor(h/24)}d`;
+};
+
 const AuditTab = () => {
   const [filter,setFilter]=useState("all");
-  const actionColor={updated:T.teal,created:T.green,deleted:T.coral,invited:T.amber,revoked:T.coral};
+  const [logs,setLogs]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const actionColor={updated:T.teal,created:T.green,deleted:T.coral,invited:T.amber};
   const filterOptions=[{id:"all",label:"Todos"},{id:"created",label:"Criou"},{id:"updated",label:"Atualizou"},{id:"deleted",label:"Deletou"},{id:"invited",label:"Convidou"}];
-  const filtered=filter==="all"?MOCK_AUDIT:MOCK_AUDIT.filter(a=>a.action===filter);
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from("audit_logs").select("*").eq("workspace_id",WORKSPACE_VANTARI).order("created_at",{ascending:false}).limit(200);
+    setLogs(data||[]);
+    setLoading(false);
+  }, []);
+  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+
+  const filtered = filter==="all" ? logs : logs.filter(a=>a.action===filter);
+
+  const exportCsv = () => {
+    const header = "data,usuario,acao,recurso,recurso_id,detalhes";
+    const rows = filtered.map(l => [
+      new Date(l.created_at).toISOString(), l.user_email||"", l.action, l.resource, l.resource_id||"",
+      JSON.stringify(l.details||{}).replace(/"/g,'""'),
+    ].map(v=>`"${v}"`).join(","));
+    const csv = [header,...rows].join("\n");
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `audit-log-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
       <Card>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-          <SectionTitle sub="Registro completo de ações no workspace">Activity Log</SectionTitle>
+          <SectionTitle sub="Registro real de ações no workspace (Equipe, Campos, Tracking, Avançado, Workspace)">Activity Log</SectionTitle>
           <div style={{display:"flex",gap:5}}>
             {filterOptions.map(fo=>(
               <button key={fo.id} onClick={()=>setFilter(fo.id)} style={{padding:"5px 12px",borderRadius:20,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:T.font,border:`1.5px solid ${filter===fo.id?T.teal:T.border}`,background:filter===fo.id?T.teal:"#fff",color:filter===fo.id?"#fff":T.muted,transition:"all 0.15s"}}>{fo.label}</button>
             ))}
           </div>
         </div>
-        {filtered.map((log,i)=>(
+        {loading ? (
+          <div style={{padding:30,textAlign:"center",fontSize:13,color:T.muted,fontFamily:T.font}}>Carregando...</div>
+        ) : filtered.length===0 ? (
+          <div style={{padding:30,textAlign:"center",fontSize:13,color:T.muted,fontFamily:T.font}}>Nenhuma atividade ainda — ações em Equipe, Campos Personalizados, Lead Tracking, Workspace e Avançado aparecem aqui.</div>
+        ) : filtered.map((log,i)=>(
           <div key={log.id} style={{display:"flex",gap:12,padding:"14px 0",borderBottom:i<filtered.length-1?`1px solid ${T.border}`:"none",alignItems:"flex-start"}}>
-            <div style={{width:34,height:34,borderRadius:10,background:T.faint,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>{log.icon}</div>
+            <div style={{width:34,height:34,borderRadius:10,background:T.faint,border:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><ClipboardList size={15} color={actionColor[log.action]||T.muted}/></div>
             <div style={{flex:1}}>
               <div style={{fontSize:13,color:T.text,fontFamily:T.font}}>
-                <strong>{log.user}</strong>{" "}<span style={{color:actionColor[log.action]||T.muted,fontWeight:600}}>{log.action}</span>{" "}{log.detail}
+                <strong>{log.user_email||"—"}</strong>{" "}<span style={{color:actionColor[log.action]||T.muted,fontWeight:600}}>{ACTION_LABEL[log.action]||log.action}</span>{" "}{RESOURCE_LABEL[log.resource]||log.resource}
               </div>
-              <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>{log.resource} · {log.time} atrás</div>
+              <div style={{fontSize:11,color:T.muted,fontFamily:T.font,marginTop:3}}>{log.resource_id ? `${log.resource_id} · ` : ""}{timeAgo(log.created_at)} atrás</div>
             </div>
           </div>
         ))}
         <div style={{marginTop:14,textAlign:"center"}}>
-          <Btn variant="outline" size="sm" icon={<Download size={12}/>}>Exportar Logs CSV</Btn>
+          <Btn variant="outline" size="sm" icon={<Download size={12}/>} onClick={exportCsv} disabled={filtered.length===0}>Exportar Logs CSV</Btn>
         </div>
       </Card>
     </div>
@@ -857,19 +1067,20 @@ const SupportTab = ({toast}) => {
   ];
   return (
     <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <PreviewBanner>Prévia — ainda não há central de documentação, canal de vídeos ou sistema de tickets conectados. Para suporte agora, fale direto com a equipe em suporte@vantari.com.br.</PreviewBanner>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
         {[{Icon:BookOpen,title:"Documentação",desc:"Guides e tutoriais completos",action:"Acessar Docs"},{Icon:Play,title:"Vídeo Tutoriais",desc:"Aprenda no YouTube",action:"Ver Vídeos"},{Icon:MessageSquare,title:"Comunidade",desc:"Tire dúvidas com outros usuários",action:"Acessar"}].map(r=>(
-          <Card key={r.title} style={{textAlign:"center",cursor:"pointer"}}>
+          <Card key={r.title} style={{textAlign:"center"}}>
             <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><r.Icon size={28} color={T.teal}/></div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font}}>{r.title}</div>
             <div style={{fontSize:12,color:T.muted,fontFamily:T.font,margin:"4px 0 12px"}}>{r.desc}</div>
-            <Btn variant="outline" size="sm">{r.action}</Btn>
+            <Btn variant="outline" size="sm" disabled title="Em breve — ainda não existe">{r.action}</Btn>
           </Card>
         ))}
       </div>
 
       <Card>
-        <SectionTitle sub="Nossa equipe responde em até 24 horas úteis">Abrir Ticket de Suporte</SectionTitle>
+        <SectionTitle sub="Envio ainda não está conectado a um sistema de suporte real — use o email acima por enquanto">Abrir Ticket de Suporte (prévia)</SectionTitle>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:12}}>
             <Input label="Assunto" value={ticket.subject} onChange={e=>setTicket(t=>({...t,subject:e.target.value}))} placeholder="Descreva o problema brevemente"/>
@@ -882,13 +1093,13 @@ const SupportTab = ({toast}) => {
               onFocus={e=>e.target.style.borderColor=T.teal} onBlur={e=>e.target.style.borderColor=T.border}/>
           </div>
           <div style={{display:"flex",justifyContent:"flex-end"}}>
-            <Btn onClick={async()=>{if(!ticket.subject||!ticket.body)return toast("Preencha assunto e descrição","error");setSubmitting(true);await new Promise(r=>setTimeout(r,900));setTicket({subject:"",body:"",priority:"normal"});setSubmitting(false);toast("Ticket enviado! Resposta em até 24h.","success");}} disabled={submitting} size="md" icon={submitting?<Loader2 size={12}/>:<Send size={12}/>}>{submitting?"Enviando...":"Enviar Ticket"}</Btn>
+            <Btn disabled title="Em breve — sem sistema de suporte conectado ainda" size="md" icon={<Send size={12}/>}>Enviar Ticket</Btn>
           </div>
         </div>
       </Card>
 
       <Card>
-        <SectionTitle sub="Últimas atualizações da plataforma">Changelog</SectionTitle>
+        <SectionTitle sub="Últimas atualizações da plataforma (exemplo)">Changelog</SectionTitle>
         {changelog.map((c,i)=>(
           <div key={c.version} style={{display:"flex",gap:12,padding:"12px 0",borderBottom:i<changelog.length-1?`1px solid ${T.border}`:"none",alignItems:"center"}}>
             <span style={{fontSize:11,fontWeight:700,color:"#fff",background:T.teal,padding:"3px 8px",borderRadius:6,whiteSpace:"nowrap",fontFamily:T.font}}>{c.version}</span>
@@ -984,6 +1195,7 @@ const CustomFieldsTab = ({ toast }) => {
     }
     setSaving(false);
     if (res.error) { toast(`Erro: ${res.error.message}`, "error"); return; }
+    logAudit({ action: editing==="new"?"created":"updated", resource:"custom_fields", resource_id: res.data?.api_id, details:{ label: payload.label } });
     toast(editing === "new" ? "Campo criado!" : "Campo atualizado!", "success");
     closeEditor();
     fetchFields();
@@ -993,6 +1205,7 @@ const CustomFieldsTab = ({ toast }) => {
     if (!confirm(`Excluir o campo "${f.label}"?\nIsso vai remover os valores associados em todos os leads.`)) return;
     const { error } = await supabase.from("custom_fields").delete().eq("id", f.id);
     if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action:"deleted", resource:"custom_fields", resource_id: f.api_id, details:{ label:f.label } });
     toast("Campo removido", "success");
     fetchFields();
   };
@@ -1235,6 +1448,7 @@ const TrackingTab = ({ toast }) => {
     }
     setSaving(false);
     if (res.error) { toast(`Erro: ${res.error.message}`, "error"); return; }
+    logAudit({ action: editing==="new"?"created":"updated", resource:"tracked_pages", resource_id: payload.url, details:{ funnel:payload.funnel } });
     toast(editing === "new" ? "Página adicionada!" : "Página atualizada!", "success");
     closeEditor();
     fetchPages();
@@ -1244,6 +1458,7 @@ const TrackingTab = ({ toast }) => {
     if (!confirm(`Remover rastreamento de "${p.url}"?`)) return;
     const { error } = await supabase.from("tracked_pages").delete().eq("id", p.id);
     if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action:"deleted", resource:"tracked_pages", resource_id: p.url });
     toast("Página removida", "success");
     fetchPages();
   };
@@ -1421,20 +1636,24 @@ const TrackingTab = ({ toast }) => {
 /* ═══════════════════════════════════════════════════════════
    ROOT — topbar idêntico ao vantari-analytics-dashboard
 ═══════════════════════════════════════════════════════════ */
-const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+const NavSection = ({ label, collapsed=false }) => (
+  collapsed ? <div style={{height:10}}/> : (
+    <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>{label}</div>
+  )
 );
 
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position:"relative",
         display:"flex",alignItems:"center",gap:9,
-        padding:"8px 20px",fontSize:13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize:13.5,
         fontWeight:active?700:600,fontFamily:T.font,
         color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
         background:active?"rgba(255,255,255,0.10)":hov?"rgba(255,255,255,0.06)":"transparent",
@@ -1443,13 +1662,75 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
       {active && (
         <span style={{position:"absolute",left:0,top:6,bottom:6,width:3,background:"linear-gradient(180deg, #14A273 0%, #5EEAD4 100%)",borderRadius:"0 3px 3px 0"}} />
       )}
-      {Icon && <Icon size={16} aria-hidden="true" />}{label}
+      {Icon && <Icon size={16} aria-hidden="true" />}{!collapsed && label}
     </div>
   );
 };
 
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function VantariSettingsAdmin() {
   const [activeTab,setActiveTab] = useState("workspace");
+  const [collapsed, setCollapsed] = useState(false);
   const {toasts,push:toast} = useToast();
 
   return (
@@ -1464,37 +1745,46 @@ export default function VantariSettingsAdmin() {
       `}</style>
 
       {/* ── SIDEBAR ── */}
-      <div style={{width:240,background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"hidden"}}>
+      <div style={{width: collapsed ? 64 : 240, transition:"width 0.15s", background:T.sidebarBg,display:"flex",flexDirection:"column",flexShrink:0,position:"relative",overflow:"visible"}}>
         {/* glow topo-direito */}
         <div style={{position:"absolute",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 90% 0%, rgba(20,162,115,.25) 0%, transparent 50%)"}} />
 
         {/* Brand */}
-        <div style={{padding:"20px 20px 0",position:"relative"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+        <div style={{padding: collapsed ? "20px 0 0" : "20px 20px 0",position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent: collapsed ? "center" : "flex-start",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
             <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
               <img src="/icone.png" alt="" style={{width:22,height:22}}/>
             </div>
-            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
-            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+            {!collapsed && <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>}
+            {!collapsed && <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>}
           </div>
         </div>
 
         <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"     />
-          <NavItem icon={Users}          label="Leads"          path="/leads"         />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"        />
-          <NavSection label="CRM"/>
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring"        path="/scoring"       />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"       />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  />
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações"    path="/integrations"  />
+          <NavSection label="Principal" collapsed={collapsed}/>
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"     collapsed={collapsed}/>
+          <NavItem icon={Users}          label="Leads"          path="/leads"         collapsed={collapsed}/>
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed}/>
+          <NavSection label="CRM" collapsed={collapsed}/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed}/>
+          <NavSection label="Ferramentas" collapsed={collapsed}/>
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"       collapsed={collapsed}/>
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"       collapsed={collapsed}/>
+          <NavItem icon={Filter}         label="Segmentações"   path="/segments"      collapsed={collapsed}/>
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing"  collapsed={collapsed}/>
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed}/>
+          <NavSection label="Sistema" collapsed={collapsed}/>
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations"  collapsed={collapsed}/>
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings" active />
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" active collapsed={collapsed}/>
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display:"flex", alignItems:"center", justifyContent: collapsed ? "center" : "flex-end", gap:6, padding: collapsed ? "8px 0" : "8px 20px", fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontFamily:T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true"/> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true"/></>}
+          </div>
         </div>
       </div>
 

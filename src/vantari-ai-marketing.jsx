@@ -7,7 +7,7 @@ import {
   RefreshCw, Sliders, CheckCircle2, Search, Save, Download,
   Brain, Zap, AtSign, Hash, Lightbulb, User, Link2,
   ClipboardList, Monitor, Video, BookOpen, ArrowUp,
-  MessageSquare, Sparkles, Send, ChevronRight, Copy
+  MessageSquare, Sparkles, Send, ChevronRight, ChevronLeft, Copy, Filter, LogOut
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -62,11 +62,13 @@ const T = {
 };
 
 /* ═══════════════════════════════════════════════════
-   MOCK DATABASE
+   WORKSPACE + DEFAULTS (persistidos em public.ai_settings)
 ═══════════════════════════════════════════════════ */
-const MOCK_SETTINGS = {
-  workspace_id: "ws_1",
-  model_preference: "gemini-2.5-flash",
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+
+const DEFAULT_SETTINGS = {
+  workspace_id: WORKSPACE_VANTARI,
+  model_preference: "gemini-flash-latest",
   temperature: 0.7,
   custom_prompts: {
     email:   "Você é um copywriter especialista em marketing B2B brasileiro. Escreva emails persuasivos, claros e com boa entregabilidade.",
@@ -75,11 +77,26 @@ const MOCK_SETTINGS = {
   },
 };
 
+// grava cada geração de IA em public.ai_generations (histórico real, lido pela
+// aba "Histórico & Analytics" — antes disso nada era persistido)
+const logGeneration = async ({ type, prompt, result, model, temperature, tokens }) => {
+  try {
+    await supabase.from("ai_generations").insert({
+      workspace_id: WORKSPACE_VANTARI,
+      type, prompt: String(prompt).slice(0, 2000), result: String(result).slice(0, 8000),
+      model, temperature, tokens: tokens || 0,
+    });
+  } catch (e) {
+    console.error("Falha ao registrar geração de IA no histórico:", e);
+  }
+};
+
 
 const MODELS = [
-  { id:"gemini-2.5-flash",  name:"Gemini 2.5 Flash", provider:"Google", cost:"rápido e econômico", badge:"Recomendado", color:T.blue   },
-  { id:"gemini-flash-latest", name:"Gemini Flash (latest)", provider:"Google", cost:"sempre o flash atual", badge:"Auto", color:T.teal },
-  { id:"gemini-2.5-pro",    name:"Gemini 2.5 Pro",   provider:"Google", cost:"mais capaz (requer billing)", badge:"Avançado", color:T.purple },
+  // gemini-2.5-flash foi aposentado pelo Google para novos usuários (jul/2026) — usar sempre
+  // o alias "-latest" evita quebrar de novo quando a versão numerada mudar.
+  { id:"gemini-flash-latest", name:"Gemini Flash (latest)", provider:"Google", cost:"sempre o flash atual", badge:"Recomendado", color:T.blue },
+  { id:"gemini-pro-latest",   name:"Gemini Pro (latest)",   provider:"Google", cost:"mais capaz (requer billing)", badge:"Avançado", color:T.purple },
 ];
 const modelLabel = (id) => (MODELS.find(m => m.id === id) || {}).name || id;
 
@@ -94,12 +111,23 @@ const CONTENT_ICONS = { email:Mail, blog:BookOpen, case_study:BarChart2, webinar
 /* ═══════════════════════════════════════════════════
    AI API CALL
 ═══════════════════════════════════════════════════ */
-const callAI = async (systemPrompt, userPrompt, model="gemini-2.0-flash", temperature=0.7) => {
+const callAI = async (systemPrompt, userPrompt, model="gemini-flash-latest", temperature=0.7) => {
   // chama a Edge Function ai-generate (Gemini server-side; chave nunca vai ao navegador)
   const { data, error } = await supabase.functions.invoke("ai-generate", {
     body: { system: systemPrompt, prompt: userPrompt, model, temperature },
   });
-  if (error) throw new Error(error.message || "Falha ao chamar a IA");
+  if (error) {
+    // Quando a function responde com status != 2xx, o supabase-js só preenche
+    // `error.message` com o texto genérico "Edge Function returned a non-2xx
+    // status code" — o motivo real (ex.: "GEMINI_API_KEY não configurada")
+    // vem no corpo JSON da resposta, acessível via error.context (Response).
+    let detail = error.message || "Falha ao chamar a IA";
+    try {
+      const body = await error.context?.json?.();
+      if (body?.error) detail = body.error;
+    } catch { /* corpo não era JSON — mantém a mensagem genérica */ }
+    throw new Error(detail);
+  }
   if (data?.error) throw new Error(data.error);
   return { text: data?.text || "", tokens: data?.tokens || 0 };
 };
@@ -187,21 +215,25 @@ const Spinner = () => (
 );
 
 /* ─── SIDEBAR NAV HELPERS ─── */
-const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
+      {label}
+    </div>
+  )
 );
-const NavItem = ({ icon:Icon, label, active=false, path }) => {
+const NavItem = ({ icon:Icon, label, active=false, path, collapsed=false }) => {
   const [hov,setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position:"relative",
         display:"flex",alignItems:"center",gap:9,
-        padding:"8px 20px",fontSize:13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize:13.5,
         fontWeight:active?700:600,
         fontFamily:T.font,
         color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
@@ -215,10 +247,71 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
           borderRadius:"0 3px 3px 0",
         }}/>
       )}
-      {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
+      {Icon&&<Icon size={16} aria-hidden="true"/>}{!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════
    TAB 1: GERAÇÃO DE EMAIL
@@ -248,6 +341,7 @@ const EmailGenTab = ({ settings, onSave }) => {
       setGen(r.text);
       setMeta({ model:settings.model_preference, tokens:r.tokens, timestamp:new Date().toISOString() });
       setChat(c=>[...c,{role:"assistant",content:"Email gerado com sucesso! Veja o preview ao lado. Quer ajustar algum elemento?"}]);
+      logGeneration({ type:"email", prompt:userMsg, result:r.text, model:settings.model_preference, temperature:settings.temperature, tokens:r.tokens });
     } catch(e) {
       setChat(c=>[...c,{role:"assistant",content:`Erro ao gerar: ${e.message}`}]);
     }
@@ -408,26 +502,22 @@ const SubjectOptTab = ({ settings }) => {
   const [subject,setSubject] = useState("");
   const [loading,setLoad]    = useState(false);
   const [results,setResults] = useState(null);
+  const [error,  setError]   = useState(null);
 
   const analyzeAndSuggest = async () => {
     if(!subject.trim()||loading) return;
-    setLoad(true); setResults(null);
+    setLoad(true); setResults(null); setError(null);
     const sys = settings.custom_prompts.subject + `\n\nResponda APENAS com JSON válido:\n{"score":0-100,"analysis":{"length":"obs","emojis":"obs","urgency":"obs","personalization":"obs","clarity":"obs"},"suggestions":[{"subject":"texto","score":0-100,"tags":["tag1"]},...] }\n\nGere 4 sugestões. Português brasileiro.`;
     try {
       const r = await callAI(sys, `Analise e melhore este assunto:\n"${subject}"`, settings.model_preference, 0.8);
       const clean = r.text.replace(/```json|```/g,"").trim();
-      setResults(JSON.parse(clean));
+      const parsed = JSON.parse(clean);
+      setResults(parsed);
+      logGeneration({ type:"subject", prompt:subject, result:JSON.stringify(parsed.suggestions||[]), model:settings.model_preference, temperature:0.8, tokens:r.tokens });
     } catch(e) {
-      setResults({
-        score:68,
-        analysis:{ length:"Adequado (45 chars)", emojis:"Nenhum — considere adicionar 1 emoji relevante", urgency:"Baixa — adicione gatilho temporal", personalization:"Sem personalização — use {{lead.name}}", clarity:"Clara e direta" },
-        suggestions:[
-          { subject:`Oferta relâmpago — ${subject} só hoje!`, score:82, tags:["urgência"]        },
-          { subject:`{{lead.name}}, ${subject.toLowerCase()}`, score:79, tags:["personalização"] },
-          { subject:`[Exclusivo] ${subject}`,                  score:76, tags:["exclusividade"]  },
-          { subject:`${subject} (+ bônus surpresa)`,           score:73, tags:["curiosidade"]    },
-        ]
-      });
+      // não inventa uma análise falsa — mostra o erro real (chave da IA ausente,
+      // falha de rede, resposta que não veio em JSON válido, etc.)
+      setError(e.message || "Falha ao analisar o assunto com IA.");
     }
     setLoad(false);
   };
@@ -472,6 +562,13 @@ const SubjectOptTab = ({ settings }) => {
         <div style={{textAlign:"center",padding:48,color:T.muted,display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
           <Spinner/><span style={{fontFamily:T.font,fontSize:14,fontWeight:600}}>Analisando assunto com IA…</span>
         </div>
+      )}
+
+      {error&&!loading&&(
+        <Card style={{padding:20,border:`1px solid ${T.red}40`,borderLeft:`3px solid ${T.red}`,background:"#FFF5F4"}}>
+          <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.red,margin:"0 0 4px"}}>Não foi possível analisar com IA</p>
+          <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:0,fontWeight:600}}>{error}</p>
+        </Card>
       )}
 
       {results&&(
@@ -545,32 +642,33 @@ const SummaryTab = ({ settings, leads }) => {
   const [selected,   setSelected]   = useState(null);
   const [loading,    setLoad]       = useState(false);
   const [summaries,  setSummaries]  = useState({});
+  const [errors,     setErrors]     = useState({});
 
   const generateSummary = async (lead) => {
     setSelected(lead);
     if(summaries[lead.id]) return;
-    setLoad(true);
+    setLoad(true); setErrors(p=>{ const n={...p}; delete n[lead.id]; return n; });
     const interactionDesc = lead.interactions.map(i=>`- ${i.label}: ${i.count}x (${i.detail})`).join("\n");
     const sys = settings.custom_prompts.summary + `\nResponda APENAS com JSON válido:\n{"summary":"texto 2-3 frases","insights":["insight1","insight2","insight3"],"intent_score":0-100,"next_action":"recomendação","stage":"Lead Frio|Nutrindo|MQL|SQL|Pronto para Venda"}\nPortuguês brasileiro.`;
     const prompt = `Lead: ${lead.name} (${lead.company})\nScore atual: ${lead.score}/100\n\nInterações:\n${interactionDesc}`;
     try {
       const r = await callAI(sys, prompt, settings.model_preference, 0.4);
       const clean = r.text.replace(/```json|```/g,"").trim();
-      setSummaries(p=>({...p,[lead.id]:JSON.parse(clean)}));
+      const parsed = JSON.parse(clean); // parse FORA do updater — se der erro de sintaxe,
+      // precisa estourar aqui dentro do try/catch, não dentro de um callback de setState
+      // (o React pode reinvocar esse callback depois, fora do try/catch, e derrubar a tela)
+      setSummaries(p=>({...p,[lead.id]:parsed}));
+      logGeneration({ type:"summary", prompt:`${lead.name} (${lead.company})`, result:parsed.summary||"", model:settings.model_preference, temperature:0.4, tokens:r.tokens });
     } catch(e) {
-      setSummaries(p=>({...p,[lead.id]:{
-        summary:`${lead.name} demonstra interesse em nossa plataforma com ${lead.interactions.reduce((a,b)=>a+b.count,0)} interações registradas.`,
-        insights:["Engajamento com conteúdo de precificação","Visitou página de trial","Solicitou demonstração"],
-        intent_score:lead.score,
-        next_action:"Agendar call de discovery com foco em ROI",
-        stage:lead.score>80?"SQL":lead.score>60?"MQL":"Nutrindo"
-      }}));
+      // não inventa resumo/insights — mostra que a IA falhou de verdade
+      setErrors(p=>({...p,[lead.id]: e.message || "Falha ao gerar resumo com IA."}));
     }
     setLoad(false);
   };
 
   const stageColor = s => ({"Lead Frio":T.muted,"Nutrindo":T.amber,"MQL":T.teal,"SQL":T.teal,"Pronto para Venda":T.green})[s]||T.muted;
   const sum = selected ? summaries[selected.id] : null;
+  const err = selected ? errors[selected.id] : null;
 
   return (
     <div style={{display:"grid",gridTemplateColumns:"280px 1fr",height:"100%",overflow:"hidden"}}>
@@ -618,6 +716,13 @@ const SummaryTab = ({ settings, leads }) => {
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:60,color:T.muted}}>
             <Spinner/><span style={{fontFamily:T.font,fontSize:14,fontWeight:600}}>Gerando resumo inteligente…</span>
           </div>
+        )}
+        {selected&&!loading&&err&&!sum&&(
+          <Card style={{padding:24,border:`1px solid ${T.red}40`,borderLeft:`3px solid ${T.red}`,background:"#FFF5F4"}}>
+            <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.red,margin:"0 0 4px"}}>Não foi possível gerar o resumo com IA</p>
+            <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:"0 0 14px",fontWeight:600}}>{err}</p>
+            <Btn size="sm" variant="secondary" icon={RefreshCw} onClick={()=>generateSummary(selected)}>Tentar de novo</Btn>
+          </Card>
         )}
         {selected&&sum&&(
           <>
@@ -709,28 +814,23 @@ const PersonalizationTab = ({ settings, leads }) => {
   const [lead,   setLead]   = useState(leads[0] || null);
   const [loading,setLoad]   = useState(false);
   const [result, setResult] = useState(null);
+  const [error,  setError]  = useState(null);
 
   const urgencyColor = u => ({alta:T.red,media:T.amber,baixa:T.green})[u]||T.muted;
 
   const generate = async () => {
-    setLoad(true); setResult(null);
+    setLoad(true); setResult(null); setError(null);
     const sys = `Você é um especialista em personalização de marketing. Baseado no perfil e comportamento do lead, gere recomendações altamente personalizadas.\n\nResponda APENAS com JSON válido:\n{"segments":["seg1","seg2"],"content_recommendations":[{"type":"email|blog|case_study|webinar","title":"título","reason":"por que enviar","urgency":"alta|media|baixa"}],"next_best_action":{"action":"texto","channel":"email|whatsapp|ligação","timing":"texto","script":"texto"}}\nPortuguês brasileiro.`;
     const prompt = `Lead: ${lead.name} (${lead.company})\nScore: ${lead.score}/100\nInterações: ${lead.interactions.map(i=>`${i.label}(${i.count}x)`).join(", ")}`;
     try {
       const r = await callAI(sys, prompt, settings.model_preference, 0.6);
       const clean = r.text.replace(/```json|```/g,"").trim();
-      setResult(JSON.parse(clean));
+      const parsed = JSON.parse(clean);
+      setResult(parsed);
+      logGeneration({ type:"personalization", prompt:`${lead.name} (${lead.company})`, result:parsed.next_best_action?.action||"", model:settings.model_preference, temperature:0.6, tokens:r.tokens });
     } catch(e) {
-      setResult({
-        segments:["Alto Interesse em Precificação","Avaliando Trial","B2B SaaS"],
-        content_recommendations:[
-          { type:"case_study", title:"Como a TechCorp aumentou 40% de receita com Vantari", reason:"Lead visitou página de pricing 3x",         urgency:"alta"  },
-          { type:"email",      title:"ROI Calculator: descubra seu potencial de retorno",    reason:"Interesse demonstrado em trial",               urgency:"alta"  },
-          { type:"webinar",    title:"Webinar: Automação de vendas na prática",               reason:"Perfil B2B com potencial de escala",           urgency:"media" },
-          { type:"blog",       title:"5 formas de reduzir o ciclo de vendas",                 reason:"Conteúdo educativo para nutrição",             urgency:"baixa" },
-        ],
-        next_best_action:{ action:"Enviar email personalizado com calculadora de ROI", channel:"email", timing:"Próximas 24h (maior engajamento terças 9-11h)", script:"Olá {{lead.name}}, vi que você explorou nossa página de preços — preparei algo especial para te mostrar o ROI exato para a {{lead.company}}." }
-      });
+      // não inventa recomendações — mostra que a IA falhou de verdade
+      setError(e.message || "Falha ao gerar recomendações com IA.");
     }
     setLoad(false);
   };
@@ -767,6 +867,13 @@ const PersonalizationTab = ({ settings, leads }) => {
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,padding:60,color:T.muted}}>
             <Spinner/><span style={{fontFamily:T.font,fontSize:14,fontWeight:600}}>Analisando perfil do lead…</span>
           </div>
+        )}
+        {error&&!loading&&(
+          <Card style={{padding:24,border:`1px solid ${T.red}40`,borderLeft:`3px solid ${T.red}`,background:"#FFF5F4"}}>
+            <p style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.red,margin:"0 0 4px"}}>Não foi possível gerar recomendações com IA</p>
+            <p style={{fontFamily:T.font,fontSize:12,color:T.muted,margin:"0 0 14px",fontWeight:600}}>{error}</p>
+            <Btn size="sm" variant="secondary" icon={RefreshCw} onClick={generate}>Tentar de novo</Btn>
+          </Card>
         )}
         {result&&(
           <>
@@ -934,8 +1041,23 @@ const SettingsTab = ({ settings, onChange }) => {
    TAB 6: HISTÓRICO & ANALYTICS
 ═══════════════════════════════════════════════════ */
 const HistoryTab = () => {
-  const [gens,   setGens]   = useState([]);
-  const [filter, setFilter] = useState("all");
+  const [gens,    setGens]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filter,  setFilter]  = useState("all");
+
+  useEffect(() => {
+    supabase.from("ai_generations").select("*")
+      .eq("workspace_id", WORKSPACE_VANTARI)
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .then(({ data }) => { setGens(data || []); setLoading(false); });
+  }, []);
+
+  const rate = async (id, rating) => {
+    setGens(prev => prev.map(x => x.id === id ? { ...x, rating } : x));
+    const { error } = await supabase.from("ai_generations").update({ rating }).eq("id", id);
+    if (error) console.error("Falha ao salvar avaliação:", error);
+  };
 
   const filtered    = filter==="all" ? gens : gens.filter(g=>g.type===filter);
   const totalTokens = gens.reduce((a,g)=>a+(g.tokens||0),0);
@@ -943,9 +1065,10 @@ const HistoryTab = () => {
   const usedCount   = gens.filter(g=>g.used).length;
 
   const typeInfo = t => ({
-    email:   { Icon:Mail,     label:"Email",   color:T.teal   },
-    subject: { Icon:AtSign,   label:"Assunto", color:T.teal   },
-    summary: { Icon:Brain,    label:"Resumo",  color:T.purple },
+    email:          { Icon:Mail,     label:"Email",          color:T.teal   },
+    subject:        { Icon:AtSign,   label:"Assunto",        color:T.teal   },
+    summary:        { Icon:Brain,    label:"Resumo",         color:T.purple },
+    personalization:{ Icon:Target,   label:"Personalização", color:T.violet },
   })[t]||{ Icon:FileText, label:t, color:T.muted };
 
   const METRICS = [
@@ -955,7 +1078,7 @@ const HistoryTab = () => {
     { label:"Tokens Consumidos", value:totalTokens.toLocaleString(), Icon:Zap,          color:T.purple },
   ];
 
-  const FILTER_LABELS = { all:"Todos", email:"Email", subject:"Assunto", summary:"Resumo" };
+  const FILTER_LABELS = { all:"Todos", email:"Email", subject:"Assunto", summary:"Resumo", personalization:"Personalização" };
 
   return (
     <div style={{padding:28,overflowY:"auto"}}>
@@ -976,7 +1099,7 @@ const HistoryTab = () => {
       </div>
 
       <div style={{display:"flex",gap:8,marginBottom:18}}>
-        {["all","email","subject","summary"].map(f=>{
+        {["all","email","subject","summary","personalization"].map(f=>{
           const FIcon = f==="all" ? Clock : (typeInfo(f).Icon);
           return (
             <button key={f} onClick={()=>setFilter(f)}
@@ -1005,7 +1128,7 @@ const HistoryTab = () => {
                       <span style={{fontFamily:T.font,fontSize:11,color:T.muted,fontWeight:600}}>{new Date(g.created_at).toLocaleDateString("pt-BR")}</span>
                     </div>
                     <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                      <Stars value={g.rating} onChange={r=>setGens(prev=>prev.map(x=>x.id===g.id?{...x,rating:r}:x))}/>
+                      <Stars value={g.rating} onChange={r=>rate(g.id, r)}/>
                       <Badge label={`${g.tokens} tok`} color={T.muted} bg={T.bg} small/>
                     </div>
                   </div>
@@ -1016,12 +1139,21 @@ const HistoryTab = () => {
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   <Btn size="xs" variant="ghost" icon={Copy} onClick={()=>navigator.clipboard?.writeText(g.result)}>Copiar</Btn>
-                  <Btn size="xs" variant="secondary">Template</Btn>
                 </div>
               </div>
             </Card>
           );
         })}
+        {loading&&(
+          <div style={{textAlign:"center",padding:48,color:T.muted,display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+            <Spinner/><span style={{fontFamily:T.font,fontSize:13,fontWeight:600}}>Carregando histórico…</span>
+          </div>
+        )}
+        {!loading&&filtered.length===0&&(
+          <div style={{textAlign:"center",padding:48,color:T.muted,fontFamily:T.font,fontSize:13,fontWeight:600}}>
+            Nenhuma geração ainda. Use as outras abas de IA e o histórico aparece aqui.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1041,8 +1173,9 @@ const TABS = [
 
 export default function VantariAIMarketing() {
   const [tab,      setTab]      = useState("email");
-  const [settings, setSettings] = useState(MOCK_SETTINGS);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [leads,    setLeads]    = useState([]);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     supabase.from("leads")
@@ -1059,7 +1192,32 @@ export default function VantariAIMarketing() {
           interactions: [],
         })));
       });
+
+    // carrega config real de public.ai_settings (antes ficava só em memória)
+    supabase.from("ai_settings").select("*").eq("workspace_id", WORKSPACE_VANTARI).maybeSingle()
+      .then(({ data }) => {
+        if (data) setSettings({
+          workspace_id: data.workspace_id,
+          model_preference: data.model_preference,
+          temperature: Number(data.temperature),
+          custom_prompts: data.custom_prompts,
+        });
+      });
   }, []);
+
+  // persiste de verdade em public.ai_settings (upsert) — antes só atualizava
+  // o estado do React e sumia ao recarregar a página
+  const saveSettings = async (next) => {
+    setSettings(next);
+    const { error } = await supabase.from("ai_settings").upsert({
+      workspace_id: WORKSPACE_VANTARI,
+      model_preference: next.model_preference,
+      temperature: next.temperature,
+      custom_prompts: next.custom_prompts,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) console.error("Falha ao salvar configurações de IA:", error);
+  };
 
   return (
     <div style={{display:"flex",height:"100vh",background:T.bg,fontFamily:T.font,overflow:"hidden"}}>
@@ -1076,10 +1234,11 @@ export default function VantariAIMarketing() {
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240,
+        width: collapsed ? 64 : 240,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display:"flex", flexDirection:"column", flexShrink:0,
-        position:"relative", overflow:"hidden",
+        position:"relative", overflow:"visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -1088,32 +1247,41 @@ export default function VantariAIMarketing() {
         }}/>
 
         {/* Brand */}
-        <div style={{padding:"20px 20px 0", position:"relative"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+        <div style={{padding: collapsed ? "20px 0 0" : "20px 20px 0", position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent: collapsed ? "center" : "flex-start",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
             <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
               <img src="/icone.png" alt="" style={{width:22,height:22}}/>
             </div>
-            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
-            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+            {!collapsed && <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>}
+            {!collapsed && <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>}
           </div>
         </div>
 
         <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"          path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
-          <NavSection label="CRM"/>
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" active/>
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed}/>
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed}/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed}/>
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"   path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" active collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed}/>
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" collapsed={collapsed} />
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings"/>
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed}/>
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
@@ -1153,31 +1321,9 @@ export default function VantariAIMarketing() {
           {tab==="subject"  && <div style={{flex:1,overflowY:"auto"}}><SubjectOptTab  settings={settings}/></div>}
           {tab==="summary"  && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><SummaryTab     settings={settings} leads={leads}/></div>}
           {tab==="personal" && <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}><PersonalizationTab settings={settings} leads={leads}/></div>}
-          {tab==="settings" && <div style={{flex:1,overflowY:"auto"}}><SettingsTab    settings={settings} onChange={setSettings}/></div>}
+          {tab==="settings" && <div style={{flex:1,overflowY:"auto"}}><SettingsTab    settings={settings} onChange={saveSettings}/></div>}
           {tab==="history"  && <div style={{flex:1,overflowY:"auto"}}><HistoryTab/></div>}
         </div>
-
-        {/* DB Schema Footer */}
-        <details style={{background:"#0f172a",color:"#a3e635",fontFamily:T.mono,fontSize:11,flexShrink:0}}>
-          <summary style={{padding:"8px 20px",cursor:"pointer",color:"#86efac",letterSpacing:"0.04em",fontWeight:600}}>
-            SCHEMA SQL — ai_generations · ai_settings · lead_summaries
-          </summary>
-          <pre style={{padding:"16px 24px",margin:0,lineHeight:1.8,overflowX:"auto"}}>{`-- TABLE: ai_generations
-CREATE TABLE ai_generations (
-  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID REFERENCES workspaces(id),
-  type         VARCHAR(20) CHECK (type IN ('email','subject','summary','personalization')),
-  prompt       TEXT NOT NULL,
-  result       TEXT NOT NULL,
-  model        VARCHAR(50) NOT NULL,
-  temperature  DECIMAL(3,2) DEFAULT 0.7,
-  tokens_used  INTEGER,
-  rating       SMALLINT CHECK (rating BETWEEN 1 AND 5),
-  used         BOOLEAN DEFAULT false,
-  created_by   UUID REFERENCES users(id),
-  created_at   TIMESTAMPTZ DEFAULT NOW()
-);`}</pre>
-        </details>
       </div>
     </div>
   );

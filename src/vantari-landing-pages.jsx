@@ -4,8 +4,8 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Zap, BookOpen, Calendar, Trophy, Lightbulb,
-  CheckCircle2, X, Search, Plus, ChevronLeft, Globe,
-  Smartphone, Monitor, Tablet
+  CheckCircle2, X, Search, Plus, ChevronLeft, ChevronRight, Globe,
+  Smartphone, Monitor, Tablet, Filter, LogOut, Loader2
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -100,6 +100,7 @@ const seedSources = () => [];
 const seedDevices = () => [];
 
 const DB = { pages:[], visits:{}, sources:seedSources(), devices:seedDevices() };
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 
 /* ═══════════════════════════════════════════════════════════════════════
    ICON SYSTEM (custom SVG paths — no emoji)
@@ -294,21 +295,25 @@ const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData })
 );
 
 /* NavSection / NavItem */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5,
         fontWeight: active ? 700 : 600,
         fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
@@ -323,10 +328,71 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
         }} />
       )}
       {Icon && <Icon size={16} aria-hidden="true" />}
-      {label}
+      {!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
    SECTION RENDERER
@@ -447,27 +513,31 @@ const SectionPreview = ({ section }) => {
 const SectionEditor = ({ section, onChange }) => {
   const { type, content:c } = section;
   const upd = (key,val) => onChange({...section,content:{...c,[key]:val}});
-  const FieldRow = ({ label, field, type="text", note }) => (
+  // função (NÃO componente) — retorna host elements direto, sem remount/perda de foco
+  // (ver mesmo padrão/comentário em vantari-crm.jsx). Um componente <FieldRow/> definido
+  // aqui dentro mudaria de identidade a cada tecla digitada, forçando o React a desmontar/
+  // remontar o <input> e perder o foco — só a 1ª letra digitada "grudava" (bug do QA).
+  const fieldRow = (label, field, type="text", note) => (
     <Input label={label} type={type} value={c[field]||""} onChange={v=>upd(field,v)} note={note}/>
   );
 
   if(type==="header") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Logo / Nome" field="logo"/>
-      <FieldRow label="Texto do CTA" field="ctaText"/>
+      {fieldRow("Logo / Nome","logo")}
+      {fieldRow("Texto do CTA","ctaText")}
       <Input label="Links de navegação (vírgula)" value={(c.links||[]).join(", ")} onChange={v=>upd("links",v.split(",").map(s=>s.trim()).filter(Boolean))}/>
     </div>
   );
   if(type==="hero") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Headline principal" field="headline"/>
+      {fieldRow("Headline principal","headline")}
       <Textarea label="Subtítulo" value={c.subtitle||""} onChange={v=>upd("subtitle",v)}/>
-      <FieldRow label="Texto do botão CTA" field="ctaText"/>
+      {fieldRow("Texto do botão CTA","ctaText")}
     </div>
   );
   if(type==="features") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Título da seção" field="title"/>
+      {fieldRow("Título da seção","title")}
       {(c.items||[]).map((item,i)=>(
         <div key={i} style={{padding:"10px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,display:"flex",flexDirection:"column",gap:6}}>
           <div style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font}}>Item {i+1}</div>
@@ -481,7 +551,7 @@ const SectionEditor = ({ section, onChange }) => {
   );
   if(type==="testimonials") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Título da seção" field="title"/>
+      {fieldRow("Título da seção","title")}
       {(c.items||[]).map((item,i)=>(
         <div key={i} style={{padding:"10px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,display:"flex",flexDirection:"column",gap:6}}>
           <div style={{fontSize:11,fontWeight:700,color:T.muted,fontFamily:T.font}}>Depoimento {i+1}</div>
@@ -495,15 +565,15 @@ const SectionEditor = ({ section, onChange }) => {
   );
   if(type==="cta") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Headline" field="headline"/>
-      <FieldRow label="Subtítulo" field="subtitle"/>
-      <FieldRow label="Texto do botão" field="ctaText"/>
+      {fieldRow("Headline","headline")}
+      {fieldRow("Subtítulo","subtitle")}
+      {fieldRow("Texto do botão","ctaText")}
     </div>
   );
   if(type==="form") return (
     <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      <FieldRow label="Título do formulário" field="title"/>
-      <FieldRow label="Texto do botão" field="submitText"/>
+      {fieldRow("Título do formulário","title")}
+      {fieldRow("Texto do botão","submitText")}
       <Divider label="Campos"/>
       {(c.fields||[]).map((f,i)=>(
         <div key={f.id} style={{padding:"10px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,display:"flex",flexDirection:"column",gap:6}}>
@@ -1089,6 +1159,54 @@ const PageCard = ({ page, onEdit, onClone, onDelete }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
+   LANDING PAGES REAIS (arquivos estáticos em public/landing-pages/)
+   Não são construídas pelo builder de seções — são HTML prontos, hospedados
+   direto pelo Vercel. As métricas vêm de tracked_pages + page_visits + forms.
+════════════════════════════════════════════════════════════════════════ */
+const REAL_LPS = [
+  { id:"lp-01", name:"Escritórios Jurídicos (B2B)",   path:"/landing-pages/01-escritorios-juridicos.html",       formSlug:"escritorios-juridicos" },
+  { id:"lp-02", name:"Antecipar Agora",                path:"/landing-pages/02-antecipar-agora.html",             formSlug:"antecipar-agora" },
+  { id:"lp-03", name:"Antecipar Ação Trabalhista",     path:"/landing-pages/03-antecipar-acao-trabalhista.html",  formSlug:"antecipar-acao" },
+];
+
+const StaticLPCard = ({ lp }) => {
+  const [hov,setHov] = useState(false);
+  const sc = lp.active ? statusColors.published : statusColors.paused;
+  return (
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)}
+      style={{background:T.surface,borderRadius:12,border:`1.5px solid ${hov?T.blue:T.border}`,overflow:"hidden",transition:"all .2s",boxShadow:hov?T.shadowMd:T.shadow}}>
+      <div style={{padding:"14px 16px"}}>
+        <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
+          <div>
+            <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font,marginBottom:3}}>{lp.name}</div>
+            <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font}}>{lp.path}</div>
+          </div>
+          <Badge label={lp.active?"Publicada · rastreada":"Sem tracking"} color={sc.text} bg={sc.bg}/>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,margin:"10px 0"}}>
+          {[["Visitantes",fmtNum(lp.metrics.visitors),T.blue],["Leads",fmtNum(lp.metrics.leads),T.green],["Conv.",`${lp.metrics.convRate}%`,T.teal]].map(([l,v,c])=>(
+            <div key={l} style={{background:T.faint,borderRadius:8,padding:"6px 8px",textAlign:"center"}}>
+              <div style={{fontSize:15,fontWeight:700,color:c,fontFamily:T.head}}>{v}</div>
+              <div style={{fontSize:10,fontWeight:700,color:T.muted,fontFamily:T.font}}>{l}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font,marginBottom:10}}>
+          {lp.formId ? `Formulário /f/${lp.formSlug} conectado` : "Formulário ainda não criado"} · página estática (editar o arquivo HTML diretamente)
+        </div>
+
+        <div style={{display:"flex",gap:6,borderTop:`0.5px solid ${T.border}`,paddingTop:10}}>
+          <Btn variant="secondary" size="sm" icon={IC.eye} onClick={()=>window.open(lp.path,"_blank")} style={{flex:1,justifyContent:"center"}}>Ver ao vivo</Btn>
+          {lp.formId && <Btn variant="secondary" size="sm" icon={IC.form} onClick={()=>window.open(`/f/${lp.formSlug}`,"_blank")} title="Ver formulário"/>}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════
    NEW PAGE MODAL
 ════════════════════════════════════════════════════════════════════════ */
 const TEMPLATE_ICONS = { webinar:Calendar, ebook:BookOpen, trial:Zap, newsletter:Mail };
@@ -1651,13 +1769,14 @@ const FormsManager = () => {
   const saveForm = async () => {
     const payload = {
       name:         editing.name,
-      slug:         editing.slug || slugify(editing.name),
+      slug:         slugify(editing.slug || editing.name),
       description:  editing.description,
       fields:       editing.fields,
       success_msg:  editing.success_msg,
       source_label: editing.source_label,
       tags:         editing.tags || [],
       active:       editing.active,
+      workspace_id: editing.workspace_id || WORKSPACE_VANTARI,
     };
     let err;
     if (editing.id) {
@@ -1769,7 +1888,8 @@ const FormEditor = ({ draft, onChange, onSave, onCancel }) => {
             </div>
             <div>
               <label style={{ fontSize:11, fontWeight:700, color:T.muted, textTransform:"uppercase", letterSpacing:.5, display:"block", marginBottom:5 }}>Slug (URL pública)</label>
-              <input value={draft.slug||""} onChange={e => onChange({...draft, slug:slugify(e.target.value)})}
+              <input value={draft.slug||""} onChange={e => onChange({...draft, slug:e.target.value.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"")})}
+                onBlur={e => onChange({...draft, slug:slugify(e.target.value)})}
                 style={{ width:"100%", padding:"8px 12px", border:`1px solid ${T.border}`, borderRadius:8, fontSize:13, color:T.text, fontFamily:T.mono, outline:"none" }}/>
             </div>
           </div>
@@ -1918,6 +2038,37 @@ export default function VantariLandingPages() {
   const [toast,       setToast]   = useState(null);
   const [landingSpark, setLandingSpark] = useState({ pages: [], visitors: [], leads: [], conv: [] });
   const [viewMode, setViewMode] = useState("pages");  // "pages" | "forms"
+  const [collapsed, setCollapsed] = useState(false);
+  const [realLPs, setRealLPs] = useState(REAL_LPS.map(lp => ({ ...lp, active:false, formId:null, metrics:{visitors:0,leads:0,convRate:0} })));
+  const [loadingReal, setLoadingReal] = useState(true);
+
+  const loadRealLPs = useCallback(async () => {
+    setLoadingReal(true);
+    const [{ data: tracked }, { data: forms }] = await Promise.all([
+      supabase.from("tracked_pages").select("id,url,active"),
+      supabase.from("forms").select("id,slug,submission_count"),
+    ]);
+    const trackedForLPs = (tracked || []).filter(t => REAL_LPS.some(lp => t.url && t.url.endsWith(lp.path)));
+    const trackedIds = trackedForLPs.map(t => t.id);
+    let visits = [];
+    if (trackedIds.length) {
+      const { data } = await supabase.from("page_visits").select("tracked_page_id,visitor_id").in("tracked_page_id", trackedIds);
+      visits = data || [];
+    }
+    const result = REAL_LPS.map(lp => {
+      const tp = trackedForLPs.find(t => t.url && t.url.endsWith(lp.path));
+      const form = (forms || []).find(f => f.slug === lp.formSlug);
+      const tpVisits = tp ? visits.filter(v => v.tracked_page_id === tp.id) : [];
+      const visitors = new Set(tpVisits.map(v => v.visitor_id)).size;
+      const leads = form?.submission_count || 0;
+      const convRate = visitors > 0 ? Math.round((leads / visitors) * 1000) / 10 : 0;
+      return { ...lp, active: tp?.active ?? false, formId: form?.id || null, metrics: { visitors, leads, convRate } };
+    });
+    setRealLPs(result);
+    setLoadingReal(false);
+  }, []);
+
+  useEffect(() => { loadRealLPs(); }, [loadRealLPs]);
 
   useEffect(() => {
     const loadSpark = async () => {
@@ -1949,10 +2100,13 @@ export default function VantariLandingPages() {
     return matchSearch&&matchStatus;
   }),[pages,search,filterStatus]);
 
-  const totalVisitors  = pages.reduce((a,p)=>a+p.metrics.visitors,0);
-  const totalLeads     = pages.reduce((a,p)=>a+p.metrics.leads,0);
-  const avgConv        = pages.filter(p=>p.metrics.visitors>0).reduce((a,p,_,arr)=>a+p.metrics.convRate/arr.length,0).toFixed(1);
-  const publishedCount = pages.filter(p=>p.status==="published").length;
+  const allPageMetrics  = [...realLPs.map(p=>p.metrics), ...pages.map(p=>p.metrics)];
+  const totalVisitors  = allPageMetrics.reduce((a,m)=>a+m.visitors,0);
+  const totalLeads     = allPageMetrics.reduce((a,m)=>a+m.leads,0);
+  const withVisitors   = allPageMetrics.filter(m=>m.visitors>0);
+  const avgConv        = withVisitors.length ? (withVisitors.reduce((a,m)=>a+m.convRate,0)/withVisitors.length).toFixed(1) : "0.0";
+  const publishedCount = realLPs.filter(p=>p.active).length + pages.filter(p=>p.status==="published").length;
+  const totalPagesCount = realLPs.length + pages.length;
 
   if(editingPage) return (
     <PageBuilder
@@ -1969,14 +2123,16 @@ export default function VantariLandingPages() {
         *, *::before, *::after { box-sizing:border-box; }
         ::-webkit-scrollbar { width:5px; height:5px; }
         ::-webkit-scrollbar-thumb { background:#B3BFCA; border-radius:99px; }
+        @keyframes spin { from{transform:rotate(0deg);} to{transform:rotate(360deg);} }
       `}</style>
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240,
+        width: collapsed ? 64 : 240,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display: "flex", flexDirection: "column", flexShrink: 0,
-        position: "relative", overflow: "hidden",
+        position: "relative", overflow: "visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -1985,32 +2141,41 @@ export default function VantariLandingPages() {
         }} />
 
         {/* Brand */}
-        <div style={{ padding: "20px 20px 0", position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+        <div style={{ padding: collapsed ? "20px 0 0" : "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
             <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
               <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
             </div>
-            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+            {!collapsed && <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>}
+            {!collapsed && <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
-          <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"          path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
-          <NavSection label="CRM" />
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing" active />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
-          <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"    path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed} />
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"          path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed} />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing" active collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"   path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed} />
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" collapsed={collapsed} />
         </div>
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-          <NavItem icon={Settings} label="Configurações" path="/settings" />
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
@@ -2070,7 +2235,7 @@ export default function VantariLandingPages() {
               icon={IC.globe}  color={T.blue}  trend={0}
               label="Páginas Publicadas"
               value={publishedCount}
-              sub={`de ${pages.length} total`}
+              sub={`de ${totalPagesCount} total`}
               sparkData={landingSpark.pages}
             />
             <HeroKpiCard
@@ -2113,11 +2278,25 @@ export default function VantariLandingPages() {
             </div>
           </div>
 
+          {!search && (
+            <div style={{marginBottom:28}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.head}}>Landing pages publicadas</div>
+                <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font}}>— arquivos estáticos em public/landing-pages, métricas reais via tracking</div>
+                {loadingReal && <Loader2 size={13} color={T.muted} style={{animation:"spin 1s linear infinite"}}/>}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:18}}>
+                {realLPs.map(lp => <StaticLPCard key={lp.id} lp={lp} />)}
+              </div>
+            </div>
+          )}
+
+          <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.head,marginBottom:12}}>Páginas criadas no builder</div>
           {filteredPages.length===0?(
             <div style={{textAlign:"center",padding:"64px 24px",color:T.muted}}>
               <Ico d={IC.layout} size={40} color={T.border}/>
-              <div style={{fontSize:16,fontWeight:700,color:T.text,marginTop:16,fontFamily:T.head}}>{search?"Nenhuma página encontrada":"Nenhuma landing page ainda"}</div>
-              <div style={{fontSize:13,fontWeight:600,color:T.muted,marginTop:6,fontFamily:T.font}}>{search?"Tente outro termo de busca.":"Clique em \"Nova página\" para criar sua primeira landing page."}</div>
+              <div style={{fontSize:16,fontWeight:700,color:T.text,marginTop:16,fontFamily:T.head}}>{search?"Nenhuma página encontrada":"Nenhuma landing page criada no builder ainda"}</div>
+              <div style={{fontSize:13,fontWeight:600,color:T.muted,marginTop:6,fontFamily:T.font}}>{search?"Tente outro termo de busca.":"Clique em \"Nova página\" para criar uma landing page a partir de um template."}</div>
               {!search&&<div style={{marginTop:16}}><Btn variant="primary" icon={IC.plus} onClick={()=>setShowNew(true)}>Criar primeira página</Btn></div>}
             </div>
           ):(

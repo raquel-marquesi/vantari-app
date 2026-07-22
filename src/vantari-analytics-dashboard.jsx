@@ -13,8 +13,8 @@ import {
   RefreshCw, Download, Plus, Pencil, Save, X,
   Hash, Table2, PieChart as PieIcon, BookOpen, KeyRound,
   Monitor, ClipboardList, Activity, Bell, Clock,
-  FileSpreadsheet,
-  ChevronRight, CheckCircle2
+  FileSpreadsheet, AlertCircle,
+  ChevronRight, ChevronLeft, CheckCircle2, LogOut
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -81,40 +81,14 @@ const T = {
   mono:    "'JetBrains Mono', monospace",
 };
 
-const STAGE_COLORS = {
-  Visitor: { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1", hex: "#94a3b8" },
-  Lead:    { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe", hex: "#3b82f6" },
-  MQL:     { bg: "#fef3c7", text: "#92400e", border: "#fde68a", hex: "#F59E0B" },
-  SQL:     { bg: "#f3f0ff", text: "#5b21b6", border: "#c4b5fd", hex: "#7C5CFF" },
-  Cliente: { bg: "#f0fdf4", text: "#14532d", border: "#86efac", hex: "#14A273" },
-};
-
-/* ───── MOCK DATA ───── */
+/* ───── MOCK DATA ─────
+   Só o que ainda é consumido de verdade fica aqui. channelData/attributionData
+   seguem mock até a aba "Canais" ganhar busca real (fora do escopo desta
+   rodada de correções). monthlyTrend/savedReports seguem mock até
+   "Relatórios" ganhar persistência real no banco (idem). */
 const monthlyTrend = [];
 const channelData = [];
 const attributionData = [];
-
-const funnelStages = [
-  { name: "Visitor", count: 0, pct: 100,  conv: null, avgDays: null },
-  { name: "Lead",    count: 0, pct: 0,    conv: 0,    avgDays: 0    },
-  { name: "MQL",     count: 0, pct: 0,    conv: 0,    avgDays: 0    },
-  { name: "SQL",     count: 0, pct: 0,    conv: 0,    avgDays: 0    },
-  { name: "Cliente", count: 0, pct: 0,    conv: 0,    avgDays: 0    },
-];
-
-const liveActivity = [];
-
-const EVENT_ICONS = {
-  lead_novo:   User,
-  email_open:  Mail,
-  sql_convert: Zap,
-  email_click: Link2,
-  form_submit: ClipboardList,
-};
-
-const campaignPerf = [];
-const todayVsYesterday = [];
-const leadsPerStage = { Visitor: [], Lead: [], MQL: [], SQL: [], Cliente: [] };
 const savedReports = [];
 
 const METRIC_OPTIONS = [
@@ -131,8 +105,34 @@ const apiEndpoints = [
   { method: "GET",  path: "/api/v1/alerts",               desc: "Lista e status dos alertas configurados",             auth: "Bearer token" },
 ];
 
+/* Exporta core.persons como CSV real — usado no botão global "Exportar" e na
+   aba Export & API. PDF/Excel/API pública ficam de fora por enquanto (não
+   existem de verdade ainda). */
+const exportPersonsCsv = async () => {
+  const { data, error } = await supabase.schema("core").from("persons")
+    .select("full_name,cpf,primary_email,primary_phone,status,created_at")
+    .order("created_at", { ascending: false });
+  if (error) { alert("Não foi possível exportar: " + error.message); return; }
+  const rows = data || [];
+  const header = ["Nome", "CPF", "Email", "Telefone", "Status", "Criado em"];
+  const csvLines = [
+    header.join(";"),
+    ...rows.map(r => [
+      r.full_name || "", r.cpf || "", r.primary_email || "", r.primary_phone || "",
+      r.status || "", r.created_at ? new Date(r.created_at).toLocaleDateString("pt-BR") : "",
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(";")),
+  ];
+  const blob = new Blob(["﻿" + csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `vantari-pessoas-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+};
+
 /* ───── SHARED COMPONENTS ───── */
-const Btn = ({ children, onClick, variant = "primary", size = "sm", icon: Icon, disabled, style: s = {} }) => {
+const Btn = ({ children, onClick, variant = "primary", size = "sm", icon: Icon, disabled, style: s = {}, ...rest }) => {
   const [hov, setHov] = useState(false);
   const v = {
     primary:   {
@@ -152,7 +152,7 @@ const Btn = ({ children, onClick, variant = "primary", size = "sm", icon: Icon, 
   const pad = { xs: "4px 8px", sm: "7px 14px", md: "9px 18px", lg: "11px 22px" }[size];
   const fs  = { xs: 10, sm: 12, md: 13, lg: 14 }[size];
   return (
-    <button onClick={onClick} disabled={disabled}
+    <button onClick={onClick} disabled={disabled} {...rest}
       onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       style={{
         display: "inline-flex", alignItems: "center", gap: 6,
@@ -174,7 +174,6 @@ const Card = ({ children, style: s = {}, hover = false }) => {
   const [hov, setHov] = useState(false);
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
-      onClick={() => path && navigate(path)}
       style={{
         background: T.surface,
         border: `1px solid ${T.border}`,
@@ -193,6 +192,20 @@ const SectionTitle = ({ children, sub }) => (
   <div style={{ marginBottom: 16 }}>
     <h2 style={{ fontSize: 15, fontWeight: 700, color: T.ink, fontFamily: T.head, margin: 0, letterSpacing: "-0.01em" }}>{children}</h2>
     {sub && <p style={{ fontSize: 12, color: T.muted, margin: "4px 0 0", fontFamily: T.font, fontWeight: 500 }}>{sub}</p>}
+  </div>
+);
+
+/* Banner de erro padrão — usado sempre que uma query Supabase falha, pra não
+   deixar a seção só mostrar zero/vazio como se fosse "sem dado" quando na
+   verdade a consulta quebrou. */
+const ErrorBanner = ({ children }) => (
+  <div style={{
+    display: "flex", alignItems: "center", gap: 8, marginBottom: 14,
+    padding: "10px 14px", borderRadius: 10,
+    background: `${T.coral}12`, border: `1px solid ${T.coral}40`,
+  }}>
+    <AlertCircle size={15} color={T.coral} style={{ flexShrink: 0 }} />
+    <span style={{ fontSize: 12.5, fontWeight: 600, color: "#9B2C2C", fontFamily: T.font }}>{children}</span>
   </div>
 );
 
@@ -333,22 +346,26 @@ const HeroKpiCard = ({ icon: Icon, label, value, trend, color, sub, sparkData })
 );
 
 /* ───── SIDEBAR NAV HELPERS ───── */
-const NavSection = ({ label }) => (
-  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed = false }) => (
+  collapsed ? <div style={{ height: 10 }} /> : (
+    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.4)", padding: "10px 20px 4px", textTransform: "uppercase", fontFamily: T.head }}>
+      {label}
+    </div>
+  )
 );
 
-const NavItem = ({ icon: Icon, label, active = false, path }) => {
+const NavItem = ({ icon: Icon, label, active = false, path, collapsed = false }) => {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position: "relative",
         display: "flex", alignItems: "center", gap: 9,
-        padding: "8px 20px", fontSize: 13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize: 13.5,
         fontWeight: active ? 700 : 600,
         fontFamily: T.font,
         color: active ? "#fff" : hov ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)",
@@ -363,10 +380,71 @@ const NavItem = ({ icon: Icon, label, active = false, path }) => {
         }} />
       )}
       {Icon && <Icon size={16} aria-hidden="true" />}
-      {label}
+      {!collapsed && label}
     </div>
   );
 };
+
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /* ───── FASE 3 HELPERS ───── */
 
@@ -492,15 +570,29 @@ const OverviewSection = () => {
   const [kpis,        setKpis]        = useState({ pessoas: 0, abertos: 0, ganhos: 0, pipelineCents: 0, campaigns: 0 });
   const [monthlyData, setMonthlyData] = useState([]);
   const [sparkData,   setSparkData]   = useState({ pessoas: [], negocios: [] });
+  const [error,       setError]       = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
+      setError(null);
       const sevenMonthsAgo = new Date();
       sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
 
       const core = supabase.schema("core");
       const crm = supabase.schema("crm");
       const mkt = supabase.schema("mkt");
+
+      const results = await Promise.all([
+        core.from("persons").select("*", { count: "exact", head: true }),
+        crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open"),
+        crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won"),
+        mkt.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
+        core.from("persons").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
+        crm.from("deals").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
+      ]);
+
+      const firstError = results.find(r => r.error)?.error;
+      if (firstError) { setError(firstError.message); return; }
 
       const [
         { count: pessoas },
@@ -509,14 +601,7 @@ const OverviewSection = () => {
         { count: campaigns },
         { data: rawPersons },
         { data: rawDeals },
-      ] = await Promise.all([
-        core.from("persons").select("*", { count: "exact", head: true }),
-        crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open"),
-        crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won"),
-        mkt.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
-        core.from("persons").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
-        crm.from("deals").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
-      ]);
+      ] = results;
 
       const abertos = (openDeals || []).length;
       const pipelineCents = (openDeals || []).reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
@@ -562,6 +647,7 @@ const OverviewSection = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {error && <ErrorBanner>Não foi possível carregar os dados do Overview: {error}</ErrorBanner>}
       {/* ── Hero KPI cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
         <HeroKpiCard
@@ -620,7 +706,7 @@ const OverviewSection = () => {
             </div>
           </div>
           <div style={{ fontSize: 11, color: T.faint3, fontFamily: T.mono, marginBottom: 12 }}>
-            {new Date().getFullYear()} · — meta dashed verde
+            Últimos 7 meses · linha tracejada verde = meta
           </div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={monthlyData}>
@@ -667,17 +753,22 @@ const stageKindSub = (k) => k === "won" ? "ganho" : k === "lost" ? "perdido" : "
 const FunnelSection = () => {
   const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [noPipeline, setNoPipeline] = useState(false);
 
   useEffect(() => {
     const load = async () => {
+      setError(null); setNoPipeline(false);
       const crm = supabase.schema("crm");
-      const { data: pipes } = await crm.from("pipelines").select("id").eq("is_default", true).limit(1);
+      const { data: pipes, error: pipeErr } = await crm.from("pipelines").select("id").eq("is_default", true).limit(1);
+      if (pipeErr) { setError(pipeErr.message); setLoading(false); return; }
       const pipe = pipes?.[0];
-      if (!pipe) { setLoading(false); return; }
-      const [{ data: st }, { data: deals }] = await Promise.all([
+      if (!pipe) { setNoPipeline(true); setLoading(false); return; }
+      const [{ data: st, error: stErr }, { data: deals, error: dealsErr }] = await Promise.all([
         crm.from("stages").select("id,name,position,kind").eq("pipeline_id", pipe.id).order("position"),
         crm.from("deals").select("stage_id").eq("pipeline_id", pipe.id),
       ]);
+      if (stErr || dealsErr) { setError((stErr || dealsErr).message); setLoading(false); return; }
       const c = {};
       (deals || []).forEach(d => { c[d.stage_id] = (c[d.stage_id] || 0) + 1; });
       setStages((st || []).map((s, i) => ({
@@ -696,10 +787,15 @@ const FunnelSection = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {error && <ErrorBanner>Não foi possível carregar o funil: {error}</ErrorBanner>}
       <Card>
         <SectionTitle sub="Negócios por estágio — dados ao vivo do CRM">Esteira de Aquisição</SectionTitle>
         {loading ? (
           <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>Carregando…</div>
+        ) : noPipeline ? (
+          <div style={{ fontSize: 12.5, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>
+            Nenhum pipeline padrão configurado ainda. Configure um em <b>Negócios</b> para ver o funil aqui.
+          </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {FUNNEL_STAGES.map((s, i) => {
@@ -799,9 +895,32 @@ const ReportBuilder = () => {
   const [filters,       setFilters]       = useState({ dateRange: "30d", source: "Todos", segment: "Todos" });
   const [activeReport,  setActiveReport]  = useState(1);
   const [showAddWidget, setShowAddWidget] = useState(false);
+  const [reports,       setReports]       = useState(savedReports);
+  const [statusMsg,     setStatusMsg]     = useState(null);
 
   const addWidget   = (type) => { const newW = { id: `w${Date.now()}`, type: type.id, metric: METRIC_OPTIONS[0], col: widgets.length % 3, row: Math.floor(widgets.length / 3) }; setWidgets([...widgets, newW]); setShowAddWidget(false); };
   const removeWidget = (id) => setWidgets(widgets.filter(w => w.id !== id));
+
+  const flash = (msg) => { setStatusMsg(msg); setTimeout(() => setStatusMsg(null), 2500); };
+
+  const handleNewReport = () => {
+    const id = Date.now();
+    const rep = { id, name: `Novo relatório ${reports.length + 1}`, owner: "Você", shared: 0, updated: "agora" };
+    setReports(r => [...r, rep]);
+    setActiveReport(id);
+    setWidgets([]);
+    flash("Relatório criado.");
+  };
+  const handleSaveReport = () => {
+    setReports(r => r.map(rep => rep.id === activeReport ? { ...rep, updated: "agora" } : rep));
+    flash("Layout do relatório salvo.");
+  };
+  const handleShareLink = async () => {
+    const link = `${window.location.origin}${window.location.pathname}?report=${activeReport}`;
+    try { await navigator.clipboard.writeText(link); flash("Link copiado para a área de transferência."); }
+    catch { flash("Não foi possível copiar automaticamente. Link: " + link); }
+  };
+  const handleExportPdf = () => { flash("Abrindo diálogo de impressão/PDF..."); window.print(); };
 
   const WidgetPreview = ({ w }) => {
     const WIcon = WIDGET_TYPES.find(t => t.id === w.type)?.icon || Hash;
@@ -868,10 +987,20 @@ const ReportBuilder = () => {
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <SectionTitle>Relatórios Salvos</SectionTitle>
-          <Btn icon={Plus} onClick={() => {}}>Novo relatório</Btn>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {statusMsg && (
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.green, fontFamily: T.font }}>{statusMsg}</span>
+            )}
+            <Btn icon={Plus} onClick={handleNewReport}>Novo relatório</Btn>
+          </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {savedReports.map(r => (
+          {reports.length === 0 && (
+            <div style={{ fontSize: 12.5, color: T.muted, fontFamily: T.font, padding: "8px 2px" }}>
+              Nenhum relatório salvo ainda — clique em "Novo relatório" para criar um.
+            </div>
+          )}
+          {reports.map(r => (
             <div key={r.id} onClick={() => setActiveReport(r.id)}
               style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", background: activeReport === r.id ? `${T.teal}0a` : T.faint, border: `1px solid ${activeReport === r.id ? T.teal : T.border}`, borderRadius: 10, cursor: "pointer", transition: "all 0.15s" }}>
               <div>
@@ -927,9 +1056,9 @@ const ReportBuilder = () => {
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
-          <Btn variant="secondary" icon={Save}>Salvar relatório</Btn>
-          <Btn variant="ghost"     icon={Link2}>Compartilhar link</Btn>
-          <Btn icon={Download}>Exportar PDF</Btn>
+          <Btn variant="secondary" icon={Save} onClick={handleSaveReport}>Salvar relatório</Btn>
+          <Btn variant="ghost"     icon={Link2} onClick={handleShareLink}>Compartilhar link</Btn>
+          <Btn icon={Download} onClick={handleExportPdf}>Exportar PDF</Btn>
         </div>
       </Card>
     </div>
@@ -944,6 +1073,15 @@ const ChannelSection = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "12px 16px",
+        borderRadius: 12, background: `${T.amber}12`, border: `1px solid ${T.amber}40`,
+      }}>
+        <AlertCircle size={16} color={T.amber} style={{ flexShrink: 0 }} />
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: T.font }}>
+          Esta aba ainda não busca dados reais — precisa antes definir de onde vem canal/origem e custo por canal. Os gráficos abaixo ficam vazios até essa fonte existir.
+        </span>
+      </div>
       <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
         <Card>
           <SectionTitle sub="Leads gerados vs custo por canal — últimos 30 dias">Performance por Fonte</SectionTitle>
@@ -1067,31 +1205,91 @@ const ChannelSection = () => {
 ═══════════════════════════════════════════════════════════ */
 const RealtimeSection = () => {
   const [feed,  setFeed]  = useState([]);
+  const [feedLoading, setFeedLoading] = useState(true);
   const [today, setToday] = useState({ lead_created: 0, form_submit: 0, page_visit: 0 });
+  const [hourly, setHourly] = useState([]);
+  const [campaignPerf, setCampaignPerf] = useState([]);
+  const [error, setError] = useState(null);
 
   const liveStats = [
-    { Icon: User,          label: "Novos leads hoje", value: today.lead_created, color: T.teal  },
-    { Icon: ClipboardList, label: "Forms hoje",       value: today.form_submit,  color: T.violet },
-    { Icon: Link2,         label: "Visitas hoje",     value: today.page_visit,   color: T.cyan  },
+    { Icon: User,          label: "Novos leads hoje", value: today.lead_created, color: T.teal,   pulse: true },
+    { Icon: ClipboardList, label: "Forms hoje",       value: today.form_submit,  color: T.violet, pulse: true },
+    { Icon: Link2,         label: "Visitas hoje",     value: today.page_visit,   color: T.cyan,   pulse: true },
   ];
 
   useEffect(() => {
     const core = supabase.schema("core");
+    const mkt  = supabase.schema("mkt");
     const load = async () => {
-      const startOfDay = new Date(); startOfDay.setHours(0, 0, 0, 0);
-      const [{ data: events }, { data: dayEvents }] = await Promise.all([
+      const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+      const startOfYesterday = new Date(startOfToday); startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+      const [
+        { data: events, error: feedErr },
+        { data: hourEvents, error: hourErr },
+        { data: campaigns, error: campErr },
+      ] = await Promise.all([
         core.from("events")
           .select("id, type, source, payload, occurred_at, persons(full_name)")
           .order("occurred_at", { ascending: false })
           .limit(8),
         core.from("events")
-          .select("type")
-          .gte("occurred_at", startOfDay.toISOString()),
+          .select("occurred_at, type")
+          .in("type", ["lead_created", "form_submit", "page_visit"])
+          .gte("occurred_at", startOfYesterday.toISOString()),
+        mkt.from("campaigns")
+          .select("id, name, status, sent_at")
+          .in("status", ["active", "sent", "sending"])
+          .order("sent_at", { ascending: false, nullsFirst: false })
+          .limit(5),
       ]);
-      if (events?.length) setFeed(events);
+
+      const firstErr = feedErr || hourErr || campErr;
+      if (firstErr) { setError(firstErr.message); setFeedLoading(false); return; }
+
+      if (events) setFeed(events);
+      setFeedLoading(false);
+
+      // contadores de hoje (pro card de KPI) + série por hora (hoje vs ontem)
       const c = {};
-      (dayEvents || []).forEach(e => { c[e.type] = (c[e.type] || 0) + 1; });
+      const buckets = Array.from({ length: 24 }, (_, h) => ({ hora: `${String(h).padStart(2, "0")}h`, hoje: 0, ontem: 0 }));
+      (hourEvents || []).forEach(e => {
+        const d = new Date(e.occurred_at);
+        const isToday = d >= startOfToday;
+        if (isToday) c[e.type] = (c[e.type] || 0) + 1;
+        if (e.type === "lead_created" || e.type === "form_submit") {
+          const bucket = buckets[d.getHours()];
+          if (isToday) bucket.hoje++;
+          else bucket.ontem++;
+        }
+      });
       setToday({ lead_created: c.lead_created || 0, form_submit: c.form_submit || 0, page_visit: c.page_visit || 0 });
+      setHourly(buckets);
+
+      // performance das campanhas ativas/enviadas mais recentes
+      const campaignIds = (campaigns || []).map(cp => cp.id);
+      let sends = [];
+      if (campaignIds.length) {
+        const { data: sendRows, error: sendErr } = await mkt.from("campaign_sends")
+          .select("campaign_id, status, opened_at, clicked_at, converted_at")
+          .in("campaign_id", campaignIds);
+        if (sendErr) { setError(sendErr.message); return; }
+        sends = sendRows || [];
+      }
+      setCampaignPerf((campaigns || []).map(cp => {
+        const rows = sends.filter(s => s.campaign_id === cp.id);
+        const total     = rows.length;
+        const opened    = rows.filter(s => s.opened_at  || ["opened", "clicked", "converted"].includes(s.status)).length;
+        const clicked   = rows.filter(s => s.clicked_at || ["clicked", "converted"].includes(s.status)).length;
+        const converted = rows.filter(s => s.converted_at || s.status === "converted").length;
+        return {
+          name: cp.name,
+          status: cp.status,
+          abertura: total ? Math.round((opened / total) * 100) : 0,
+          ctr:      total ? Math.round((clicked / total) * 100) : 0,
+          conversoes: converted,
+        };
+      }));
     };
     load();
     const iv = setInterval(load, 5000);
@@ -1100,6 +1298,7 @@ const RealtimeSection = () => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      {error && <ErrorBanner>Não foi possível atualizar o Tempo Real: {error}</ErrorBanner>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
         {liveStats.map((s, i) => {
           const SIcon = s.Icon;
@@ -1134,7 +1333,12 @@ const RealtimeSection = () => {
           </div>
 
           <div style={{ overflowY: "auto", maxHeight: 320 }}>
-            {feed.length === 0 && (
+            {feedLoading && (
+              <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>
+                Carregando…
+              </div>
+            )}
+            {!feedLoading && feed.length === 0 && (
               <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>
                 Nenhum evento recente
               </div>
@@ -1169,9 +1373,9 @@ const RealtimeSection = () => {
         </Card>
 
         <Card>
-          <SectionTitle sub="Leads gerados por hora">Hoje vs. Ontem</SectionTitle>
+          <SectionTitle sub="Leads gerados por hora — comparado a ontem">Hoje vs. Ontem</SectionTitle>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={todayVsYesterday}>
+            <LineChart data={hourly}>
               <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" />
               <XAxis dataKey="hora" tick={{ fontSize: 11, fontFamily: T.font, fill: T.muted }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fontFamily: T.font, fill: T.muted }} axisLine={false} tickLine={false} />
@@ -1185,7 +1389,7 @@ const RealtimeSection = () => {
       </div>
 
       <Card>
-        <SectionTitle sub="Performance das campanhas abertas hoje">Campanhas — Visão Hoje</SectionTitle>
+        <SectionTitle sub="Campanhas ativas ou enviadas mais recentemente">Campanhas — Performance atual</SectionTitle>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: T.font }}>
             <thead>
@@ -1196,13 +1400,17 @@ const RealtimeSection = () => {
               </tr>
             </thead>
             <tbody>
+              {campaignPerf.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: "20px 12px", textAlign: "center", fontSize: 12, color: T.muted }}>Nenhuma campanha ativa ou enviada recentemente.</td></tr>
+              )}
               {campaignPerf.map((c, i) => {
-                const statusColor = { ativo: T.green, encerrado: T.muted, pausado: T.amber }[c.status];
+                const statusColor = { active: T.green, sent: T.muted, sending: T.amber }[c.status] || T.muted;
+                const statusLabel = { active: "ativa", sent: "enviada", sending: "enviando" }[c.status] || c.status;
                 const perfPct     = Math.round((c.abertura / 40) * 100);
                 return (
                   <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? T.faint : "#fff" }}>
                     <td style={{ padding: "11px 12px", fontSize: 12, fontWeight: 700, color: T.text }}>{c.name}</td>
-                    <td style={{ padding: "11px 12px" }}><Badge color={statusColor}>{c.status}</Badge></td>
+                    <td style={{ padding: "11px 12px" }}><Badge color={statusColor}>{statusLabel}</Badge></td>
                     <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 700, color: c.abertura < 20 ? T.coral : T.text, fontVariantNumeric: "tabular-nums" }}>{c.abertura}%</td>
                     <td style={{ padding: "11px 12px", fontSize: 13, color: T.muted, fontWeight: 600 }}>{c.ctr}%</td>
                     <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 700, color: T.green }}>{c.conversoes}</td>
@@ -1228,26 +1436,31 @@ const RealtimeSection = () => {
 ═══════════════════════════════════════════════════════════ */
 const ExportSection = () => {
   const [schedules, setSchedules] = useState([]);
-  const [apiCopied, setApiCopied] = useState(null);
-  const copyEndpoint = (path) => { setApiCopied(path); setTimeout(() => setApiCopied(null), 2000); };
+  const [exportingCsv, setExportingCsv] = useState(false);
 
   const exportOptions = [
-    { Icon: FileText,       label: "Export PDF",             sub: "Relatório completo com logo e cores", format: "PDF",   color: T.coral   },
-    { Icon: BarChart2,      label: "Export Excel",           sub: "Dados tabulares + gráficos",          format: "XLSX",  color: T.green   },
-    { Icon: FileSpreadsheet,label: "Export CSV",             sub: "Dados brutos para BI externo",        format: "CSV",   color: T.teal    },
-    { Icon: Link2,          label: "Dashboard Embeddable",   sub: "Link iframe para stakeholders",       format: "EMBED", color: T.violet  },
+    { Icon: FileSpreadsheet,label: "Export CSV",             sub: "Pessoas do core, dados reais",        format: "CSV",   color: T.teal,   ready: true  },
+    { Icon: FileText,       label: "Export PDF",             sub: "Relatório completo com logo e cores", format: "PDF",   color: T.coral,  ready: false },
+    { Icon: BarChart2,      label: "Export Excel",           sub: "Dados tabulares + gráficos",          format: "XLSX",  color: T.green,  ready: false },
+    { Icon: Link2,          label: "Dashboard Embeddable",   sub: "Link iframe para stakeholders",       format: "EMBED", color: T.violet, ready: false },
   ];
+
+  const handleCsvClick = async () => {
+    setExportingCsv(true);
+    try { await exportPersonsCsv(); }
+    finally { setExportingCsv(false); }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <Card>
-          <SectionTitle sub="Exporte qualquer relatório com branding Vantari">Export Rápido</SectionTitle>
+          <SectionTitle sub="Só o CSV está pronto por enquanto — o resto é roadmap">Export Rápido</SectionTitle>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {exportOptions.map((e, i) => {
               const EIcon = e.Icon;
               return (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 10 }}>
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 10, opacity: e.ready ? 1 : 0.6 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: `${e.color}14`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                     <EIcon size={18} color={e.color} aria-hidden="true" />
                   </div>
@@ -1255,7 +1468,9 @@ const ExportSection = () => {
                     <div style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.font }}>{e.label}</div>
                     <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, fontWeight: 600 }}>{e.sub}</div>
                   </div>
-                  <Btn size="xs" variant="secondary" icon={Download}>{e.format}</Btn>
+                  {e.ready
+                    ? <Btn size="xs" variant="secondary" icon={Download} onClick={handleCsvClick} disabled={exportingCsv}>{exportingCsv ? "..." : e.format}</Btn>
+                    : <Badge color={T.muted}>Em breve</Badge>}
                 </div>
               );
             })}
@@ -1264,10 +1479,15 @@ const ExportSection = () => {
 
         <Card>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-            <SectionTitle sub="Envio automático por email">Relatórios Agendados</SectionTitle>
-            <Btn icon={Plus} size="xs">Agendar</Btn>
+            <SectionTitle sub="Envio automático por email — em breve">Relatórios Agendados</SectionTitle>
+            <Btn icon={Plus} size="xs" disabled title="Em breve — ainda não persiste no banco">Agendar</Btn>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {schedules.length === 0 && (
+              <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "16px 0", textAlign: "center" }}>
+                Nenhum relatório agendado ainda — feature em construção.
+              </div>
+            )}
             {schedules.map(s => (
               <div key={s.id} style={{ padding: "12px 14px", background: s.active ? `${T.green}08` : T.faint, border: `1px solid ${s.active ? T.green + "40" : T.border}`, borderRadius: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
@@ -1294,52 +1514,43 @@ const ExportSection = () => {
 
       <Card>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <SectionTitle sub="Integre com Power BI, Looker, Tableau ou BI customizado">API de Integração BI</SectionTitle>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Btn variant="secondary" icon={BookOpen}>Docs</Btn>
-            <Btn icon={KeyRound}>Gerar API Key</Btn>
-          </div>
+          <SectionTitle sub="Integre com Power BI, Looker, Tableau ou BI customizado — roadmap, nada disso existe ainda de verdade">API de Integração BI</SectionTitle>
+          <Badge color={T.muted}>Em breve</Badge>
         </div>
         <div style={{ background: "#0f172a", borderRadius: 12, padding: "12px 16px", marginBottom: 16, fontFamily: T.mono }}>
-          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>Base URL</div>
+          <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6 }}>Base URL (planejada)</div>
           <div style={{ fontSize: 13, color: "#E8EEF3" }}>https://api.vantari.com.br/v1</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {apiEndpoints.map((ep, i) => (
-            <div key={i} style={{ display: "flex", gap: 12, padding: "11px 14px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 10, alignItems: "center" }}>
+            <div key={i} style={{ display: "flex", gap: 12, padding: "11px 14px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 10, alignItems: "center", opacity: 0.65 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: ep.method === "GET" ? T.green : T.teal, fontFamily: T.mono, background: `${ep.method === "GET" ? T.green : T.teal}14`, padding: "3px 8px", borderRadius: 6, flexShrink: 0 }}>
                 {ep.method}
               </span>
               <code style={{ fontSize: 12, color: T.teal, fontFamily: T.mono, flex: "0 0 auto" }}>{ep.path}</code>
               <span style={{ fontSize: 11, color: T.muted, fontFamily: T.font, fontWeight: 600, flex: 1 }}>{ep.desc}</span>
               <Badge color={T.violet}>{ep.auth}</Badge>
-              <button onClick={() => copyEndpoint(ep.path)}
-                style={{ background: "none", border: `1px solid ${T.border}`, borderRadius: 6, padding: "4px 10px", fontSize: 11, fontFamily: T.font, fontWeight: 700, cursor: "pointer", color: apiCopied === ep.path ? T.green : T.muted, display: "flex", alignItems: "center", gap: 4 }}>
-                {apiCopied === ep.path ? <><CheckCircle2 size={11} aria-hidden="true" /> Copiado</> : "Copiar"}
-              </button>
             </div>
           ))}
         </div>
       </Card>
 
       <Card>
-        <SectionTitle sub="Dashboards embeddable para stakeholders externos">Dashboards Embeddable</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <SectionTitle sub="Dashboards embeddable para stakeholders externos — roadmap, ainda não existe">Dashboards Embeddable</SectionTitle>
+          <Badge color={T.muted}>Em breve</Badge>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginTop: 12 }}>
           {[
-            { name: "Overview Executivo",  views: 24, lastView: "2h atrás",  token: "dash_exec_••••••" },
-            { name: "Pipeline Comercial",  views: 8,  lastView: "1d atrás",  token: "dash_pipe_••••••" },
-            { name: "Performance Mktg",    views: 16, lastView: "5h atrás",  token: "dash_mktg_••••••" },
+            { name: "Overview Executivo" },
+            { name: "Pipeline Comercial" },
+            { name: "Performance Mktg" },
           ].map((d, i) => (
-            <div key={i} style={{ padding: "16px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 12 }}>
+            <div key={i} style={{ padding: "16px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 12, opacity: 0.65 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.font, marginBottom: 8 }}>
                 <Monitor size={14} color={T.teal} aria-hidden="true" /> {d.name}
               </div>
-              <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, marginBottom: 4, fontWeight: 600 }}>{d.views} visualizações · {d.lastView}</div>
-              <code style={{ fontSize: 10, color: T.teal, background: `${T.teal}10`, padding: "3px 8px", borderRadius: 6, display: "block", marginBottom: 10, fontFamily: T.mono }}>{d.token}</code>
-              <div style={{ display: "flex", gap: 6 }}>
-                <Btn size="xs" variant="secondary" icon={Link2}>Link</Btn>
-                <Btn size="xs" variant="ghost">iframe</Btn>
-              </div>
+              <div style={{ fontSize: 11, color: T.muted, fontFamily: T.font, fontWeight: 600 }}>Ainda não disponível</div>
             </div>
           ))}
         </div>
@@ -1366,8 +1577,23 @@ const TABS = [
 export default function VantariAnalyticsDashboard() {
   const [activeTab,       setActiveTab]       = useState("overview");
   const [globalDateRange, setGlobalDateRange] = useState("30d");
+  const [collapsed, setCollapsed] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const TAB_LABELS = { overview: "Overview", funnel: "Funil", reports: "Relatórios", channels: "Canais", realtime: "Tempo Real", export: "Export & API" };
+
+  // "Atualizar": remonta a aba ativa, o que refaz todas as buscas dela do zero.
+  const handleRefresh = () => setRefreshKey(k => k + 1);
+
+  // "Exportar" (topbar): CSV real das pessoas do core — dataset mais estável
+  // e útil independente da aba ativa. PDF/Excel/API ficam pra quando essas
+  // features existirem de verdade (ver aba Export & API).
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try { await exportPersonsCsv(); }
+    finally { setExporting(false); }
+  };
 
   return (
     <div style={{ display: "flex", height: "100vh", background: T.bg, fontFamily: T.font, overflow: "hidden" }}>
@@ -1405,10 +1631,11 @@ export default function VantariAnalyticsDashboard() {
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240,
+        width: collapsed ? 64 : 240,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display: "flex", flexDirection: "column", flexShrink: 0,
-        position: "relative", overflow: "hidden",
+        position: "relative", overflow: "visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -1417,33 +1644,42 @@ export default function VantariAnalyticsDashboard() {
         }} />
 
         {/* Brand */}
-        <div style={{ padding: "20px 20px 0", position: "relative" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
+        <div style={{ padding: collapsed ? "20px 0 0" : "20px 20px 0", position: "relative" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-start", gap: 10, paddingBottom: 20, borderBottom: "1px solid rgba(255,255,255,.08)", marginBottom: 16 }}>
             <div style={{ width: 32, height: 32, background: "white", borderRadius: 8, display: "grid", placeItems: "center", flexShrink: 0 }}>
               <img src="/icone.png" alt="" style={{ width: 22, height: 22 }} />
             </div>
-            <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>
-            <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>
+            {!collapsed && <span style={{ fontFamily: T.head, fontSize: 18, fontWeight: 700, letterSpacing: "-0.02em", color: "white" }}>vantari</span>}
+            {!collapsed && <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
-          <NavSection label="Principal" />
-          <NavItem icon={BarChart2}      label="Analytics"     path="/dashboard"    active />
-          <NavItem icon={Users}          label="Leads"         path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"      />
-          <NavSection label="CRM" />
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas" />
-          <NavItem icon={Star}           label="Scoring"       path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
-          <NavSection label="Sistema" />
-          <NavItem icon={Plug}           label="Integrações"   path="/integrations" />
+          <NavSection label="Principal" collapsed={collapsed} />
+          <NavItem icon={BarChart2}      label="Analytics"     path="/dashboard"    active collapsed={collapsed} />
+          <NavItem icon={Users}          label="Leads"         path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"      collapsed={collapsed} />
+          <NavSection label="CRM" collapsed={collapsed} />
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Star}           label="Scoring"       path="/scoring"      collapsed={collapsed} />
+          <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"      collapsed={collapsed} />
+          <NavItem icon={Filter}         label="Segmentações"  path="/segments"     collapsed={collapsed} />
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+          <NavSection label="Sistema" collapsed={collapsed} />
+          <NavItem icon={Plug}           label="Integrações"   path="/integrations" collapsed={collapsed} />
         </div>
 
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
-          <NavItem icon={Settings} label="Configurações" path="/settings" />
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed} />
+        </div>
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display: "flex", alignItems: "center", justifyContent: collapsed ? "center" : "flex-end", gap: 6, padding: collapsed ? "8px 0" : "8px 20px", fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.6)", cursor: "pointer", fontFamily: T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true" /> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true" /></>}
+          </div>
         </div>
       </div>
 
@@ -1465,8 +1701,8 @@ export default function VantariAnalyticsDashboard() {
               style={{ border: `1px solid ${T.border}`, borderRadius: 8, padding: "6px 10px", fontSize: 12, fontFamily: T.font, fontWeight: 600, color: T.text, background: "#fff", cursor: "pointer" }}>
               {["7d","30d","90d","12m"].map(o => <option key={o}>{o}</option>)}
             </select>
-            <Btn variant="secondary" icon={RefreshCw} size="sm">Atualizar</Btn>
-            <Btn icon={Download} size="sm">Exportar</Btn>
+            <Btn variant="secondary" icon={RefreshCw} size="sm" onClick={handleRefresh}>Atualizar</Btn>
+            <Btn icon={Download} size="sm" onClick={handleExportCsv} disabled={exporting}>{exporting ? "Exportando…" : "Exportar"}</Btn>
           </div>
         </div>
 
@@ -1487,11 +1723,11 @@ export default function VantariAnalyticsDashboard() {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px", background: "linear-gradient(180deg, #F0F9FC 0%, #EBF7F3 100%)" }}>
-          {activeTab === "overview"  && <OverviewSection />}
-          {activeTab === "funnel"    && <FunnelSection />}
+          {activeTab === "overview"  && <OverviewSection key={`overview-${refreshKey}`} />}
+          {activeTab === "funnel"    && <FunnelSection key={`funnel-${refreshKey}`} />}
           {activeTab === "reports"   && <ReportBuilder />}
-          {activeTab === "channels"  && <ChannelSection />}
-          {activeTab === "realtime"  && <RealtimeSection />}
+          {activeTab === "channels"  && <ChannelSection key={`channels-${refreshKey}`} />}
+          {activeTab === "realtime"  && <RealtimeSection key={`realtime-${refreshKey}`} />}
           {activeTab === "export"    && <ExportSection />}
         </div>
       </div>

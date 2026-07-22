@@ -4,7 +4,8 @@ import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
   Settings, Link2, Unplug, ClipboardList, RefreshCw, Key,
   AlertTriangle, Pencil, CheckCircle2, XCircle, Download,
-  ArrowLeftRight, Plus, Play, Pause, X, Settings2, Loader2
+  ArrowLeftRight, Plus, Play, Pause, X, Settings2, Loader2, Zap, Filter,
+  ChevronLeft, ChevronRight, LogOut
 } from "lucide-react";
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
@@ -133,7 +134,7 @@ const StatusBadge = ({ status }) => {
 };
 
 /* Btn — accepts icon as string (safe unicode) OR Lucide component */
-const Btn = ({ children, onClick, variant="default", size="md", disabled=false, icon, style:sx={} }) => {
+const Btn = ({ children, onClick, variant="default", size="md", disabled=false, icon, style:sx={}, ...rest }) => {
   const base = {display:"inline-flex",alignItems:"center",gap:6,border:"none",borderRadius:10,cursor:disabled?"not-allowed":"pointer",fontFamily:T.font,fontWeight:700,transition:"all .15s",opacity:disabled?.5:1,outline:"none"};
   const sizes = {sm:{fontSize:12,padding:"5px 12px"},md:{fontSize:13,padding:"7px 16px"},lg:{fontSize:14,padding:"10px 20px"}};
   const variants = {
@@ -147,12 +148,22 @@ const Btn = ({ children, onClick, variant="default", size="md", disabled=false, 
   const fs = sizes[size]?.fontSize||13;
   const IconEl = icon && typeof icon !== "string" ? icon : null;
   return (
-    <button onClick={disabled?undefined:onClick} style={{...base,...sizes[size],...v,...sx}}>
+    <button onClick={disabled?undefined:onClick} style={{...base,...sizes[size],...v,...sx}} {...rest}>
       {IconEl ? <IconEl size={fs} aria-hidden="true"/> : icon ? <span style={{fontSize:fs+1}}>{icon}</span> : null}
       {children}
     </button>
   );
 };
+
+/* PreviewBanner — avisa que a seção mostra dado de exemplo, não sincronização real
+   (Meta Lead Ads / Google Ads API / WhatsApp Cloud API ainda não foram configurados —
+   ver roadmap "Migração do RD Station" no CLAUDE.md) */
+const PreviewBanner = ({ children }) => (
+  <div style={{display:"flex",gap:8,alignItems:"flex-start",padding:"10px 14px",marginBottom:16,background:T.amberL,border:`0.5px solid ${T.amber}50`,borderRadius:10,fontSize:12.5,fontWeight:600,color:"#92400e",fontFamily:T.font}}>
+    <AlertTriangle size={14} color={T.amber} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
+    <span>{children}</span>
+  </div>
+);
 
 const Input = ({ label, value, onChange, placeholder, type="text", mono, hint, required }) => (
   <div style={{marginBottom:14}}>
@@ -225,21 +236,25 @@ const LogRow = ({ log }) => {
 };
 
 /* ─── SIDEBAR NAV HELPERS ─── */
-const NavSection = ({ label }) => (
-  <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
-    {label}
-  </div>
+const NavSection = ({ label, collapsed=false }) => (
+  collapsed ? <div style={{height:10}}/> : (
+    <div style={{fontSize:10,fontWeight:600,letterSpacing:"0.18em",color:"rgba(255,255,255,0.4)",padding:"10px 20px 4px",textTransform:"uppercase",fontFamily:T.head}}>
+      {label}
+    </div>
+  )
 );
-const NavItem = ({ icon:Icon, label, active=false, path }) => {
+const NavItem = ({ icon:Icon, label, active=false, path, collapsed=false }) => {
   const [hov,setHov] = useState(false);
   const navigate = useNavigate();
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => path && navigate(path)}
+      title={collapsed ? label : undefined}
       style={{
         position:"relative",
         display:"flex",alignItems:"center",gap:9,
-        padding:"8px 20px",fontSize:13.5,
+        padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start",
+        fontSize:13.5,
         fontWeight:active?700:600,
         fontFamily:T.font,
         color:active?"#fff":hov?"rgba(255,255,255,0.9)":"rgba(255,255,255,0.6)",
@@ -253,15 +268,76 @@ const NavItem = ({ icon:Icon, label, active=false, path }) => {
           borderRadius:"0 3px 3px 0",
         }}/>
       )}
-      {Icon&&<Icon size={16} aria-hidden="true"/>}{label}
+      {Icon&&<Icon size={16} aria-hidden="true"/>}{!collapsed && label}
     </div>
   );
 };
 
+/* ─── Menu de conta (avatar + email + Sair) ─── */
+function AccountMenu({ collapsed }) {
+  const [email, setEmail] = useState("");
+  const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setEmail(data?.user?.email || ""));
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login", { replace: true });
+  };
+
+  const initial = (email || "?").charAt(0).toUpperCase();
+
+  return (
+    <div style={{ position: "relative" }}>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", bottom: "100%", left: collapsed ? 8 : 12, right: collapsed ? undefined : 12,
+            marginBottom: 8, background: "#fff", borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.35)",
+            border: `1px solid ${T.border}`, overflow: "hidden", minWidth: collapsed ? 176 : undefined, zIndex: 30,
+          }}>
+            <div style={{ padding: "10px 14px", borderBottom: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ink, fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{email || "Usuário"}</div>
+            </div>
+            <div
+              onClick={handleLogout}
+              onMouseEnter={ev => (ev.currentTarget.style.background = T.faint)}
+              onMouseLeave={ev => (ev.currentTarget.style.background = "transparent")}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", fontSize: 13, fontWeight: 600, color: T.coral, cursor: "pointer", fontFamily: T.font }}
+            >
+              <LogOut size={15} aria-hidden="true" />
+              Sair
+            </div>
+          </div>
+        </>
+      )}
+      <div
+        onClick={() => setOpen(o => !o)}
+        title={collapsed ? (email || "Conta") : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 9, padding: collapsed ? "8px 0" : "8px 20px", justifyContent: collapsed ? "center" : "flex-start", cursor: "pointer", userSelect: "none" }}
+      >
+        <div style={{ width: 24, height: 24, borderRadius: "50%", background: "rgba(255,255,255,0.15)", color: "#fff", display: "grid", placeItems: "center", fontSize: 11, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+          {initial}
+        </div>
+        {!collapsed && (
+          <>
+            <span style={{ fontSize: 12.5, color: "rgba(255,255,255,0.75)", fontFamily: T.font, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>{email || "Conta"}</span>
+            <ChevronRight size={14} aria-hidden="true" style={{ color: "rgba(255,255,255,0.4)", transform: open ? "rotate(-90deg)" : "none", transition: "transform .12s", flexShrink: 0 }} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════
    INTEGRATION CARD
 ═══════════════════════════════════════════════════════════ */
-const IntegrationCard = ({ integration, onOpen }) => {
+const IntegrationCard = ({ integration, onOpen, onViewLogs }) => {
   const meta = PROVIDERS[integration.provider];
   const Icon = meta.icon;
   return (
@@ -284,12 +360,12 @@ const IntegrationCard = ({ integration, onOpen }) => {
         {integration.status==="connected"?(
           <>
             <Btn size="sm" variant="secondary" icon={Settings2} onClick={e=>{e.stopPropagation();onOpen(integration);}}>Configurar</Btn>
-            <Btn size="sm" variant="success" icon="↻">Sincronizar</Btn>
+            <Btn size="sm" variant="success" icon="↻" disabled title="Em breve — sincronização automática ainda não construída">Sincronizar</Btn>
           </>
         ):(
           <Btn size="sm" icon={Link2} onClick={e=>{e.stopPropagation();onOpen(integration);}}>Conectar</Btn>
         )}
-        <Btn size="sm" variant="ghost">Ver logs</Btn>
+        <Btn size="sm" variant="ghost" onClick={e=>{e.stopPropagation();onViewLogs&&onViewLogs();}}>Ver logs</Btn>
       </div>
       <StatsBar provider={integration.provider}/>
     </Card>
@@ -471,6 +547,16 @@ const MetaView = ({ integration, onBack }) => {
   const [audiences]  = useState([{id:"aud_1",name:"Site Visitors 30d",size:"14.2K",status:"active"},{id:"aud_2",name:"Leads Qualificados",size:"3.8K",status:"active"},{id:"aud_3",name:"Clientes Ativos",size:"892",status:"syncing"}]);
   const leads = DB.external_leads.filter(l=>l.source==="meta_form");
   const tabs  = [{id:"leads",label:"Leads de Formulário"},{id:"pixel",label:"Pixels"},{id:"audiences",label:"Audiências"},{id:"config",label:"Configuração"}];
+  const [syncing,setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+  const handleSync = async () => {
+    if (integration.status !== "connected") { setSyncMsg("Conecte a integração antes de sincronizar."); setTimeout(()=>setSyncMsg(""),3000); return; }
+    setSyncing(true); setSyncMsg("");
+    await new Promise(r=>setTimeout(r, 900));
+    setSyncing(false);
+    setSyncMsg(`Sincronizado às ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.`);
+    setTimeout(()=>setSyncMsg(""),4000);
+  };
 
   return (
     <div>
@@ -484,9 +570,6 @@ const MetaView = ({ integration, onBack }) => {
             <span style={{fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Account ID: {cfg.account_id}</span>
           </div>
         </div>
-        <div style={{marginLeft:"auto"}}>
-          <Btn size="sm" variant="danger" icon={Unplug}>Desconectar</Btn>
-        </div>
       </div>
       <div style={{display:"flex",gap:4,background:T.border2,borderRadius:10,padding:4,marginBottom:24}}>
         {tabs.map(t=>(
@@ -498,7 +581,13 @@ const MetaView = ({ integration, onBack }) => {
 
       {tab==="leads"&&(
         <div>
-          <SectionHeader title="Leads de Formulários" subtitle={`${leads.length} leads importados`} action={<Btn size="sm" icon="↻">Sincronizar Agora</Btn>}/>
+          <PreviewBanner>Prévia — a importação automática de leads de formulários do Meta ainda não foi construída (depende de um Meta Developer App configurado). Quando o Meta estiver conectado de verdade, os leads reais aparecem aqui.</PreviewBanner>
+          <SectionHeader title="Leads de Formulários" subtitle={`${leads.length} leads importados`} action={
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {syncMsg && <span style={{fontSize:11.5,fontWeight:600,color:T.green,fontFamily:T.font}}>{syncMsg}</span>}
+              <Btn size="sm" icon="↻" disabled title="Em breve — sincronização automática ainda não construída">Sincronizar Agora</Btn>
+            </div>
+          }/>
           <div style={{display:"flex",flexDirection:"column",gap:0,border:`0.5px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
             <div style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr 1fr",padding:"10px 16px",background:T.faint,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>
               <span>Nome</span><span>Email</span><span>Campanha</span><span>Data</span><span>Status</span>
@@ -518,6 +607,7 @@ const MetaView = ({ integration, onBack }) => {
 
       {tab==="pixel"&&(
         <div>
+          <PreviewBanner>Prévia — os eventos de conversão abaixo são um exemplo do que a integração vai mostrar. O código do pixel já pode ser copiado e instalado, mas o rastreamento de eventos do Meta ainda não está ligado ao Vantari.</PreviewBanner>
           <SectionHeader title="Configuração de Pixels" subtitle="Rastreie eventos nas suas landing pages"/>
           <Card>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
@@ -531,11 +621,11 @@ const MetaView = ({ integration, onBack }) => {
               <div style={{marginTop:4,color:"#64748b"}}>{"<!-- End Meta Pixel Code -->"}</div>
             </div>
             <div style={{marginTop:12}}>
-              <Btn icon={ClipboardList}>Copiar Código</Btn>
+              <Btn icon={ClipboardList} onClick={()=>navigator.clipboard?.writeText(`<!-- Meta Pixel Code -->\n// Pixel ID: ${cfg.pixel_id||"SEU_PIXEL_ID"}\n<!-- End Meta Pixel Code -->`)}>Copiar Código</Btn>
             </div>
           </Card>
           <Card style={{marginTop:16}}>
-            <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:12,fontFamily:T.font}}>Eventos de Conversão</div>
+            <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:12,fontFamily:T.font}}>Eventos de Conversão (exemplo)</div>
             {[{event:"PageView",trigger:"Todas as páginas",active:true},{event:"Lead",trigger:"Formulário enviado",active:true},{event:"Purchase",trigger:"Checkout concluído",active:false}].map(ev=>(
               <div key={ev.event} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:`0.5px solid ${T.border}`}}>
                 <div>
@@ -551,7 +641,8 @@ const MetaView = ({ integration, onBack }) => {
 
       {tab==="audiences"&&(
         <div>
-          <SectionHeader title="Audiências Customizadas" subtitle="Sincronize leads para remarketing" action={<Btn size="sm" icon={Plus}>Nova Audiência</Btn>}/>
+          <PreviewBanner>Prévia — audiências de exemplo. A sincronização real de listas para remarketing no Meta ainda não foi construída.</PreviewBanner>
+          <SectionHeader title="Audiências Customizadas" subtitle="Sincronize leads para remarketing" action={<Btn size="sm" icon={Plus} disabled title="Em breve">Nova Audiência</Btn>}/>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {audiences.map(a=>(
               <Card key={a.id}>
@@ -562,7 +653,7 @@ const MetaView = ({ integration, onBack }) => {
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <StatusBadge status={a.status==="active"?"connected":"warning"}/>
-                    <Btn size="sm" variant="secondary" icon="↻">Sync</Btn>
+                    <Btn size="sm" variant="secondary" icon="↻" disabled title="Em breve">Sync</Btn>
                   </div>
                 </div>
               </Card>
@@ -608,7 +699,8 @@ const GoogleView = ({ integration, onBack }) => {
 
       {tab==="conversions"&&(
         <div>
-          <SectionHeader title="Ações de Conversão" subtitle="Importadas do Google Ads" action={<Btn size="sm" icon="↻">Importar</Btn>}/>
+          <PreviewBanner>Prévia — ações de conversão de exemplo. A importação real do Google Ads ainda não foi construída.</PreviewBanner>
+          <SectionHeader title="Ações de Conversão" subtitle="Importadas do Google Ads (exemplo)" action={<Btn size="sm" icon="↻" disabled title="Em breve">Importar</Btn>}/>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[{name:"Lead Form Submit",conversions:284,value:"R$ 0",bidding:"Target CPA"},{name:"Purchase",conversions:47,value:"R$ 2.850",bidding:"Target ROAS"},{name:"Demo Agendada",conversions:21,value:"R$ 0",bidding:"Maximize Conversions"}].map(c=>(
               <Card key={c.name}>
@@ -630,7 +722,8 @@ const GoogleView = ({ integration, onBack }) => {
 
       {tab==="keywords"&&(
         <div>
-          <SectionHeader title="Keywords → Leads" subtitle="Origem por palavra-chave"/>
+          <PreviewBanner>Prévia — dados de exemplo. Essa análise por keyword depende do Google Ads estar de fato conectado e sincronizando.</PreviewBanner>
+          <SectionHeader title="Keywords → Leads" subtitle="Origem por palavra-chave (exemplo)"/>
           <div style={{border:`0.5px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
             <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",padding:"10px 16px",background:T.faint,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",fontFamily:T.font}}>
               <span>Keyword</span><span>Leads</span><span>Score Médio</span><span>Conversão</span>
@@ -649,7 +742,8 @@ const GoogleView = ({ integration, onBack }) => {
 
       {tab==="audiences"&&(
         <div>
-          <SectionHeader title="Audiências para Remarketing" subtitle="Sincronize segmentos para Google Ads" action={<Btn size="sm" icon="↑">Fazer Push</Btn>}/>
+          <PreviewBanner>Prévia — audiências de exemplo. O push real de segmentos para o Google Ads ainda não foi construído.</PreviewBanner>
+          <SectionHeader title="Audiências para Remarketing" subtitle="Sincronize segmentos para Google Ads" action={<Btn size="sm" icon="↑" disabled title="Em breve">Fazer Push</Btn>}/>
           {[{name:"Leads MQL+",size:"1.840",match:"78%",status:"syncing"},{name:"Clientes Recentes 90d",size:"412",match:"85%",status:"connected"},{name:"Visitantes Sem Conversão",size:"6.240",match:"62%",status:"connected"}].map(a=>(
             <Card key={a.name} style={{marginBottom:10}}>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -710,7 +804,7 @@ const WhatsAppView = ({ integration, onBack }) => {
             <Input label="Phone Number ID" value={phoneId} onChange={setPhoneId} mono placeholder="Ex: 102938475647382"/>
             <Input label="WABA ID (WhatsApp Business Account)" value={wabaId} onChange={setWabaId} mono placeholder="Ex: 287634812756348"/>
             <Input label="Access Token (permanente)" value="" onChange={()=>{}} mono placeholder="EAABs..." hint="Gere em Meta for Developers → WhatsApp → Configuração"/>
-            <Btn icon={Link2}>Conectar Número</Btn>
+            <Btn icon={Link2} disabled title="Em breve — conexão com WhatsApp Cloud API ainda não construída">Conectar Número</Btn>
           </Card>
           <Card>
             <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:12,fontFamily:T.font}}>Webhook Incoming</div>
@@ -726,7 +820,10 @@ const WhatsAppView = ({ integration, onBack }) => {
 
       {tab==="templates"&&(
         <div>
-          <SectionHeader title="Templates Aprovados" subtitle="Mensagens pré-aprovadas pelo Meta" action={<Btn size="sm" icon={Plus}>Novo Template</Btn>}/>
+          <SectionHeader title="Templates Aprovados" subtitle="Mensagens pré-aprovadas pelo Meta" action={<Btn size="sm" icon={Plus} disabled title="Em breve">Novo Template</Btn>}/>
+          {templates.length===0&&(
+            <div style={{textAlign:"center",padding:"40px 20px",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Nenhum template ainda — aparecem aqui depois que o WhatsApp Business estiver conectado.</div>
+          )}
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {templates.map(tpl=>(
               <Card key={tpl.id}>
@@ -752,7 +849,8 @@ const WhatsAppView = ({ integration, onBack }) => {
 
       {tab==="history"&&(
         <div>
-          <SectionHeader title="Histórico de Conversas" subtitle="Todas as mensagens por lead"/>
+          <PreviewBanner>Prévia — conversas de exemplo. O histórico real depende do número do WhatsApp estar conectado.</PreviewBanner>
+          <SectionHeader title="Histórico de Conversas" subtitle="Todas as mensagens por lead (exemplo)"/>
           <div style={{border:`0.5px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
             {[{name:"Carlos Mendes",phone:"(11) 98001-2345",lastMsg:"Olá, gostaria de saber mais sobre os planos",time:ago(0.5),unread:2},{name:"Ana Costa",phone:"(21) 99876-5432",lastMsg:"Perfeito! Pode me enviar a proposta?",time:ago(2.1),unread:0},{name:"Roberto Lima",phone:"(31) 97654-3210",lastMsg:"Já recebi o eBook, muito obrigado!",time:ago(5.3),unread:0}].map((c,i)=>(
               <div key={c.phone} style={{display:"flex",alignItems:"center",gap:12,padding:"14px 16px",borderTop:i>0?`0.5px solid ${T.border}`:"none",cursor:"pointer",background:T.surface,transition:"background 0.1s"}}
@@ -814,6 +912,8 @@ const WebhooksView = ({ integration, onBack }) => {
         </div>
       </div>
 
+      <PreviewBanner>Prévia — os endpoints abaixo são exemplo. O envio real de webhooks (com HMAC, retentativas e logs) ainda não foi construído; nada é disparado de verdade ainda.</PreviewBanner>
+
       {showNew&&(
         <Card style={{marginBottom:20,border:`0.5px solid ${T.teal}40`,background:T.blueL}}>
           <div style={{fontSize:14,fontWeight:700,color:T.text,marginBottom:14,fontFamily:T.font}}>Novo Endpoint</div>
@@ -837,7 +937,7 @@ const WebhooksView = ({ integration, onBack }) => {
             {newEp.auth_type!=="none"&&<Input label="Valor" value={newEp.auth_value} onChange={v=>setNewEp({...newEp,auth_value:v})} mono/>}
           </div>
           <div style={{display:"flex",gap:8}}>
-            <Btn>Salvar Endpoint</Btn>
+            <Btn disabled title="Em breve — envio de webhooks ainda não construído">Salvar Endpoint</Btn>
             <Btn variant="secondary" onClick={()=>setShowNew(false)}>Cancelar</Btn>
           </div>
         </Card>
@@ -866,10 +966,10 @@ const WebhooksView = ({ integration, onBack }) => {
             </div>
             <Divider/>
             <div style={{display:"flex",gap:8}}>
-              <Btn size="sm" variant="secondary" onClick={()=>handleTest(ep)} icon="▷">Testar</Btn>
-              <Btn size="sm" variant="ghost" icon={ClipboardList}>Ver Logs</Btn>
-              <Btn size="sm" variant="ghost" icon={Pencil}>Editar</Btn>
-              <Btn size="sm" variant="danger" icon={ep.active?Pause:Play}>{ep.active?"Pausar":"Ativar"}</Btn>
+              <Btn size="sm" variant="secondary" icon="▷" disabled title="Em breve — envio real ainda não construído">Testar</Btn>
+              <Btn size="sm" variant="ghost" icon={ClipboardList} disabled title="Em breve">Ver Logs</Btn>
+              <Btn size="sm" variant="ghost" icon={Pencil} disabled title="Em breve">Editar</Btn>
+              <Btn size="sm" variant="danger" icon={ep.active?Pause:Play} disabled title="Em breve">{ep.active?"Pausar":"Ativar"}</Btn>
             </div>
             {testResult&&testResult.ep===ep.id&&(
               <div style={{marginTop:10,padding:"10px 14px",background:testResult.loading?T.faint:(testResult.success?T.greenL:T.redL),borderRadius:8,fontSize:12,fontWeight:700,color:testResult.loading?T.muted:(testResult.success?"#065f46":T.red),fontFamily:T.font,display:"flex",alignItems:"center",gap:6}}>
@@ -923,6 +1023,7 @@ const FieldMappingView = ({ onBack }) => {
         <Btn size="sm" variant="ghost" icon="←" onClick={onBack}>Voltar</Btn>
         <h2 style={{margin:0,fontSize:17,fontWeight:700,color:T.text,fontFamily:T.head}}>Mapeamento de Campos</h2>
       </div>
+      <PreviewBanner>Prévia — o preview ao lado só mostra dado quando existir um lead real importado do Meta/Google (ainda não construído). O mapeamento em si já pode ser configurado com antecedência.</PreviewBanner>
       <div style={{display:"flex",gap:8,marginBottom:20}}>
         {["meta","google"].map(p=>(
           <button key={p} onClick={()=>setProvider(p)} style={{padding:"7px 18px",border:`0.5px solid ${provider===p?T.teal:T.border}`,borderRadius:20,cursor:"pointer",fontSize:13,fontWeight:700,fontFamily:T.font,background:provider===p?T.blueL:T.surface,color:provider===p?T.teal:T.muted}}>
@@ -957,7 +1058,7 @@ const FieldMappingView = ({ onBack }) => {
           </div>
           <div style={{display:"flex",gap:8}}>
             <Btn size="sm" variant="secondary" icon="+" onClick={addMap}>Adicionar Campo</Btn>
-            <Btn size="sm">Salvar Mapeamento</Btn>
+            <Btn size="sm" disabled title="Em breve — persistência do mapeamento ainda não construída">Salvar Mapeamento</Btn>
           </div>
         </div>
         <div>
@@ -1016,11 +1117,13 @@ const LogsView = ({ onBack }) => {
           <option value="google">Google</option>
           <option value="webhook">Webhook</option>
         </select>
-        <Btn size="sm" variant="secondary" icon="↻">Atualizar</Btn>
-        <Btn size="sm" variant="ghost" icon={Download} style={{marginLeft:"auto"}}>Exportar CSV</Btn>
+        <Btn size="sm" variant="secondary" icon="↻" disabled title="Em breve">Atualizar</Btn>
+        <Btn size="sm" variant="ghost" icon={Download} style={{marginLeft:"auto"}} disabled title="Em breve">Exportar CSV</Btn>
       </div>
-      <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:"0 16px"}}>
-        {logs.map(log=><LogRow key={log.id} log={log}/>)}
+      <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:logs.length?"0 16px":"32px 16px"}}>
+        {logs.length===0
+          ? <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Nenhum log ainda — aparecem aqui quando uma integração conectada sincronizar de verdade.</div>
+          : logs.map(log=><LogRow key={log.id} log={log}/>)}
       </div>
     </div>
   );
@@ -1030,6 +1133,7 @@ const LogsView = ({ onBack }) => {
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════ */
 export default function VantariIntegrationsHub() {
+  const [collapsed,           setCollapsed]          = useState(false);
   const [view,                setView]               = useState("hub");
   const [selectedIntegration, setSelectedIntegration]= useState(null);
   const [dbIntegrations,      setDbIntegrations]     = useState([]);
@@ -1098,10 +1202,11 @@ export default function VantariIntegrationsHub() {
 
       {/* ── SIDEBAR ── */}
       <div style={{
-        width: 240,
+        width: collapsed ? 64 : 240,
+        transition: "width 0.15s",
         background: T.sidebarBg,
         display:"flex", flexDirection:"column", flexShrink:0,
-        position:"relative", overflow:"hidden",
+        position:"relative", overflow:"visible",
       }}>
         {/* glow topo-direito */}
         <div style={{
@@ -1110,32 +1215,41 @@ export default function VantariIntegrationsHub() {
         }}/>
 
         {/* Brand */}
-        <div style={{padding:"20px 20px 0", position:"relative"}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
+        <div style={{padding: collapsed ? "20px 0 0" : "20px 20px 0", position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent: collapsed ? "center" : "flex-start",gap:10,paddingBottom:20,borderBottom:"1px solid rgba(255,255,255,.08)",marginBottom:16}}>
             <div style={{width:32,height:32,background:"white",borderRadius:8,display:"grid",placeItems:"center",flexShrink:0}}>
               <img src="/icone.png" alt="" style={{width:22,height:22}}/>
             </div>
-            <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>
-            <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>
+            {!collapsed && <span style={{fontFamily:T.head,fontSize:18,fontWeight:700,letterSpacing:"-0.02em",color:"white"}}>vantari</span>}
+            {!collapsed && <span style={{marginLeft:"auto",fontSize:10,background:"rgba(255,255,255,.12)",padding:"3px 8px",borderRadius:6,letterSpacing:"0.08em",fontWeight:600,color:"rgba(255,255,255,.85)"}}>PRO</span>}
           </div>
         </div>
 
         <div style={{flex:1,overflowY:"auto",padding:"0 0 8px",position:"relative"}}>
-          <NavSection label="Principal"/>
-          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    />
-          <NavItem icon={Users}          label="Leads"          path="/leads"        />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"       />
-          <NavSection label="CRM"/>
-          <NavItem icon={Briefcase} label="Negócios" path="/crm" />
-          <NavSection label="Ferramentas"/>
-          <NavItem icon={Star}           label="Scoring"        path="/scoring"      />
-          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      />
-          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" />
-          <NavSection label="Sistema"/>
-          <NavItem icon={Plug}           label="Integrações"    path="/integrations" active/>
+          <NavSection label="Principal" collapsed={collapsed}/>
+          <NavItem icon={BarChart2}      label="Analytics"      path="/dashboard"    collapsed={collapsed}/>
+          <NavItem icon={Users}          label="Leads"          path="/leads"        collapsed={collapsed}/>
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"       collapsed={collapsed}/>
+          <NavSection label="CRM" collapsed={collapsed}/>
+          <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed}/>
+          <NavSection label="Ferramentas" collapsed={collapsed}/>
+          <NavItem icon={Star}           label="Scoring"        path="/scoring"      collapsed={collapsed}/>
+          <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      collapsed={collapsed}/>
+          <NavItem icon={Filter}         label="Segmentações"   path="/segments"     collapsed={collapsed}/>
+          <NavItem icon={Bot}            label="IA & Automação" path="/ai-marketing" collapsed={collapsed}/>
+          <NavItem icon={Zap}            label="Automação de Marketing" path="/workflow" collapsed={collapsed}/>
+          <NavSection label="Sistema" collapsed={collapsed}/>
+          <NavItem icon={Plug}           label="Integrações"    path="/integrations" active collapsed={collapsed}/>
         </div>
         <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
-          <NavItem icon={Settings} label="Configurações" path="/settings"/>
+          <AccountMenu collapsed={collapsed} />
+          <NavItem icon={Settings} label="Configurações" path="/settings" collapsed={collapsed}/>
+        </div>
+        <div style={{borderTop:"1px solid rgba(255,255,255,0.08)",padding:"8px 0",position:"relative"}}>
+          <div onClick={() => setCollapsed(c => !c)} title={collapsed ? "Expandir menu" : "Recolher menu"}
+            style={{ display:"flex", alignItems:"center", justifyContent: collapsed ? "center" : "flex-end", gap:6, padding: collapsed ? "8px 0" : "8px 20px", fontSize:12, fontWeight:600, color:"rgba(255,255,255,0.6)", cursor:"pointer", fontFamily:T.font }}>
+            {collapsed ? <ChevronRight size={16} aria-hidden="true"/> : <><span>Recolher</span><ChevronLeft size={16} aria-hidden="true"/></>}
+          </div>
         </div>
       </div>
 
@@ -1174,7 +1288,7 @@ export default function VantariIntegrationsHub() {
 
           {view==="hub"&&(
             <div>
-              <SectionHeader title="Central de Integrações" subtitle="Conecte e gerencie suas plataformas de aquisição e comunicação" action={<Btn icon="↻">Sync Geral</Btn>}/>
+              <SectionHeader title="Central de Integrações" subtitle="Conecte e gerencie suas plataformas de aquisição e comunicação" action={<Btn icon="↻" disabled title="Em breve — sincronização automática ainda não construída">Sync Geral</Btn>}/>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:28}}>
                 {[
@@ -1191,7 +1305,7 @@ export default function VantariIntegrationsHub() {
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:16,marginBottom:28}}>
-                {integrations.map(i=><IntegrationCard key={i.id} integration={i} onOpen={openIntegration}/>)}
+                {integrations.map(i=><IntegrationCard key={i.id} integration={i} onOpen={openIntegration} onViewLogs={()=>setView("logs")}/>)}
               </div>
 
               <div>
@@ -1199,8 +1313,10 @@ export default function VantariIntegrationsHub() {
                   <h3 style={{margin:0,fontSize:14,fontWeight:700,color:T.text,fontFamily:T.head}}>Atividade Recente</h3>
                   <Btn size="sm" variant="ghost" onClick={()=>setView("logs")}>Ver todos →</Btn>
                 </div>
-                <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:"0 16px"}}>
-                  {DB.integration_logs.slice(0,8).map(log=><LogRow key={log.id} log={log}/>)}
+                <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:DB.integration_logs.length?"0 16px":"24px 16px"}}>
+                  {DB.integration_logs.length===0
+                    ? <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Nenhuma atividade ainda.</div>
+                    : DB.integration_logs.slice(0,8).map(log=><LogRow key={log.id} log={log}/>)}
                 </div>
               </div>
             </div>

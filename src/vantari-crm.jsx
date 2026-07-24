@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
+import { Activity, ListChecks } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
 const T = {
   teal: "#0D7491", blue: "#0D7491", green: "#14A273", brand2: "#1F76BC", deep: "#0A3D4D",
@@ -25,7 +27,7 @@ const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 // Cores de coluna por posição/tipo (won=verde, lost=coral, demais por ordem)
 const STAGE_ACCENTS = [T.blue, T.violet, T.amber, T.coral, T.green, T.faint3];
 const stageAccent = (stage, idx) =>
-  stage.kind === "won" ? T.green : stage.kind === "lost" ? T.coral : STAGE_ACCENTS[idx % STAGE_ACCENTS.length];
+  stage.color || (stage.kind === "won" ? T.green : stage.kind === "lost" ? T.coral : STAGE_ACCENTS[idx % STAGE_ACCENTS.length]);
 
 const fmtBRL = (cents) =>
   "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -255,6 +257,10 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavSection label="CRM" collapsed={collapsed} />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" active collapsed={collapsed} />
+        <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
+        <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
+        <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
+        <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
         <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
@@ -349,32 +355,42 @@ function ListaView({ stages, deals, personMap }) {
 function PrevisaoView({ stages, deals }) {
   const ordered = [...stages].sort((a, b) => a.position - b.position);
   const totalGeral = deals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+  const totalPonderado = ordered.reduce((sum, s) => {
+    const stageDeals = deals.filter((d) => d.stage_id === s.id);
+    const stageTotal = stageDeals.reduce((sm, d) => sm + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+    return sum + stageTotal * ((s.probability ?? 0) / 100);
+  }, 0);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ fontSize: 12.5, color: T.muted, fontFamily: T.font, marginBottom: 4 }}>
-        Projeção simples: soma do valor ofertado dos negócios abertos em cada estágio (sem ponderação por probabilidade).
+        Valor total por estágio, e projeção ponderada pela probabilidade % de cada estágio (configurável em Configurações → Pipelines).
       </div>
       {ordered.map((s, i) => {
         const stageDeals = deals.filter((d) => d.stage_id === s.id);
         const total = stageDeals.reduce((sum, d) => sum + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
         const pct = totalGeral > 0 ? (total / totalGeral) * 100 : 0;
+        const ponderado = total * ((s.probability ?? 0) / 100);
         return (
           <div key={s.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 16px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, fontFamily: T.head }}>{s.name}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, fontFamily: T.head }}>{s.name} <span style={{ color: T.muted, fontWeight: 600, fontSize: 11.5 }}>({s.probability ?? 0}%)</span></span>
               <span style={{ fontFamily: T.mono, fontWeight: 700, color: T.teal, fontSize: 13 }}>{fmtBRL(total)}</span>
             </div>
             <div style={{ height: 6, borderRadius: 99, background: T.faint, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${pct}%`, background: stageAccent(s, i), borderRadius: 99 }} />
             </div>
-            <div style={{ fontSize: 11, color: T.muted, marginTop: 4, fontFamily: T.font }}>
-              {stageDeals.length} {stageDeals.length === 1 ? "negócio" : "negócios"} · {pct.toFixed(0)}% do total
+            <div style={{ fontSize: 11, color: T.muted, marginTop: 4, fontFamily: T.font, display: "flex", justifyContent: "space-between" }}>
+              <span>{stageDeals.length} {stageDeals.length === 1 ? "negócio" : "negócios"} · {pct.toFixed(0)}% do total</span>
+              <span>ponderado: <strong style={{ color: T.text }}>{fmtBRL(ponderado)}</strong></span>
             </div>
           </div>
         );
       })}
       <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", fontWeight: 700, color: T.ink, fontFamily: T.font, fontSize: 13 }}>
         <span>Total geral</span><span style={{ fontFamily: T.mono, color: T.teal }}>{fmtBRL(totalGeral)}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 16px", fontWeight: 700, color: T.ink, fontFamily: T.font, fontSize: 13, background: T.faint, borderRadius: 10 }}>
+        <span>Previsão ponderada (por probabilidade)</span><span style={{ fontFamily: T.mono, color: T.green }}>{fmtBRL(totalPonderado)}</span>
       </div>
     </div>
   );
@@ -705,6 +721,89 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
   );
 }
 
+/* ─── Painel de Filtro (popover sob o botão "Filtro") ─── */
+const EMPTY_FILTERS = { stageIds: [], creditType: "all", modalidade: "all", captador: "all", valorMin: "", valorMax: "" };
+function countActiveFilters(f) {
+  let n = 0;
+  if (f.stageIds.length) n++;
+  if (f.creditType !== "all") n++;
+  if (f.modalidade !== "all") n++;
+  if (f.captador !== "all") n++;
+  if (f.valorMin) n++;
+  if (f.valorMax) n++;
+  return n;
+}
+function FilterPanel({ stages, filters, onChange, onClear, onClose }) {
+  const labelSt = { fontSize: 11.5, fontWeight: 600, color: T.text, display: "block", marginBottom: 5, fontFamily: T.font };
+  const selectSt = { width: "100%", padding: "7px 9px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 12.5, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
+  const toggleStage = (id) => {
+    const has = filters.stageIds.includes(id);
+    onChange({ ...filters, stageIds: has ? filters.stageIds.filter((x) => x !== id) : [...filters.stageIds, id] });
+  };
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 40 }} />
+      <div onClick={(e) => e.stopPropagation()} style={{
+        position: "absolute", top: "100%", right: 0, marginTop: 8, width: 300, background: T.surface,
+        border: `1px solid ${T.border}`, borderRadius: 12, boxShadow: "0 12px 32px -12px rgba(0,0,0,.2)", zIndex: 41, padding: 16,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <span style={{ fontFamily: T.head, fontWeight: 700, fontSize: 13.5, color: T.ink }}>Filtrar negócios</span>
+          <button onClick={onClear} style={{ border: "none", background: "none", color: T.teal, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>Limpar</button>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelSt}>Estágio</label>
+          <div style={{ display: "flex", flexDirection: "column", gap: 5, maxHeight: 130, overflowY: "auto" }}>
+            {stages.map((s) => (
+              <label key={s.id} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, color: T.text, cursor: "pointer", fontFamily: T.font }}>
+                <input type="checkbox" checked={filters.stageIds.includes(s.id)} onChange={() => toggleStage(s.id)} />
+                {s.name}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelSt}>Tipo de crédito</label>
+          <select value={filters.creditType} onChange={(e) => onChange({ ...filters, creditType: e.target.value })} style={selectSt}>
+            <option value="all">Todos</option>
+            <option value="reclamante">Reclamante</option>
+            <option value="advogado_honorario">Honorário (adv.)</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelSt}>Modalidade</label>
+          <select value={filters.modalidade} onChange={(e) => onChange({ ...filters, modalidade: e.target.value })} style={selectSt}>
+            <option value="all">Todas</option>
+            <option value="tradicional">Tradicional</option>
+            <option value="kicker">Kicker</option>
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelSt}>Captador/a</label>
+          <select value={filters.captador} onChange={(e) => onChange({ ...filters, captador: e.target.value })} style={selectSt}>
+            <option value="all">Todos</option>
+            {CAPTADORES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={labelSt}>Valor ofertado (R$)</label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input inputMode="numeric" placeholder="Mín." value={filters.valorMin}
+              onChange={(e) => onChange({ ...filters, valorMin: e.target.value.replace(/\D/g, "") })} style={selectSt} />
+            <input inputMode="numeric" placeholder="Máx." value={filters.valorMax}
+              onChange={(e) => onChange({ ...filters, valorMax: e.target.value.replace(/\D/g, "") })} style={selectSt} />
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function CRM() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -716,6 +815,8 @@ export default function CRM() {
   const [showNovo, setShowNovo] = useState(false);
   const [toast, setToast] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [showFilter, setShowFilter] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -729,7 +830,7 @@ export default function CRM() {
       setPipeline(pipe);
 
       const { data: st, error: e2 } = await crm
-        .from("stages").select("id,name,position,kind").eq("pipeline_id", pipe.id).order("position");
+        .from("stages").select("id,name,position,kind,color,probability").eq("pipeline_id", pipe.id).order("position");
       if (e2) throw e2;
       setStages(st || []);
 
@@ -759,8 +860,24 @@ export default function CRM() {
 
   useEffect(() => { load(); }, [load]);
 
-  const dealsByStage = (stageId) => deals.filter((d) => d.stage_id === stageId);
-  const totalGeral = deals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+  const filteredDeals = useMemo(() => {
+    const min = filters.valorMin ? parseInt(filters.valorMin, 10) * 100 : null;
+    const max = filters.valorMax ? parseInt(filters.valorMax, 10) * 100 : null;
+    return deals.filter((d) => {
+      if (filters.stageIds.length && !filters.stageIds.includes(d.stage_id)) return false;
+      if (filters.creditType !== "all" && d.credit_type !== filters.creditType) return false;
+      if (filters.modalidade !== "all" && d.modalidade !== filters.modalidade) return false;
+      if (filters.captador !== "all" && d.captador !== filters.captador) return false;
+      const valor = d.valor_ofertado_cents ?? d.valor_face_cents ?? 0;
+      if (min != null && valor < min) return false;
+      if (max != null && valor > max) return false;
+      return true;
+    });
+  }, [deals, filters]);
+
+  const activeFilterCount = countActiveFilters(filters);
+  const dealsByStage = (stageId) => filteredDeals.filter((d) => d.stage_id === stageId);
+  const totalGeral = filteredDeals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
@@ -773,7 +890,10 @@ export default function CRM() {
               Negócios
             </h1>
             <div style={{ fontSize: 13, color: T.muted, fontFamily: T.font, marginTop: 4 }}>
-              {pipeline ? pipeline.name : "Pipeline"} · {fmtBRL(totalGeral)} em {deals.length} {deals.length === 1 ? "negócio" : "negócios"}
+              {pipeline ? pipeline.name : "Pipeline"} · {fmtBRL(totalGeral)} em {filteredDeals.length} {filteredDeals.length === 1 ? "negócio" : "negócios"}
+              {activeFilterCount > 0 && filteredDeals.length !== deals.length && (
+                <span style={{ color: T.faint3 }}> (de {deals.length} no total)</span>
+              )}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -794,11 +914,17 @@ export default function CRM() {
                 </button>
               ))}
             </div>
-            <button onClick={() => alert("Em construção")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px",
-              background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, cursor: "pointer",
-              fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: T.font }}>
-              <Filter size={14} /> Filtro
-            </button>
+            <div style={{ position: "relative" }}>
+              <button onClick={() => setShowFilter((v) => !v)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px",
+                background: activeFilterCount > 0 ? T.teal : T.surface, border: `1px solid ${activeFilterCount > 0 ? T.teal : T.border}`, borderRadius: 9, cursor: "pointer",
+                fontSize: 12.5, fontWeight: 600, color: activeFilterCount > 0 ? "#fff" : T.text, fontFamily: T.font }}>
+                <Filter size={14} /> Filtro{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              </button>
+              {showFilter && (
+                <FilterPanel stages={stages} filters={filters} onChange={setFilters}
+                  onClear={() => setFilters(EMPTY_FILTERS)} onClose={() => setShowFilter(false)} />
+              )}
+            </div>
             <button onClick={() => pipeline && setShowNovo(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
               background: T.gradient, border: "none", borderRadius: 9, cursor: "pointer",
               fontSize: 13, fontWeight: 700, color: "#fff", fontFamily: T.font }}>
@@ -828,8 +954,14 @@ export default function CRM() {
           </div>
         )}
 
+        {!loading && !error && pipeline && deals.length > 0 && filteredDeals.length === 0 && (
+          <div style={{ textAlign: "center", color: T.muted, padding: "60px 0", fontSize: 13.5 }}>
+            Nenhum negócio corresponde aos filtros aplicados.
+          </div>
+        )}
+
         {/* Board Kanban */}
-        {!loading && !error && pipeline && view === "kanban" && (
+        {!loading && !error && pipeline && (filteredDeals.length > 0 || deals.length === 0) && view === "kanban" && (
           <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
             {stages.map((s, i) => (
               <StageColumn key={s.id} stage={s} accent={stageAccent(s, i)} deals={dealsByStage(s.id)} personMap={personMap} />
@@ -838,13 +970,13 @@ export default function CRM() {
         )}
 
         {/* Visão Lista */}
-        {!loading && !error && pipeline && view === "lista" && (
-          <ListaView stages={stages} deals={deals} personMap={personMap} />
+        {!loading && !error && pipeline && (filteredDeals.length > 0 || deals.length === 0) && view === "lista" && (
+          <ListaView stages={stages} deals={filteredDeals} personMap={personMap} />
         )}
 
         {/* Visão Previsão */}
-        {!loading && !error && pipeline && view === "previsao" && (
-          <PrevisaoView stages={stages} deals={deals} />
+        {!loading && !error && pipeline && (filteredDeals.length > 0 || deals.length === 0) && view === "previsao" && (
+          <PrevisaoView stages={stages} deals={filteredDeals} />
         )}
       </div>
 

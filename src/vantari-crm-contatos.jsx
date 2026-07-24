@@ -4,8 +4,10 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard, Zap, Filter,
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronLeft, ChevronRight, LogOut, Building2,
 } from "lucide-react";
+import { Activity, ListChecks } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 /* ───── DESIGN TOKENS ───── */
 const T = {
@@ -149,6 +151,10 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavSection label="CRM" collapsed={collapsed} />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+        <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
+        <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
+        <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
+        <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
         <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />

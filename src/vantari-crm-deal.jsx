@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
+import { Activity, ListChecks } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 /* ───── DESIGN TOKENS ───── */
 const T = {
   teal: "#0D7491", blue: "#0D7491", green: "#14A273", brand2: "#1F76BC", deep: "#0A3D4D",
@@ -178,6 +180,10 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavSection label="CRM" collapsed={collapsed} />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" active collapsed={collapsed} />
+        <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
+        <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
+        <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
+        <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
         <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />

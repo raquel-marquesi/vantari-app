@@ -12,6 +12,9 @@ import {
 
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { Activity, ListChecks } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 /* ═══════════════════════════════════════════════════
    DESIGN TOKENS — Vantari redesign
 ═══════════════════════════════════════════════════ */
@@ -1264,6 +1267,10 @@ export default function VantariAIMarketing() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email"       collapsed={collapsed} />
           <NavSection label="CRM" collapsed={collapsed}/>
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
+          <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
+          <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
+          <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
           <NavSection label="Ferramentas" collapsed={collapsed}/>
           <NavItem icon={Star}           label="Scoring"        path="/scoring"      collapsed={collapsed} />
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"      collapsed={collapsed} />

@@ -6,7 +6,7 @@ import {
   Building2, CreditCard, ClipboardList, Headphones, Zap, Sparkles,
   Save, Send, Key, Package, RefreshCw, Download, FileText, Plus,
   FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
-  Loader2, AlertTriangle, ArrowUp,
+  Loader2, AlertTriangle, ArrowUp, ArrowDown, Kanban,
   Database, Edit3, Trash2, Search, X, Copy as CopyIcon,
   Activity, Globe, Filter,
   ChevronLeft, ChevronRight, LogOut,
@@ -14,6 +14,7 @@ import {
 
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
+import { ListChecks } from "lucide-react";
 /* ═══════════════════════════════════════════════════════════
    DATABASE SCHEMA (Supabase-compatible)
    ─────────────────────────────────────────────────────────
@@ -160,6 +161,7 @@ const MOCK_INVOICES = [];
 const TABS = [
   { id:"workspace",    Icon:Building2,     label:"Workspace"             },
   { id:"team",         Icon:Users,         label:"Equipe"                },
+  { id:"pipelines",    Icon:Kanban,        label:"Pipelines"             },
   { id:"customfields", Icon:Database,      label:"Campos Personalizados" },
   { id:"tracking",     Icon:Activity,      label:"Lead Tracking"         },
   { id:"email",        Icon:Mail,          label:"Email"                 },
@@ -1113,6 +1115,247 @@ const SupportTab = ({toast}) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   PIPELINES TAB — editor do funil de negócios (crm.pipelines/crm.stages)
+   Substitui o array hardcoded STAGE_ACCENTS de vantari-crm.jsx: agora
+   cor, probabilidade % e ordem dos estágios são reais e configuráveis.
+═══════════════════════════════════════════════════════════ */
+const STAGE_KIND_LABEL = { open: "Em aberto", won: "Ganho", lost: "Perdido" };
+const STAGE_COLOR_PRESETS = ["#0D7491", "#7C5CFF", "#F59E0B", "#FF6B5E", "#14A273", "#1F76BC", "#06B6D4", "#EC4899"];
+
+const PipelinesTab = ({ toast }) => {
+  const [pipeline, setPipeline] = useState(null);
+  const [nameDraft, setNameDraft] = useState("");
+  const [stages, setStages] = useState([]);
+  const [dealCounts, setDealCounts] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [savingName, setSavingName] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [newStage, setNewStage] = useState({ name: "", color: STAGE_COLOR_PRESETS[0], probability: "0", kind: "open" });
+  const [savingNew, setSavingNew] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [rowDraft, setRowDraft] = useState({});
+  const [savingRow, setSavingRow] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setError(null);
+    const crm = supabase.schema("crm");
+    const { data: pipes, error: e1 } = await crm.from("pipelines").select("id,name").eq("is_default", true).limit(1);
+    if (e1) { setError(e1.message); setLoading(false); return; }
+    const pipe = pipes?.[0] || null;
+    setPipeline(pipe);
+    setNameDraft(pipe?.name || "");
+    if (!pipe) { setStages([]); setLoading(false); return; }
+    const { data: st, error: e2 } = await crm.from("stages").select("id,name,position,kind,color,probability").eq("pipeline_id", pipe.id).order("position");
+    if (e2) { setError(e2.message); setLoading(false); return; }
+    setStages(st || []);
+    const stageIds = (st || []).map((s) => s.id);
+    if (stageIds.length) {
+      const { data: dl } = await crm.from("deals").select("stage_id").in("stage_id", stageIds);
+      const counts = {};
+      (dl || []).forEach((d) => { counts[d.stage_id] = (counts[d.stage_id] || 0) + 1; });
+      setDealCounts(counts);
+    } else setDealCounts({});
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const saveName = async () => {
+    if (!nameDraft.trim()) return toast("Informe um nome para o pipeline", "error");
+    setSavingName(true);
+    const { error } = await supabase.schema("crm").from("pipelines").update({ name: nameDraft.trim() }).eq("id", pipeline.id);
+    setSavingName(false);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action: "updated", resource: "crm.pipelines", resource_id: pipeline.id, details: { name: nameDraft.trim() } });
+    toast("Nome do pipeline atualizado!", "success");
+    load();
+  };
+
+  const startEdit = (s) => { setEditingId(s.id); setRowDraft({ name: s.name, color: s.color || STAGE_COLOR_PRESETS[0], probability: String(s.probability ?? 0), kind: s.kind }); };
+  const cancelEdit = () => { setEditingId(null); setRowDraft({}); };
+
+  const saveRow = async (id) => {
+    if (!rowDraft.name?.trim()) return toast("Informe um nome para o estágio", "error");
+    const prob = Math.max(0, Math.min(100, parseInt(rowDraft.probability, 10) || 0));
+    setSavingRow(true);
+    const { error } = await supabase.schema("crm").from("stages").update({
+      name: rowDraft.name.trim(), color: rowDraft.color, probability: prob, kind: rowDraft.kind,
+    }).eq("id", id);
+    setSavingRow(false);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action: "updated", resource: "crm.stages", resource_id: id, details: { name: rowDraft.name, probability: prob, kind: rowDraft.kind } });
+    toast("Estágio atualizado!", "success");
+    cancelEdit();
+    load();
+  };
+
+  const move = async (idx, dir) => {
+    const target = idx + dir;
+    if (target < 0 || target >= stages.length) return;
+    const a = stages[idx], b = stages[target];
+    const crm = supabase.schema("crm");
+    const [r1, r2] = await Promise.all([
+      crm.from("stages").update({ position: b.position }).eq("id", a.id),
+      crm.from("stages").update({ position: a.position }).eq("id", b.id),
+    ]);
+    if (r1.error || r2.error) return toast(`Erro: ${(r1.error || r2.error).message}`, "error");
+    load();
+  };
+
+  const addStage = async () => {
+    if (!newStage.name.trim()) return toast("Informe um nome para o estágio", "error");
+    setSavingNew(true);
+    const prob = Math.max(0, Math.min(100, parseInt(newStage.probability, 10) || 0));
+    const nextPos = stages.length ? Math.max(...stages.map((s) => s.position)) + 1 : 1;
+    const { error } = await supabase.schema("crm").from("stages").insert({
+      workspace_id: WORKSPACE_VANTARI, pipeline_id: pipeline.id, name: newStage.name.trim(),
+      color: newStage.color, probability: prob, kind: newStage.kind, position: nextPos,
+    });
+    setSavingNew(false);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action: "created", resource: "crm.stages", details: { name: newStage.name } });
+    toast("Estágio criado!", "success");
+    setShowNew(false);
+    setNewStage({ name: "", color: STAGE_COLOR_PRESETS[0], probability: "0", kind: "open" });
+    load();
+  };
+
+  const removeStage = async (s) => {
+    const inUse = dealCounts[s.id] || 0;
+    if (inUse > 0) return toast(`${inUse} negócio(s) estão neste estágio — mova-os antes de excluir.`, "error");
+    const sameKind = stages.filter((x) => x.kind === s.kind && x.kind !== "open");
+    if (s.kind !== "open" && sameKind.length <= 1) {
+      return toast(`É preciso manter ao menos um estágio do tipo "${STAGE_KIND_LABEL[s.kind]}".`, "error");
+    }
+    if (!confirm(`Excluir o estágio "${s.name}"?`)) return;
+    const { error } = await supabase.schema("crm").from("stages").delete().eq("id", s.id);
+    if (error) return toast(`Erro: ${error.message}`, "error");
+    logAudit({ action: "deleted", resource: "crm.stages", resource_id: s.id, details: { name: s.name } });
+    toast("Estágio removido", "success");
+    load();
+  };
+
+  const inputSt = { padding: "7px 9px", border: `1.5px solid ${T.border}`, borderRadius: 8, fontSize: 12.5, color: T.text, outline: "none", fontFamily: T.font, background: "#fff" };
+
+  if (loading) {
+    return (
+      <Card style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, padding: 30 }}>
+        <Loader2 size={18} color={T.teal} style={{ animation: "spin 1s linear infinite" }} />
+        <span style={{ fontSize: 13, color: T.muted, fontFamily: T.font }}>Carregando pipeline...</span>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card style={{ borderLeft: `4px solid ${T.coral}`, background: "#fff5f4" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+          <AlertTriangle size={18} color={T.coral} style={{ flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: T.coral, fontFamily: T.head }}>Erro ao carregar pipeline</div>
+            <div style={{ fontSize: 12, color: T.muted, fontFamily: T.mono, marginTop: 4 }}>{error}</div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (!pipeline) {
+    return <Card><div style={{ fontSize: 13, color: T.muted, fontFamily: T.font }}>Nenhum pipeline configurado para este workspace.</div></Card>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <Card>
+        <SectionTitle sub="Nome do funil usado em Negócios (/crm)">Pipeline</SectionTitle>
+        <div style={{ display: "flex", gap: 10, maxWidth: 420 }}>
+          <input value={nameDraft} onChange={(e) => setNameDraft(e.target.value)} style={{ ...inputSt, flex: 1 }} />
+          <Btn onClick={saveName} disabled={savingName || nameDraft === pipeline.name}>
+            {savingName && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />} Salvar
+          </Btn>
+        </div>
+      </Card>
+
+      <Card>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+          <SectionTitle sub="Cor, probabilidade e ordem usadas no Kanban e na Previsão de /crm">Estágios</SectionTitle>
+          <Btn size="sm" icon={<Plus size={12} />} onClick={() => setShowNew((v) => !v)}>Novo estágio</Btn>
+        </div>
+
+        {showNew && (
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", padding: "12px 14px", background: T.faint, borderRadius: 10, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: T.muted, marginBottom: 3 }}>Nome</div>
+              <input value={newStage.name} onChange={(e) => setNewStage((s) => ({ ...s, name: e.target.value }))} style={inputSt} placeholder="Ex: Qualificação" />
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: T.muted, marginBottom: 3 }}>Cor</div>
+              <input type="color" value={newStage.color} onChange={(e) => setNewStage((s) => ({ ...s, color: e.target.value }))} style={{ width: 40, height: 30, padding: 0, border: `1.5px solid ${T.border}`, borderRadius: 8, cursor: "pointer" }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: T.muted, marginBottom: 3 }}>Probabilidade %</div>
+              <input inputMode="numeric" value={newStage.probability} onChange={(e) => setNewStage((s) => ({ ...s, probability: e.target.value.replace(/\D/g, "") }))} style={{ ...inputSt, width: 70 }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 600, color: T.muted, marginBottom: 3 }}>Tipo</div>
+              <select value={newStage.kind} onChange={(e) => setNewStage((s) => ({ ...s, kind: e.target.value }))} style={inputSt}>
+                <option value="open">Em aberto</option>
+                <option value="won">Ganho</option>
+                <option value="lost">Perdido</option>
+              </select>
+            </div>
+            <Btn onClick={addStage} disabled={savingNew}>{savingNew && <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />} Criar</Btn>
+            <Btn variant="ghost" onClick={() => setShowNew(false)}>Cancelar</Btn>
+          </div>
+        )}
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {stages.map((s, idx) => {
+            const isEditing = editingId === s.id;
+            const n = dealCounts[s.id] || 0;
+            return (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#fff" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <button onClick={() => move(idx, -1)} disabled={idx === 0} style={{ border: "none", background: "none", cursor: idx === 0 ? "default" : "pointer", color: idx === 0 ? T.faint3 : T.muted, padding: 0 }}><ArrowUp size={14} /></button>
+                  <button onClick={() => move(idx, 1)} disabled={idx === stages.length - 1} style={{ border: "none", background: "none", cursor: idx === stages.length - 1 ? "default" : "pointer", color: idx === stages.length - 1 ? T.faint3 : T.muted, padding: 0 }}><ArrowDown size={14} /></button>
+                </div>
+
+                {isEditing ? (
+                  <>
+                    <input type="color" value={rowDraft.color} onChange={(e) => setRowDraft((r) => ({ ...r, color: e.target.value }))} style={{ width: 34, height: 30, padding: 0, border: `1.5px solid ${T.border}`, borderRadius: 8, cursor: "pointer", flexShrink: 0 }} />
+                    <input value={rowDraft.name} onChange={(e) => setRowDraft((r) => ({ ...r, name: e.target.value }))} style={{ ...inputSt, flex: 1, minWidth: 120 }} />
+                    <input inputMode="numeric" value={rowDraft.probability} onChange={(e) => setRowDraft((r) => ({ ...r, probability: e.target.value.replace(/\D/g, "") }))} style={{ ...inputSt, width: 56 }} />
+                    <span style={{ fontSize: 12, color: T.muted }}>%</span>
+                    <select value={rowDraft.kind} onChange={(e) => setRowDraft((r) => ({ ...r, kind: e.target.value }))} style={inputSt}>
+                      <option value="open">Em aberto</option>
+                      <option value="won">Ganho</option>
+                      <option value="lost">Perdido</option>
+                    </select>
+                    <Btn size="xs" onClick={() => saveRow(s.id)} disabled={savingRow}>Salvar</Btn>
+                    <Btn size="xs" variant="ghost" onClick={cancelEdit}>Cancelar</Btn>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ width: 14, height: 14, borderRadius: "50%", background: s.color || T.faint3, flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, fontFamily: T.font, flex: 1 }}>{s.name}</span>
+                    <Badge color={T.muted} bg={T.faint}>{STAGE_KIND_LABEL[s.kind]}</Badge>
+                    <span style={{ fontSize: 12, fontFamily: T.mono, color: T.muted, width: 42, textAlign: "right" }}>{s.probability ?? 0}%</span>
+                    <span style={{ fontSize: 11.5, color: T.faint3, width: 70, textAlign: "right" }}>{n} negócio{n === 1 ? "" : "s"}</span>
+                    <button onClick={() => startEdit(s)} title="Editar" style={{ border: "none", background: "none", cursor: "pointer", color: T.teal, padding: 4 }}><Edit3 size={14} /></button>
+                    <button onClick={() => removeStage(s)} title="Excluir" style={{ border: "none", background: "none", cursor: "pointer", color: T.coral, padding: 4 }}><Trash2 size={14} /></button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    CUSTOM FIELDS TAB — gerenciador de campos personalizados
    Substitui o módulo "Campos Personalizados" do RD Station.
    Dados em Supabase: custom_fields + lead_custom_values
@@ -1767,6 +2010,10 @@ export default function VantariSettingsAdmin() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed}/>
           <NavSection label="CRM" collapsed={collapsed}/>
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed}/>
+          <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed}/>
+          <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed}/>
+          <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed}/>
+          <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed}/>
           <NavSection label="Ferramentas" collapsed={collapsed}/>
           <NavItem icon={Star}           label="Scoring"        path="/scoring"       collapsed={collapsed}/>
           <NavItem icon={LayoutTemplate} label="Landing Pages"  path="/landing"       collapsed={collapsed}/>
@@ -1822,6 +2069,7 @@ export default function VantariSettingsAdmin() {
       <div style={{flex:1,overflowY:"auto",background:T.bg}}><div style={{padding:"24px 28px",maxWidth:1100,margin:"0 auto"}}>
         {activeTab==="workspace"   &&<WorkspaceTab    toast={toast}/>}
         {activeTab==="team"        &&<TeamTab         toast={toast}/>}
+        {activeTab==="pipelines"   &&<PipelinesTab    toast={toast}/>}
         {activeTab==="customfields"&&<CustomFieldsTab toast={toast}/>}
         {activeTab==="tracking"    &&<TrackingTab     toast={toast}/>}
         {activeTab==="email"       &&<EmailTab        toast={toast}/>}

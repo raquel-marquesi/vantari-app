@@ -4,6 +4,9 @@ import { supabase } from "./supabase";
 import { Loader2, AlertCircle, BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap, Filter, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { IdCard } from "lucide-react";
 import { Briefcase } from "lucide-react";
+import { Building2 } from "lucide-react";
+import { Activity, ListChecks } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 /* ─── design tokens ─── */
@@ -1152,6 +1155,10 @@ export default function WorkflowBuilderPage() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed} />
           <NavSection label="CRM" collapsed={collapsed} />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
+          <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
+          <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
+          <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
+          <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
           <NavSection label="Ferramentas" collapsed={collapsed} />
           <NavItem icon={Star}           label="Scoring"         path="/scoring"      collapsed={collapsed} />
           <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing"      collapsed={collapsed} />

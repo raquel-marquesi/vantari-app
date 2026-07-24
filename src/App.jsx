@@ -16,6 +16,10 @@ const Segments         = lazy(() => import("./vantari-segments"));
 const CRM              = lazy(() => import("./vantari-crm"));
 const DealDetail       = lazy(() => import("./vantari-crm-deal"));
 const Contatos         = lazy(() => import("./vantari-crm-contatos"));
+const Empresas         = lazy(() => import("./vantari-crm-empresas"));
+const Atividades       = lazy(() => import("./vantari-crm-atividades"));
+const Tarefas          = lazy(() => import("./vantari-crm-tarefas"));
+const EmRisco          = lazy(() => import("./vantari-crm-em-risco"));
 const PublicForm       = lazy(() => import("./vantari-public-form"));
 
 function PageLoader() {
@@ -95,6 +99,10 @@ export default function App() {
           <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
           <Route path="/crm"           element={<ProtectedRoute><CRM /></ProtectedRoute>} />
           <Route path="/crm/:dealId"   element={<ProtectedRoute><DealDetail /></ProtectedRoute>} />
+          <Route path="/empresas"      element={<ProtectedRoute><Empresas /></ProtectedRoute>} />
+          <Route path="/activities"    element={<ProtectedRoute><Atividades /></ProtectedRoute>} />
+          <Route path="/tasks"         element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />
+          <Route path="/risco"         element={<ProtectedRoute><EmRisco /></ProtectedRoute>} />
           {/* /contatos → redireciona pra /leads (termo adotado pela equipe) */}
           <Route path="/contatos"      element={<Navigate to="/leads" replace />} />
           <Route path="*"               element={<NotFound />} />

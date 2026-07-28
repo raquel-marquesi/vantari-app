@@ -187,7 +187,12 @@ const FIELDS = [
   { value: "visited_page",    label: "Visitou página",      type: "page",   src: "event" },   // core.events (inerte até tracker no core)
   { value: "unsubscribed",    label: "Descadastrado (email)", type: "bool", src: "consent" }, // core.consents (inerte até consent no core)
 ];
-const fieldOf = (rule) => FIELDS.find(f => f.value === rule.field) || FIELDS[0];
+// "id" é uma regra de sistema (lote estático vindo de importação de CSV em /leads),
+// nunca aparece no seletor de campos (FIELDS) — precisa de fallback próprio pra não
+// cair em FIELDS[0] (score) e ser processada errado como regra de score.
+const fieldOf = (rule) => rule.field === "id"
+  ? { value: "id", label: "Lote importado", type: "id_list", src: "id_list" }
+  : FIELDS.find(f => f.value === rule.field) || FIELDS[0];
 
 const OPS = {
   number: [{ v: "gt", l: ">" }, { v: "gte", l: "≥" }, { v: "lt", l: "<" }, { v: "lte", l: "≤" }, { v: "eq", l: "=" }],
@@ -241,6 +246,13 @@ async function buildPersonConstraints(filters) {
     const { data, error } = await q.limit(5000);
     if (error) throw error;
     allowed = intersect(allowed, (data || []).map(x => x.person_id));
+  }
+
+  // LOTE IMPORTADO — regra de sistema {field:"id", op:"in", value:[person_id,...]}
+  // criada quando um CSV é importado em /leads com "criar segmentação" marcado.
+  for (const r of rules.filter(r => r.field === "id" && r.op === "in")) {
+    const ids = Array.isArray(r.value) ? r.value : [];
+    allowed = intersect(allowed, ids);
   }
 
   // ESTÁGIO — crm.deals (pessoa com negócio no estágio). value = stage_id
@@ -533,7 +545,14 @@ function SegmentModal({ segment, onClose, onSave }) {
                 </div>
               )}
               {filters.map((rule, i) => (
-                <RuleRow key={i} rule={rule} onChange={r => updateRule(i, r)} onRemove={() => removeRule(i)} />
+                rule.field === "id" ? (
+                  <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8, padding: "9px 12px", background: T.faint, border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12.5, color: T.text, fontFamily: T.font }}>
+                    <span>📥 Lote importado — {Array.isArray(rule.value) ? rule.value.length : 0} pessoas</span>
+                    <button onClick={() => removeRule(i)} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted, display: "flex" }}><X size={14} aria-hidden="true" /></button>
+                  </div>
+                ) : (
+                  <RuleRow key={i} rule={rule} onChange={r => updateRule(i, r)} onRemove={() => removeRule(i)} />
+                )
               ))}
             </div>
           </div>
@@ -639,6 +658,13 @@ function SegmentCard({ segment, leadCount, loading, onEdit, onDuplicate, onDelet
       {ruleCount > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 12 }}>
           {segment.rules.slice(0, 3).map((rule, i) => {
+            if (rule.field === "id") {
+              return (
+                <span key={i} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: T.faint, color: T.muted, border: `1px solid ${T.border}`, fontFamily: T.font }}>
+                  📥 Lote importado ({Array.isArray(rule.value) ? rule.value.length : 0})
+                </span>
+              );
+            }
             const f = FIELDS.find(x => x.value === rule.field);
             const allOps = [...OPS.number, ...OPS.text, ...OPS.enum, ...OPS.stage, ...OPS.page];
             const o = allOps.find(x => x.v === rule.op);

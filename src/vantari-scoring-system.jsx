@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Scale, Layers, Target, Settings, Users, Mail,
   LayoutTemplate, Bot, Plug, Star, X, Plus, CheckCircle2, AlertCircle,
   Activity, Loader2, Briefcase, RefreshCw, Trash2, Award, Zap, Filter,
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronLeft, ChevronRight, LogOut, Building2, ListChecks, AlertTriangle,
 } from "lucide-react";
 import { supabase } from "./supabase";
 
@@ -543,7 +544,7 @@ export default function VantariScoringSystem() {
   const [tab, setTab]       = useState("geral");
   const [dirty, setDirty]   = useState(false);
   const [recomputing, setRecomputing] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   const mkt = () => supabase.schema("mkt");
 
@@ -675,6 +676,10 @@ export default function VantariScoringSystem() {
           <NavItem icon={Mail}           label="Email Marketing" path="/email" collapsed={collapsed} />
           <NavSection label="CRM" collapsed={collapsed} />
           <NavItem icon={Briefcase}      label="Negócios"        path="/crm" collapsed={collapsed} />
+          <NavItem icon={Building2}      label="Empresas"        path="/empresas" collapsed={collapsed} />
+          <NavItem icon={Activity}       label="Atividades"      path="/activities" collapsed={collapsed} />
+          <NavItem icon={ListChecks}     label="Tarefas"         path="/tasks" collapsed={collapsed} />
+          <NavItem icon={AlertTriangle}  label="Em Risco"        path="/risco" collapsed={collapsed} />
           <NavSection label="Ferramentas" collapsed={collapsed} />
           <NavItem icon={Star}           label="Scoring"         path="/scoring" active collapsed={collapsed} />
           <NavItem icon={LayoutTemplate} label="Landing Pages"   path="/landing" collapsed={collapsed} />

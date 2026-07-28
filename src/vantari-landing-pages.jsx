@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -2041,7 +2042,7 @@ export default function VantariLandingPages() {
   const [toast,       setToast]   = useState(null);
   const [landingSpark, setLandingSpark] = useState({ pages: [], visitors: [], leads: [], conv: [] });
   const [viewMode, setViewMode] = useState("pages");  // "pages" | "forms"
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [realLPs, setRealLPs] = useState(REAL_LPS.map(lp => ({ ...lp, active:false, formId:null, metrics:{visitors:0,leads:0,convRate:0} })));
   const [loadingReal, setLoadingReal] = useState(true);
 

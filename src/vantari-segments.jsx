@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -828,7 +829,7 @@ export default function VantariSegments() {
   const [modal, setModal]         = useState(null);
   const [detail, setDetail]       = useState(null);
   const [search, setSearch]       = useState("");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   const [segSpark, setSegSpark] = useState({ segments: [], leads: [] });
 

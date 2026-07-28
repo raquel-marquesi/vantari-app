@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -348,7 +349,7 @@ export default function Atividades() {
   const [tab, setTab] = useState("todas");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);

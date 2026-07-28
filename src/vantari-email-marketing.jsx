@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
@@ -2406,7 +2407,7 @@ export default function VantariEmailMarketing() {
   const [editCamp,   setEditCamp]   = useState(null);
   const [reportCamp, setReportCamp] = useState(null);
   const [sendModal,  setSendModal]  = useState(null);
-  const [collapsed,  setCollapsed]  = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   const fetchCampaigns = useCallback(async () => {
     setLoading(true);

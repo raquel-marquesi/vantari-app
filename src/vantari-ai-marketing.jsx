@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -1178,7 +1179,7 @@ export default function VantariAIMarketing() {
   const [tab,      setTab]      = useState("email");
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [leads,    setLeads]    = useState([]);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
 
   useEffect(() => {
     supabase.from("leads")

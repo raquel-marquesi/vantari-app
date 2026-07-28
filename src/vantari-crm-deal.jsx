@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -260,7 +261,7 @@ export default function DealDetail() {
   const [editing, setEditing] = useState(null); // 'deal' | 'processo' | 'person' | 'company'
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
   const load = useCallback(async () => {

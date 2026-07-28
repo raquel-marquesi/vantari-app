@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, createElement, Fragment } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import { Loader2, AlertCircle, BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Zap, Filter, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
@@ -1164,7 +1165,7 @@ function WorkflowWidget({ tab, setTab, editFlowId, setEditFlowId }) {
    PAGE WRAPPER (sidebar + content)
 ════════════════════════════════════════════ */
 export default function WorkflowBuilderPage() {
-  const [collapsed, setCollapsed]   = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [tab, setTab]               = useState("workflows");
   const [editFlowId, setEditFlowId] = useState(null);
   const sidebarW = collapsed ? 64 : 240;

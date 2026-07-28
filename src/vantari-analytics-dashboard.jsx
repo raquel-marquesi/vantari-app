@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -1580,7 +1581,7 @@ const TABS = [
 export default function VantariAnalyticsDashboard() {
   const [activeTab,       setActiveTab]       = useState("overview");
   const [globalDateRange, setGlobalDateRange] = useState("30d");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [refreshKey, setRefreshKey] = useState(0);
   const [exporting, setExporting] = useState(false);
 

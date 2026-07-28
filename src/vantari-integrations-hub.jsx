@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import {
   BarChart2, Users, Mail, LayoutTemplate, Bot, Plug, Star,
@@ -1135,7 +1136,7 @@ const LogsView = ({ onBack }) => {
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════════ */
 export default function VantariIntegrationsHub() {
-  const [collapsed,           setCollapsed]          = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [view,                setView]               = useState("hub");
   const [selectedIntegration, setSelectedIntegration]= useState(null);
   const [dbIntegrations,      setDbIntegrations]     = useState([]);

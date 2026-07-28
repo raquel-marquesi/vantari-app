@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -814,7 +815,7 @@ export default function CRM() {
   const [view, setView] = useState("kanban");
   const [showNovo, setShowNovo] = useState(false);
   const [toast, setToast] = useState(null);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilter, setShowFilter] = useState(false);
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -1973,7 +1974,7 @@ function AccountMenu({ collapsed }) {
 
 export default function VantariSettingsAdmin() {
   const [activeTab,setActiveTab] = useState("workspace");
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const {toasts,push:toast} = useToast();
 
   return (

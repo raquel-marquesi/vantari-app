@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -852,7 +853,7 @@ export default function VantariOnboardingWizard() {
   const [verifyingDns, setVerifyingDns] = useState(false);
   const [newMembro, setNewMembro] = useState({ email:"", role:"analista" });
   const [newAlerta, setNewAlerta] = useState({ tipo:"sql", canal:"email", threshold:"85" });
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useSidebarCollapsed();
   const navigate = useNavigate();
 
   /* helpers */

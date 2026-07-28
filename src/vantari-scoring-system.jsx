@@ -669,7 +669,7 @@ export default function VantariScoringSystem() {
             {!collapsed && <span style={{ marginLeft: "auto", fontSize: 10, background: "rgba(255,255,255,.12)", padding: "3px 8px", borderRadius: 6, letterSpacing: "0.08em", fontWeight: 600, color: "rgba(255,255,255,.85)" }}>PRO</span>}
           </div>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
+        <div className="vantari-sidebar-nav" style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
           <NavSection label="Principal" collapsed={collapsed} />
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard" collapsed={collapsed} />
           <NavItem icon={Users}          label="Leads"           path="/leads" collapsed={collapsed} />

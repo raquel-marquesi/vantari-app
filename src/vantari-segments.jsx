@@ -951,7 +951,7 @@ export default function VantariSegments() {
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", paddingTop: 0, position: "relative" }}>
+        <div className="vantari-sidebar-nav" style={{ flex: 1, overflowY: "auto", paddingTop: 0, position: "relative" }}>
           <NavSection label="Principal" collapsed={collapsed} />
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    collapsed={collapsed} />
           <NavItem icon={Users}          label="Leads"           path="/leads"        collapsed={collapsed} />

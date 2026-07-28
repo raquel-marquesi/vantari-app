@@ -1658,7 +1658,7 @@ export default function VantariAnalyticsDashboard() {
           </div>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
+        <div className="vantari-sidebar-nav" style={{ flex: 1, overflowY: "auto", padding: "0 0 8px", position: "relative" }}>
           <NavSection label="Principal" collapsed={collapsed} />
           <NavItem icon={BarChart2}      label="Analytics"     path="/dashboard"    active collapsed={collapsed} />
           <NavItem icon={Users}          label="Leads"         path="/leads"        collapsed={collapsed} />

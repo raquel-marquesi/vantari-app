@@ -10,7 +10,7 @@ select
 from auth.users u
 left join public.team_members tm on tm.email = u.email;
 
-grant select on public.v_user_directory to authenticated, anon;
+grant select on public.v_user_directory to authenticated;
 
 -- Índices de suporte às novas telas de Atividades/Tarefas (listagem por vencimento/status)
 create index if not exists activities_due_at_idx  on crm.activities (due_at);

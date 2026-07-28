@@ -164,7 +164,8 @@ const NC = {
   action:    { label: "Ação",      icon: "ti-player-play", clr: "#0F6E56", bg: "#E1F5EE", bdr: "#1D9E75", tx: "#085041" },
   delay:     { label: "Espera",    icon: "ti-clock",       clr: "#993C1D", bg: "#FAECE7", bdr: "#D85A30", tx: "#4A1B0C" },
 };
-const TRIG = ["Envio de Formulário","Tag Adicionada","Tag Removida","Score Atingido","Email Aberto","Email Clicado","Visita à Página","Aniversário","Dias Após Cadastro","Manual"];
+const TRIG = ["Envio de Formulário","Tag Adicionada","Tag Removida","Score Atingido","Email Aberto","Email Clicado","Visita à Página","Aniversário","Dias Após Cadastro","Pertence à Segmentação","Manual"];
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 const ACTS = ["Enviar Email","Adicionar Tag","Remover Tag","Mudar Etapa","Webhook POST"];
 const UNIT_LABELS  = { minutes: "minutos", hours: "horas", days: "dias", weeks: "semanas" };
 const FIELD_LABELS = { score: "Score", tag: "Tag", stage: "Etapa", email: "Email", source: "Origem", country: "País" };
@@ -174,7 +175,10 @@ const OP_LABELS = { "=": "Igual a", "≠": "Diferente de", ">": "Maior que", "<"
 /* deriva o texto do card a partir da configuração escolhida — o nó não precisa
    de um nome manual, o que foi selecionado já identifica a etapa */
 function computeLabel(type, cfg = {}) {
-  if (type === "trigger") return cfg.trigger || "Selecione o gatilho";
+  if (type === "trigger") {
+    if (cfg.trigger === "Pertence à Segmentação") return cfg.segment_name ? `${cfg.trigger} · ${cfg.segment_name}` : cfg.trigger;
+    return cfg.trigger || "Selecione o gatilho";
+  }
   if (type === "condition") {
     if (cfg.field && cfg.op && cfg.value) return `${FIELD_LABELS[cfg.field] || cfg.field} ${(OP_LABELS[cfg.op] || cfg.op).toLowerCase()} ${cfg.value}`;
     return "Configure a condição";
@@ -399,7 +403,7 @@ function Palette({ onAdd }) {
 }
 
 /* ── node config panel ── */
-function NodeConfig({ node, onChange, onClose, onDelete }) {
+function NodeConfig({ node, onChange, onClose, onDelete, segments = [] }) {
   const c = NC[node.type];
   const e = createElement;
   const fld = (lbl, child) => e("div", { style: { marginBottom: 9 } },
@@ -417,6 +421,18 @@ function NodeConfig({ node, onChange, onClose, onDelete }) {
       return e("option", { key: v, value: v }, l);
     })
   );
+  const segSel = () => segments.length === 0
+    ? e("div", { style: { fontSize: 11, color: T.muted, fontFamily: T.font } }, "Nenhuma segmentação criada ainda — crie uma em Segmentações.")
+    : e("select", {
+        value: node.cfg?.segment_id || "", style: inpStyle,
+        onChange: ev => {
+          const opt = segments.find(s => s.id === ev.target.value);
+          applyCfg({ ...node.cfg, segment_id: ev.target.value, segment_name: opt?.name || "" });
+        },
+      },
+        e("option", { value: "" }, "— selecionar —"),
+        ...segments.map(s => e("option", { key: s.id, value: s.id }, s.name))
+      );
   return e("div", { style: { padding: 12 } },
     e("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 } },
       e("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
@@ -435,6 +451,7 @@ function NodeConfig({ node, onChange, onClose, onDelete }) {
       node.cfg?.trigger === "Visita à Página"       && fld("URL contém", inp("url", "/pricing")),
       node.cfg?.trigger === "Dias Após Cadastro"&& fld("Dias", inp("days", "7")),
       node.cfg?.trigger === "Tag Adicionada"        && fld("Tag", inp("tag", "hot-lead")),
+      node.cfg?.trigger === "Pertence à Segmentação" && fld("Segmentação", segSel()),
     ),
     node.type === "condition" && e(Fragment, null,
       fld("Campo",    sel("field", Object.entries(FIELD_LABELS).map(([value, label]) => ({ value, label })))),
@@ -601,11 +618,27 @@ function LogView() {
       setLoading(true); setError(null);
       const { data, error: err } = await supabase
         .from("flow_runs")
-        .select("id, step, status, started_at, log, automation_flows(name), leads(email)")
+        .select("id, status, started_at, log, flow_id, person_id")
         .order("started_at", { ascending: false })
         .limit(100);
-      if (err) setError(err.message);
-      else setRuns(data || []);
+      if (err) { setError(err.message); setLoading(false); return; }
+      const list = data || [];
+
+      const flowIds   = [...new Set(list.map(r => r.flow_id).filter(Boolean))];
+      const personIds = [...new Set(list.map(r => r.person_id).filter(Boolean))];
+      const [flowsRes, personsRes] = await Promise.all([
+        flowIds.length ? supabase.from("automation_flows").select("id,name").in("id", flowIds) : Promise.resolve({ data: [] }),
+        personIds.length ? supabase.schema("core").from("persons").select("id,full_name,primary_email").in("id", personIds) : Promise.resolve({ data: [] }),
+      ]);
+      const flowMap   = Object.fromEntries((flowsRes.data || []).map(f => [f.id, f.name]));
+      const personMap = Object.fromEntries((personsRes.data || []).map(p => [p.id, p.full_name || p.primary_email || "—"]));
+
+      setRuns(list.map(r => ({
+        ...r,
+        flowName:    flowMap[r.flow_id] || "—",
+        personLabel: personMap[r.person_id] || "—",
+        lastLog:     Array.isArray(r.log) && r.log.length ? r.log[r.log.length - 1].msg : "—",
+      })));
       setLoading(false);
     };
     load();
@@ -613,9 +646,10 @@ function LogView() {
 
   const filtered = filter === "all" ? runs : runs.filter(r => r.status === filter);
   const statusStyle = (s) => ({
-    success: { bg: `${T.green}14`, cl: T.green },
-    error:   { bg: `${T.coral}14`, cl: T.coral },
-    waiting: { bg: `${T.amber}18`, cl: T.amber },
+    completed: { bg: `${T.green}14`, cl: T.green },
+    failed:    { bg: `${T.coral}14`, cl: T.coral },
+    waiting:   { bg: `${T.amber}18`, cl: T.amber },
+    running:   { bg: `${T.teal}14`, cl: T.teal },
   }[s] || { bg: T.faint, cl: T.muted });
 
   return (
@@ -627,9 +661,9 @@ function LogView() {
           <p style={{ fontSize: 13, color: T.muted, margin: 0, fontFamily: T.font }}>Últimas 100 execuções</p>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
-          {["all","success","error","waiting"].map(f => (
+          {["all","running","waiting","completed","failed"].map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{ padding: "5px 12px", fontSize: 11, borderRadius: 20, fontWeight: filter === f ? 700 : 600, background: filter === f ? T.teal : "none", color: filter === f ? "#fff" : T.muted, border: filter === f ? "none" : `1px solid ${T.border}`, cursor: "pointer", fontFamily: T.font }}>
-              {{ all: "Todos", success: "sucesso", error: "erro", waiting: "aguardando" }[f]}
+              {{ all: "Todos", running: "em execução", waiting: "aguardando", completed: "concluído", failed: "falhou" }[f]}
             </button>
           ))}
         </div>
@@ -651,24 +685,24 @@ function LogView() {
         <div style={{ textAlign: "center", padding: "60px 20px", color: T.muted }}>
           <i className="ti ti-terminal-2" style={{ fontSize: 48, display: "block", marginBottom: 16, opacity: 0.4 }} />
           <p style={{ fontFamily: T.font, fontSize: 14, margin: 0 }}>
-            {runs.length === 0 ? "Nenhuma execução registrada ainda. Ative um fluxo para começar." : `Nenhum log com status "${{ success: "sucesso", error: "erro", waiting: "aguardando" }[filter] || filter}".`}
+            {runs.length === 0 ? "Nenhuma execução registrada ainda. Ative um fluxo com gatilho de Segmentação para começar." : `Nenhum log com status "${{ running: "em execução", waiting: "aguardando", completed: "concluído", failed: "falhou" }[filter] || filter}".`}
           </p>
         </div>
       ) : (
         <div style={{ border: `1px solid ${T.border}`, borderRadius: 10, overflow: "hidden" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1fr 80px", padding: "9px 16px", background: T.bg, fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", fontFamily: T.head }}>
-            {["Hora","Lead","Fluxo","Etapa","Status"].map((h, i) => <span key={i}>{h}</span>)}
+          <div style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1.4fr 90px", padding: "9px 16px", background: T.bg, fontSize: 10, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: ".06em", fontFamily: T.head }}>
+            {["Hora","Pessoa","Fluxo","Última atividade","Status"].map((h, i) => <span key={i}>{h}</span>)}
           </div>
           {filtered.map((run, i) => {
             const s = statusStyle(run.status);
             const time = new Date(run.started_at).toLocaleTimeString("pt-BR");
             return (
-              <div key={run.id} style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1fr 80px", padding: "11px 16px", borderTop: `1px solid ${T.border}`, alignItems: "center", fontSize: 12, background: i % 2 ? T.bg : "#fff", fontFamily: T.font }}>
+              <div key={run.id} style={{ display: "grid", gridTemplateColumns: "130px 1fr 1fr 1.4fr 90px", padding: "11px 16px", borderTop: `1px solid ${T.border}`, alignItems: "center", fontSize: 12, background: i % 2 ? T.bg : "#fff", fontFamily: T.font }}>
                 <div style={{ color: T.muted, fontSize: 11 }}>{time}</div>
-                <div style={{ color: T.teal, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.leads?.email || "—"}</div>
-                <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.automation_flows?.name || "—"}</div>
-                <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.step || "—"}</div>
-                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700 }}>{{ success: "sucesso", error: "erro", waiting: "aguardando" }[run.status] || run.status}</span>
+                <div style={{ color: T.teal, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.personLabel}</div>
+                <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{run.flowName}</div>
+                <div style={{ color: T.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={run.lastLog}>{run.lastLog}</div>
+                <span style={{ fontSize: 10, padding: "2px 8px", borderRadius: 20, background: s.bg, color: s.cl, fontWeight: 700 }}>{{ running: "em execução", waiting: "aguardando", completed: "concluído", failed: "falhou" }[run.status] || run.status}</span>
               </div>
             );
           })}
@@ -694,11 +728,11 @@ function AnaView() {
       const allFlows = flowsRes.data || [];
       setKpis({
         total:    runs.length,
-        success:  runs.filter(r => r.status === "success").length,
-        errors:   runs.filter(r => r.status === "error").length,
+        success:  runs.filter(r => r.status === "completed").length,
+        errors:   runs.filter(r => r.status === "failed").length,
         waiting:  runs.filter(r => r.status === "waiting").length,
         active:   allFlows.filter(f => f.status === "active").length,
-        paused:   allFlows.filter(f => f.status === "paused").length,
+        paused:   allFlows.filter(f => f.status === "inactive").length,
         draft:    allFlows.filter(f => f.status === "draft").length,
       });
       setFlows(allFlows);
@@ -782,7 +816,13 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
   const [saved, setSaved]     = useState(true);
   const [saving, setSaving]   = useState(false);
   const [loadingFlow, setLoadingFlow] = useState(false);
+  const [segments, setSegments] = useState([]);
   const ref = useRef(null);
+
+  useEffect(() => {
+    supabase.from("segments").select("id,name").eq("workspace_id", WORKSPACE_VANTARI).order("name")
+      .then(({ data }) => setSegments(data || []));
+  }, []);
 
   /* auto-save */
   const saveFlow = useCallback(async (currentNodes, currentEdges, currentName, currentFlowId) => {
@@ -998,6 +1038,7 @@ function BuilderCanvas({ flowId, onFlowIdChange }) {
           ? e(Palette, { onAdd })
           : e(NodeConfig, {
               node: selNode,
+              segments,
               onClose: () => setSel(null),
               onChange: u => { setNodes(ns => ns.map(n => n.id === selNode.id ? { ...n, ...u } : n)); setSaved(false); },
               onDelete: () => { setNodes(ns => ns.filter(n => n.id !== selNode.id)); setEdges(es => es.filter(x => x.src !== selNode.id && x.tgt !== selNode.id)); setSel(null); setSaved(false); },

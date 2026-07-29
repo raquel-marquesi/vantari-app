@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Loader2, AlertCircle, Building2, Zap, Filter, ChevronLeft, ChevronRight, LogOut,
   Activity, ListChecks, AlertTriangle, Inbox, Send, UserCheck, UserX, Search,
-  Phone, IdCard, FileText, MessageCircle,
+  Phone, IdCard, FileText, MessageCircle, Mic,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
@@ -37,6 +37,16 @@ function relTime(iso) {
 const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
 const fmtCpf = (v) => { if (!v) return null; const d = String(v).replace(/\D/g, ""); return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v; };
 const initialOf = (name, phone) => (name ? name.trim().charAt(0) : (phone ? phone.replace(/\D/g, "").slice(-2, -1) : "?")).toUpperCase();
+// placeholder que a Nina manda enquanto a transcrição do áudio não chega —
+// detecta pra desenhar como "transcrevendo" em vez de texto normal
+const isAudioProcessing = (body) => !!body && /\[?\s*áudio\s*-?\s*processando\s*transcri/i.test(body);
+function mergeById(list, item) {
+  const idx = list.findIndex((m) => m.id === item.id);
+  if (idx === -1) return [...list, item];
+  const copy = [...list];
+  copy[idx] = item;
+  return copy;
+}
 
 /* ─── Sidebar (padrão self-contained do projeto) ─── */
 const NavSection = ({ label, collapsed = false }) => (
@@ -166,22 +176,33 @@ function Sidebar({ collapsed, onToggle }) {
 }
 
 /* ─── bolha de mensagem ─── */
-function MessageBubble({ m }) {
+function MessageBubble({ m, grouped }) {
   const isCustomer = m.sender === "customer";
   const isNina = m.sender === "nina";
   const align = isCustomer ? "flex-start" : "flex-end";
   const bg = isCustomer ? T.surface : isNina ? "#E6F3F6" : "#E8F7F1";
   const label = isCustomer ? null : isNina ? "Nina" : "Você";
+  const processing = isAudioProcessing(m.body);
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: align, marginBottom: 10 }}>
-      {label && <span style={{ fontSize: 10.5, fontWeight: 700, color: isNina ? T.teal : T.green, marginBottom: 2, fontFamily: T.font }}>{label}</span>}
-      <div style={{
-        maxWidth: "72%", background: bg, border: `1px solid ${isCustomer ? T.border : "transparent"}`,
-        borderRadius: 14, padding: "9px 13px", fontSize: 13.5, color: T.text, lineHeight: 1.45,
-        fontFamily: T.font, whiteSpace: "pre-wrap", wordBreak: "break-word",
-      }}>
-        {m.body || <span style={{ color: T.faint3, fontStyle: "italic" }}>(sem texto)</span>}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: align, marginBottom: grouped ? 3 : 12 }}>
+      {label && !grouped && <span style={{ fontSize: 10.5, fontWeight: 700, color: isNina ? T.teal : T.green, marginBottom: 2, fontFamily: T.font }}>{label}</span>}
+      {processing ? (
+        <div style={{
+          maxWidth: "72%", display: "flex", alignItems: "center", gap: 8, background: T.surface,
+          border: `1px dashed ${T.faint3}`, borderRadius: 14, padding: "9px 13px", fontFamily: T.font,
+        }}>
+          <Mic size={14} color={T.faint3} style={{ animation: "pulseAudio 1.4s ease-in-out infinite" }} />
+          <span style={{ fontSize: 13, color: T.muted, fontStyle: "italic" }}>Transcrevendo áudio...</span>
+        </div>
+      ) : (
+        <div style={{
+          maxWidth: "72%", background: bg, border: `1px solid ${isCustomer ? T.border : "transparent"}`,
+          borderRadius: 14, padding: "9px 13px", fontSize: 13.5, color: T.text, lineHeight: 1.45,
+          fontFamily: T.font, whiteSpace: "pre-wrap", wordBreak: "break-word",
+        }}>
+          {m.body || <span style={{ color: T.faint3, fontStyle: "italic" }}>(sem texto)</span>}
+        </div>
+      )}
       <span style={{ fontSize: 10, color: T.faint3, marginTop: 3, fontFamily: T.mono }}>{fmtTime(m.created_at)}</span>
     </div>
   );
@@ -239,6 +260,13 @@ export default function InboxAtendimento() {
     return () => { supabase.removeChannel(channel); };
   }, [load]);
 
+  // rede/websocket às vezes falha silenciosamente — um polling leve de
+  // segurança garante que a lista nunca fique "presa" esperando o realtime
+  useEffect(() => {
+    const id = setInterval(() => load(), 15000);
+    return () => clearInterval(id);
+  }, [load]);
+
   const loadMessages = useCallback(async (conversationId) => {
     setMsgLoading(true);
     const core = supabase.schema("core");
@@ -263,20 +291,41 @@ export default function InboxAtendimento() {
     }
   }, [selectedId, loadMessages]);
 
-  // realtime: mensagens novas da conversa aberta
+  // realtime: mensagens novas OU atualizadas da conversa aberta (UPDATE
+  // cobre o caso de um áudio que chega como placeholder e é atualizado
+  // depois com o texto transcrito, mesmo id de mensagem)
   useEffect(() => {
     if (!selectedId) return;
     const channel = supabase
       .channel(`inbox-messages-${selectedId}`)
-      .on("postgres_changes", { event: "INSERT", schema: "core", table: "messages", filter: `conversation_id=eq.${selectedId}` },
-        (payload) => setMessages((prev) => prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]))
+      .on("postgres_changes", { event: "*", schema: "core", table: "messages", filter: `conversation_id=eq.${selectedId}` },
+        (payload) => setMessages((prev) => mergeById(prev, payload.new)))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [selectedId]);
 
+  // polling de segurança: se o websocket cair silenciosamente, a conversa
+  // aberta ainda se atualiza sozinha em poucos segundos
+  useEffect(() => {
+    if (!selectedId) return;
+    const id = setInterval(() => loadMessages(selectedId), 8000);
+    return () => clearInterval(id);
+  }, [selectedId, loadMessages]);
+
+  // só rola pro fim sozinho se o usuário já estava perto do fim — assim o
+  // polling de segurança não puxa a tela pra baixo enquanto alguém lê o
+  // histórico mais antigo
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  // ao trocar de conversa, sempre começa no fim
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages]);
+  }, [selectedId]);
 
   const filteredConvs = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -335,7 +384,10 @@ export default function InboxAtendimento() {
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
-      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulseAudio { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+      `}</style>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <div style={{ marginLeft: collapsed ? 64 : 240, transition: "margin-left 0.15s", height: "100vh", display: "flex" }}>
 
@@ -383,8 +435,13 @@ export default function InboxAtendimento() {
                       </span>
                       <span style={{ fontSize: 10.5, color: T.faint3, fontFamily: T.mono, flexShrink: 0 }}>{relTime(c.last_message_at)}</span>
                     </div>
-                    <div style={{ fontSize: 12, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2 }}>
-                      {c.last_message_sender === "human" ? "Você: " : c.last_message_sender === "nina" ? "Nina: " : ""}{c.last_message_body || "—"}
+                    <div style={{ fontSize: 12, color: T.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: 2, display: "flex", alignItems: "center", gap: 4 }}>
+                      {c.last_message_sender === "human" ? "Você: " : c.last_message_sender === "nina" ? "Nina: " : ""}
+                      {isAudioProcessing(c.last_message_body) ? (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontStyle: "italic" }}>
+                          <Mic size={11} /> Transcrevendo áudio...
+                        </span>
+                      ) : (c.last_message_body || "—")}
                     </div>
                     <div style={{ marginTop: 5 }}>{statusBadge(c.status)}</div>
                   </div>
@@ -440,7 +497,9 @@ export default function InboxAtendimento() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div style={{ textAlign: "center", color: T.muted, margin: "auto", fontSize: 13 }}>Nenhuma mensagem ainda nesta conversa.</div>
-                ) : messages.map((m) => <MessageBubble key={m.id} m={m} />)}
+                ) : messages.map((m, i) => (
+                  <MessageBubble key={m.id} m={m} grouped={i > 0 && messages[i - 1].sender === m.sender} />
+                ))}
               </div>
 
               <div style={{ padding: "14px 22px", borderTop: `1px solid ${T.border}`, background: T.surface }}>

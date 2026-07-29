@@ -223,9 +223,16 @@ export default function InboxAtendimento() {
   const [actionBusy, setActionBusy] = useState(false);
   const [banner, setBanner] = useState(null);
   const scrollRef = useRef(null);
+  const convReqId = useRef(0);
+  const msgReqId = useRef(0);
 
-  const load = useCallback(async () => {
-    setLoading(true); setError(null);
+  // silent=true é usado no realtime/polling em segundo plano — nunca deve
+  // fazer a lista inteira piscar pra "Carregando...", só o primeiro load
+  // (quando a tela ainda está vazia) mostra o spinner
+  const load = useCallback(async (opts = {}) => {
+    const { silent = false } = opts;
+    const reqId = ++convReqId.current;
+    if (!silent) { setLoading(true); setError(null); }
     try {
       const core = supabase.schema("core");
       const { data: convs, error: e1 } = await core.from("conversations").select("*")
@@ -241,39 +248,47 @@ export default function InboxAtendimento() {
           .select("id, full_name, primary_phone, primary_email, cpf, status").in("id", personIds);
         (persons || []).forEach((p) => personById[p.id] = p);
       }
+      if (reqId !== convReqId.current) return; // resposta antiga, ignora (evita "piscar" com dado desatualizado)
       setConversations((convs || []).map((c) => ({ ...c, person: personById[c.person_id] || null })));
     } catch (err) {
-      setError(err.message || String(err));
+      if (reqId !== convReqId.current) return;
+      if (!silent) setError(err.message || String(err));
     } finally {
-      setLoading(false);
+      if (reqId === convReqId.current && !silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // realtime: qualquer criação/atualização de conversa reordena/atualiza a lista
+  // realtime: qualquer criação/atualização de conversa reordena/atualiza a
+  // lista — silencioso, nunca mostra spinner (senão a lista pisca a cada
+  // mensagem nova, já que toda mensagem atualiza last_message_at)
   useEffect(() => {
     const channel = supabase
       .channel("inbox-conversations")
-      .on("postgres_changes", { event: "*", schema: "core", table: "conversations" }, () => load())
+      .on("postgres_changes", { event: "*", schema: "core", table: "conversations" }, () => load({ silent: true }))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [load]);
 
   // rede/websocket às vezes falha silenciosamente — um polling leve de
-  // segurança garante que a lista nunca fique "presa" esperando o realtime
+  // segurança garante que a lista nunca fique "presa" esperando o realtime,
+  // sempre silencioso (sem spinner) pra não deixar a tela instável
   useEffect(() => {
-    const id = setInterval(() => load(), 15000);
+    const id = setInterval(() => load({ silent: true }), 15000);
     return () => clearInterval(id);
   }, [load]);
 
-  const loadMessages = useCallback(async (conversationId) => {
-    setMsgLoading(true);
+  const loadMessages = useCallback(async (conversationId, opts = {}) => {
+    const { silent = false } = opts;
+    const reqId = ++msgReqId.current;
+    if (!silent) setMsgLoading(true);
     const core = supabase.schema("core");
     const { data, error: e } = await core.from("messages").select("*")
       .eq("conversation_id", conversationId).order("created_at", { ascending: true }).limit(500);
+    if (reqId !== msgReqId.current) return; // resposta antiga (conversa trocou ou outro poll passou na frente)
     if (!e) setMessages(data || []);
-    setMsgLoading(false);
+    if (!silent) setMsgLoading(false);
   }, []);
 
   const selected = useMemo(() => conversations.find((c) => c.id === selectedId) || null, [conversations, selectedId]);
@@ -308,7 +323,7 @@ export default function InboxAtendimento() {
   // aberta ainda se atualiza sozinha em poucos segundos
   useEffect(() => {
     if (!selectedId) return;
-    const id = setInterval(() => loadMessages(selectedId), 8000);
+    const id = setInterval(() => loadMessages(selectedId, { silent: true }), 8000);
     return () => clearInterval(id);
   }, [selectedId, loadMessages]);
 

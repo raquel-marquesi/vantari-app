@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard, Zap, Filter,
   ChevronLeft, ChevronRight, LogOut, Building2, Upload, Download, FileText,
-  CheckCircle2, ArrowRight, ArrowLeft,
+  CheckCircle2, ArrowRight, ArrowLeft, Edit3, Save,
 } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
@@ -267,12 +267,51 @@ function EventRow({ ev }) {
   );
 }
 
-function LeadDetailModal({ lead, companyName, onClose }) {
+function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deals, setDeals] = useState([]);
   const [events, setEvents] = useState([]);
   const sb = statusBadge(lead.status);
+
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [form, setForm] = useState({
+    full_name: lead.full_name || "", cpf: lead.cpf || "",
+    phone: lead.primary_phone || "", email: lead.primary_email || "",
+  });
+  const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
+
+  const inputSt = { width: "100%", padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
+  const labelSt = { fontSize: 11, color: T.faint3, marginBottom: 2 };
+
+  const startEdit = () => {
+    setForm({ full_name: lead.full_name || "", cpf: lead.cpf || "", phone: lead.primary_phone || "", email: lead.primary_email || "" });
+    setSaveError(null);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    setSaveError(null);
+    let cpfClean = null;
+    if (form.cpf.trim()) {
+      cpfClean = cleanCpf(form.cpf);
+      if (!cpfClean) { setSaveError("CPF inválido (confira os 11 dígitos)."); return; }
+    }
+    setSaving(true);
+    const { error: e } = await supabase.schema("core").rpc("update_person_manual", {
+      p_person: lead.id,
+      p_full_name: form.full_name.trim() || null,
+      p_cpf: cpfClean,
+      p_phone: form.phone || null,
+      p_email: form.email.trim() || null,
+    });
+    setSaving(false);
+    if (e) { setSaveError(e.message); return; }
+    setEditing(false);
+    onSaved?.();
+  };
 
   useEffect(() => {
     let alive = true;
@@ -311,20 +350,67 @@ function LeadDetailModal({ lead, companyName, onClose }) {
               <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99, background: sb.bg, color: sb.color, border: `1px solid ${sb.border}` }}>{sb.label}</span>
             </div>
           </div>
-          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            {!editing && (
+              <button onClick={startEdit} title="Editar dados de contato"
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: T.text, fontFamily: T.font }}>
+                <Edit3 size={13} /> Editar
+              </button>
+            )}
+            <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+          </div>
         </div>
 
         <div style={{ padding: "18px 24px", overflowY: "auto" }}>
-          <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
-            Dados de contato
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Dados de contato
+            </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
-            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>CPF</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.cpf ? maskCpf(lead.cpf) : "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Telefone</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.primary_phone ? maskPhone(lead.primary_phone) : "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text }}>{lead.primary_email || "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Empresa</div><div style={{ fontSize: 13, color: T.text }}>{companyName || "—"}</div></div>
-            <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Criado em</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{fmtDate(lead.created_at)}</div></div>
-          </div>
+
+          {editing ? (
+            <div style={{ marginBottom: 22 }}>
+              <div style={{ marginBottom: 10 }}>
+                <label style={labelSt}>Nome</label>
+                <input value={form.full_name} onChange={(e) => setF("full_name", e.target.value)} style={inputSt} placeholder="Nome completo" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 10 }}>
+                <div>
+                  <label style={labelSt}>CPF</label>
+                  <input inputMode="numeric" value={maskCpf(form.cpf)} onChange={(e) => setF("cpf", onlyDigits(e.target.value))} style={inputSt} placeholder="000.000.000-00" />
+                </div>
+                <div>
+                  <label style={labelSt}>Telefone</label>
+                  <input inputMode="numeric" value={maskPhone(form.phone)} onChange={(e) => setF("phone", onlyDigits(e.target.value))} style={inputSt} placeholder="(11) 90000-0000" />
+                </div>
+              </div>
+              <div style={{ marginBottom: 4 }}>
+                <label style={labelSt}>E-mail</label>
+                <input type="email" value={form.email} onChange={(e) => setF("email", e.target.value)} style={inputSt} placeholder="email@exemplo.com" />
+              </div>
+              {saveError && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, color: "#9B2C2C", fontSize: 12.5 }}>
+                  <AlertCircle size={15} color={T.coral} /> {saveError}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <button onClick={save} disabled={saving} style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", background: T.gradient, border: "none", borderRadius: 8, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: saving ? "default" : "pointer", opacity: saving ? 0.7 : 1, fontFamily: T.font }}>
+                  {saving ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Save size={13} />} Salvar
+                </button>
+                <button onClick={() => { setEditing(false); setSaveError(null); }} disabled={saving} style={{ padding: "7px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, color: T.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: T.font }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>CPF</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.cpf ? maskCpf(lead.cpf) : "—"}</div></div>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Telefone</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.primary_phone ? maskPhone(lead.primary_phone) : "—"}</div></div>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text }}>{lead.primary_email || "—"}</div></div>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Empresa</div><div style={{ fontSize: 13, color: T.text }}>{companyName || "—"}</div></div>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Criado em</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{fmtDate(lead.created_at)}</div></div>
+            </div>
+          )}
 
           <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
             Negócios associados (CRM)
@@ -777,6 +863,7 @@ export default function Contatos() {
           lead={selectedLead}
           companyName={selectedLead.company_id ? companies[selectedLead.company_id] : null}
           onClose={() => setSelectedLead(null)}
+          onSaved={() => { setSelectedLead(null); load(); }}
         />
       )}
     </div>

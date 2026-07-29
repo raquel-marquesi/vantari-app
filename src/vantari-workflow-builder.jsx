@@ -8,6 +8,7 @@ import { Briefcase } from "lucide-react";
 import { Building2 } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
+import { Inbox } from "lucide-react";
 import "@tabler/icons-webfont/dist/tabler-icons.min.css";
 
 /* ─── design tokens ─── */
@@ -1194,6 +1195,7 @@ export default function WorkflowBuilderPage() {
           <NavSection label="Principal" collapsed={collapsed} />
           <NavItem icon={BarChart2}      label="Analytics"       path="/dashboard"    collapsed={collapsed} />
           <NavItem icon={Users}          label="Leads"           path="/leads"        collapsed={collapsed} />
+          <NavItem icon={Inbox}          label="Atendimento"     path="/inbox"        collapsed={collapsed} />
           <NavItem icon={Mail}           label="Email Marketing" path="/email"        collapsed={collapsed} />
           <NavSection label="CRM" collapsed={collapsed} />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />

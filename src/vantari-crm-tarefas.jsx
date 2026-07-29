@@ -9,6 +9,7 @@ import {
   CheckCircle2, Circle,
 } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
+import { Inbox } from "lucide-react";
 
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
 const T = {
@@ -172,6 +173,7 @@ function Sidebar({ collapsed, onToggle }) {
         <NavSection label="Principal" collapsed={collapsed} />
         <NavItem icon={BarChart2} label="Analytics" path="/dashboard" collapsed={collapsed} />
         <NavItem icon={Users} label="Leads" path="/leads" collapsed={collapsed} />
+        <NavItem icon={Inbox} label="Atendimento" path="/inbox" collapsed={collapsed} />
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavSection label="CRM" collapsed={collapsed} />
         <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />

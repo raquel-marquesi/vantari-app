@@ -20,6 +20,7 @@ const Empresas         = lazy(() => import("./vantari-crm-empresas"));
 const Atividades       = lazy(() => import("./vantari-crm-atividades"));
 const Tarefas          = lazy(() => import("./vantari-crm-tarefas"));
 const EmRisco          = lazy(() => import("./vantari-crm-em-risco"));
+const InboxAtendimento = lazy(() => import("./vantari-inbox"));
 const PublicForm       = lazy(() => import("./vantari-public-form"));
 
 function PageLoader() {
@@ -103,6 +104,7 @@ export default function App() {
           <Route path="/activities"    element={<ProtectedRoute><Atividades /></ProtectedRoute>} />
           <Route path="/tasks"         element={<ProtectedRoute><Tarefas /></ProtectedRoute>} />
           <Route path="/risco"         element={<ProtectedRoute><EmRisco /></ProtectedRoute>} />
+          <Route path="/inbox"        element={<ProtectedRoute><InboxAtendimento /></ProtectedRoute>} />
           {/* /contatos → redireciona pra /leads (termo adotado pela equipe) */}
           <Route path="/contatos"      element={<Navigate to="/leads" replace />} />
           <Route path="*"               element={<NotFound />} />

@@ -45,6 +45,18 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+// core.persons.primary_phone é normalizado por core.normalize_phone_br SEM
+// o código do país (ex: "11977773870") — mas o WhatsApp/Nina identifica
+// contato pelo número completo (ex: "+5511977773870"). Sem isso, a Nina
+// não encontra o contato e responde 404 "Contact not found".
+function toWhatsAppPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const digits = String(raw).replace(/\D/g, "");
+  if (!digits) return null;
+  if (digits.startsWith("55") && digits.length >= 12) return `+${digits}`;
+  return `+55${digits}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST")    return jsonResp({ error: "Method not allowed" }, 405);
@@ -110,7 +122,7 @@ serve(async (req) => {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Nina-Secret": NINA_API_SECRET },
       body: JSON.stringify({
-        phone: person?.primary_phone ?? null,
+        phone: toWhatsAppPhone(person?.primary_phone),
         cpf: person?.cpf ?? null,
         external_conversation_id: conv.external_conversation_id,
         status: newStatus,

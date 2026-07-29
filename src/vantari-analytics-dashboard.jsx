@@ -1664,7 +1664,6 @@ export default function VantariAnalyticsDashboard() {
           <NavItem icon={BarChart2}      label="Analytics"     path="/dashboard"    active collapsed={collapsed} />
           <NavItem icon={Users}          label="Leads"         path="/leads"        collapsed={collapsed} />
           <NavItem icon={Inbox}          label="Atendimento"   path="/inbox"        collapsed={collapsed} />
-          <NavItem icon={Mail}           label="Email Marketing" path="/email"      collapsed={collapsed} />
           <NavSection label="CRM" collapsed={collapsed} />
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
           <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
@@ -1672,6 +1671,7 @@ export default function VantariAnalyticsDashboard() {
           <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
           <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
           <NavSection label="Ferramentas" collapsed={collapsed} />
+          <NavItem icon={Mail}           label="Email Marketing" path="/email"      collapsed={collapsed} />
           <NavItem icon={Star}           label="Scoring"       path="/scoring"      collapsed={collapsed} />
           <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing"      collapsed={collapsed} />
           <NavItem icon={Filter}         label="Segmentações"  path="/segments"     collapsed={collapsed} />

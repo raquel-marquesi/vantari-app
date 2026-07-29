@@ -23,10 +23,14 @@
 //   "attributes": {                                  // opcional → scoring Etapa 1
 //     "cidade_estado":"sao_paulo", "nivel_urgencia":"alta_dividas", ...
 //   }                                                // chaves/valores canônicos: ver 0007
+//   "processo": {                                     // opcional → cria/atualiza negócio no CRM
+//     "numero_cnj": "0001085-82.2025.5.07.0015",       // se vier, entra em crm.processos
+//     "honorarios_pct": 30                             // opcional, guardado no negócio
+//   }                                                 // negócio nasce em "Novos Leads", valor R$0 (placeholder)
 //   // Alternativa Meta Lead Ads: enviar "field_data":[{name,values[]}] em vez de person
 // }
 //
-// Resposta: { "person_id": "<uuid>", "source": "...", "event_type": "..." }
+// Resposta: { "person_id": "<uuid>", "source": "...", "event_type": "...", "deal_id"?: "<uuid>" }
 //
 // Deploy:  supabase functions deploy ingest
 // Secret:  supabase secrets set INGEST_SECRET=<aleatório forte>
@@ -168,5 +172,26 @@ serve(async (req) => {
     }
   }
 
-  return jsonResp({ person_id: personId, source, event_type: eventType });
+  // —— processo → negócio no CRM (Esteira de Aquisição · Novos Leads) ——
+  // se vier numero_cnj, cria/reaproveita o processo e o negócio (idempotente:
+  // não duplica se a Nina mandar o mesmo processo de novo numa mensagem futura).
+  let dealId: string | null = null;
+  if (body.processo && typeof body.processo === "object" && body.processo.numero_cnj) {
+    const crm = supabase.schema("crm");
+    const { data: deal, error: dealErr } = await crm.rpc("ingest_processo_lead", {
+      p_workspace: workspaceId,
+      p_person: personId,
+      p_numero_cnj: String(body.processo.numero_cnj),
+      p_honorarios_pct: body.processo.honorarios_pct ?? null,
+      p_source: source,
+    });
+    if (dealErr) {
+      // não-fatal: pessoa e evento já gravados, só o negócio que falhou
+      return jsonResp({ person_id: personId, source, event_type: eventType,
+        warning: "negócio não criado", detail: dealErr.message }, 207);
+    }
+    dealId = deal;
+  }
+
+  return jsonResp({ person_id: personId, source, event_type: eventType, deal_id: dealId });
 });

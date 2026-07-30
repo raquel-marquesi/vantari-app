@@ -241,19 +241,43 @@ const fmtBRL = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", {
 
 /* ─── Modal Detalhe do Lead (perfil: dados + negócios associados) ─── */
 const EVENT_LABELS = {
-  contact_updated: "Contato atualizado",
-  persons_merged:  "Cadastros unificados",
-  lead_created:    "Lead criado",
-  form_submit:     "Formulário enviado",
-  page_visit:      "Visita a página",
-  stage_changed:   "Etapa alterada",
+  contact_updated:    "Contato atualizado",
+  person_edited:      "Dados do lead editados",
+  persons_merged:     "Cadastros unificados",
+  lead_created:       "Lead criado",
+  form_submit:        "Formulário enviado",
+  page_visit:         "Visita a página",
+  stage_changed:      "Etapa alterada",
+  deal_created:       "Negócio criado",
+  deal_created_auto:  "Negócio criado automaticamente",
+  whatsapp_in:        "Mensagem recebida no WhatsApp",
 };
 const FIELD_LABELS_HIST = { email: "E-mail", phone: "Telefone" };
+
+// Tipos "barulhentos" — cada mensagem de WhatsApp que a Nina capta gera um
+// evento, e uma única conversa pode gerar dezenas seguidas. Agrupamos só
+// esses (nunca stage_changed, deal_created etc., que são ações distintas e
+// cada uma importa por si só) numa única linha com contador, pra não afogar
+// o histórico. Não perde informação — a data mostrada é a do mais recente.
+const GROUPABLE_EVENT_TYPES = new Set(["whatsapp_in"]);
+
+function groupEvents(events) {
+  const groups = [];
+  for (const ev of events) {
+    const last = groups[groups.length - 1];
+    if (last && last.type === ev.type && GROUPABLE_EVENT_TYPES.has(ev.type)) {
+      last.count += 1;
+    } else {
+      groups.push({ ...ev, count: 1 });
+    }
+  }
+  return groups;
+}
 
 function EventRow({ ev }) {
   const label = EVENT_LABELS[ev.type] || ev.type;
   let detail = null;
-  if (ev.type === "contact_updated" && ev.payload) {
+  if (ev.type === "contact_updated" && ev.payload && ev.count === 1) {
     const f = FIELD_LABELS_HIST[ev.payload.field] || ev.payload.field;
     detail = `${f}: ${ev.payload.old || "—"} → ${ev.payload.new || "—"}`;
   }
@@ -261,7 +285,14 @@ function EventRow({ ev }) {
     <div style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: `0.5px solid ${T.border}` }}>
       <div style={{ width: 6, height: 6, borderRadius: 99, background: T.teal, marginTop: 6, flexShrink: 0 }} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>{label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 700, color: T.ink, display: "flex", alignItems: "center", gap: 6 }}>
+          {label}
+          {ev.count > 1 && (
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: T.muted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 99, padding: "1px 7px", fontFamily: T.mono }}>
+              ×{ev.count}
+            </span>
+          )}
+        </div>
         {detail && <div style={{ fontSize: 12, color: T.muted, marginTop: 2 }}>{detail}</div>}
       </div>
       <div style={{ fontSize: 11, color: T.faint3, fontFamily: T.mono, whiteSpace: "nowrap" }}>{fmtDate(ev.occurred_at)}</div>
@@ -345,7 +376,7 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
             .select("id,type,payload,occurred_at")
             .eq("person_id", lead.id)
             .order("occurred_at", { ascending: false })
-            .limit(20),
+            .limit(60),
         ]);
         if (e) throw e;
         if (alive) { setDeals(data || []); setEvents(ev || []); }
@@ -474,7 +505,7 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
           )}
           {!loading && !error && events.length > 0 && (
             <div>
-              {events.map((ev) => <EventRow key={ev.id} ev={ev} />)}
+              {groupEvents(events).map((ev) => <EventRow key={ev.id} ev={ev} />)}
             </div>
           )}
         </div>

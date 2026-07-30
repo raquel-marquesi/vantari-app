@@ -1,27 +1,101 @@
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect, Component } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./supabase";
 
-const AuthSystem     = lazy(() => import("./vantari-auth-system"));
-const Analytics      = lazy(() => import("./vantari-analytics-dashboard"));
-const Scoring        = lazy(() => import("./vantari-scoring-system"));
-const EmailMarketing = lazy(() => import("./vantari-email-marketing"));
-const LandingPages   = lazy(() => import("./vantari-landing-pages"));
-const AIMarketing    = lazy(() => import("./vantari-ai-marketing"));
-const Integrations   = lazy(() => import("./vantari-integrations-hub"));
-const Settings         = lazy(() => import("./vantari-settings-admin"));
-const Onboarding       = lazy(() => import("./vantari-onboarding-wizard"));
-const WorkflowBuilder  = lazy(() => import("./vantari-workflow-builder"));
-const Segments         = lazy(() => import("./vantari-segments"));
-const CRM              = lazy(() => import("./vantari-crm"));
-const DealDetail       = lazy(() => import("./vantari-crm-deal"));
-const Contatos         = lazy(() => import("./vantari-crm-contatos"));
-const Empresas         = lazy(() => import("./vantari-crm-empresas"));
-const Atividades       = lazy(() => import("./vantari-crm-atividades"));
-const Tarefas          = lazy(() => import("./vantari-crm-tarefas"));
-const EmRisco          = lazy(() => import("./vantari-crm-em-risco"));
-const InboxAtendimento = lazy(() => import("./vantari-inbox"));
-const PublicForm       = lazy(() => import("./vantari-public-form"));
+// ────────────────────────────────────────────────────────────────
+// Depois de cada deploy no Vercel, os arquivos JS de cada página ganham um
+// hash novo no nome (ex: vantari-crm-abc123.js vira vantari-crm-def456.js).
+// Um usuário que já estava com o site aberto ANTES do deploy ainda tem o
+// index.html antigo referenciando o hash antigo — se ele clicar num menu
+// pra uma página que ele ainda não tinha carregado, o navegador tenta
+// buscar o arquivo antigo, que não existe mais → o import() falha → sem
+// tratamento, isso derruba a árvore de componentes inteira e vira tela
+// branca (o sintoma que outros usuários relataram, e a Catarina não vê
+// porque costuma dar refresh com mais frequência ao testar).
+//
+// Fix em duas camadas:
+//  1. lazyWithReload: se o import() de uma página falhar, recarrega a
+//     página automaticamente UMA vez (o novo index.html já vem com os
+//     hashes certos) — resolve sozinho, sem o usuário perceber.
+//  2. ErrorBoundary: se mesmo assim algo quebrar (ex: um erro de verdade,
+//     não relacionado a deploy), mostra uma tela de erro com botão de
+//     recarregar em vez de ficar tudo branco sem explicação nenhuma.
+const CHUNK_RELOAD_KEY = "vantari_chunk_reload_attempted";
+
+function lazyWithReload(factory) {
+  return lazy(async () => {
+    try {
+      const mod = await factory();
+      // import deu certo — libera a tentativa de reload pro próximo deploy
+      try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch {}
+      return mod;
+    } catch (err) {
+      let alreadyTried = false;
+      try { alreadyTried = sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1"; } catch {}
+      if (!alreadyTried) {
+        try { sessionStorage.setItem(CHUNK_RELOAD_KEY, "1"); } catch {}
+        window.location.reload();
+        // trava o carregamento suspenso até o reload acontecer, em vez de
+        // deixar o React tentar renderizar um módulo quebrado
+        return new Promise(() => {});
+      }
+      throw err;
+    }
+  });
+}
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) { console.error("Erro na aplicação:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          height: "100vh", gap: 14, background: "#F5F8FB", color: "#2E3D4B",
+          fontFamily: "'Inter', system-ui, sans-serif", padding: 24, textAlign: "center",
+        }}>
+          <span style={{ fontSize: 17, fontWeight: 700, color: "#0E1A24" }}>Algo deu errado ao carregar a página</span>
+          <span style={{ fontSize: 13.5, color: "#5A6B7A", maxWidth: 420 }}>
+            Isso costuma acontecer logo depois de uma atualização do sistema. Clique no botão abaixo pra recarregar.
+          </span>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: "10px 20px", background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
+              border: "none", borderRadius: 9, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            Recarregar página
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const AuthSystem     = lazyWithReload(() => import("./vantari-auth-system"));
+const Analytics      = lazyWithReload(() => import("./vantari-analytics-dashboard"));
+const Scoring        = lazyWithReload(() => import("./vantari-scoring-system"));
+const EmailMarketing = lazyWithReload(() => import("./vantari-email-marketing"));
+const LandingPages   = lazyWithReload(() => import("./vantari-landing-pages"));
+const AIMarketing    = lazyWithReload(() => import("./vantari-ai-marketing"));
+const Integrations   = lazyWithReload(() => import("./vantari-integrations-hub"));
+const Settings         = lazyWithReload(() => import("./vantari-settings-admin"));
+const Onboarding       = lazyWithReload(() => import("./vantari-onboarding-wizard"));
+const WorkflowBuilder  = lazyWithReload(() => import("./vantari-workflow-builder"));
+const Segments         = lazyWithReload(() => import("./vantari-segments"));
+const CRM              = lazyWithReload(() => import("./vantari-crm"));
+const DealDetail       = lazyWithReload(() => import("./vantari-crm-deal"));
+const Contatos         = lazyWithReload(() => import("./vantari-crm-contatos"));
+const Empresas         = lazyWithReload(() => import("./vantari-crm-empresas"));
+const Atividades       = lazyWithReload(() => import("./vantari-crm-atividades"));
+const Tarefas          = lazyWithReload(() => import("./vantari-crm-tarefas"));
+const EmRisco          = lazyWithReload(() => import("./vantari-crm-em-risco"));
+const InboxAtendimento = lazyWithReload(() => import("./vantari-inbox"));
+const PublicForm       = lazyWithReload(() => import("./vantari-public-form"));
 
 function PageLoader() {
   return (
@@ -80,6 +154,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/"               element={<Navigate to="/dashboard" replace />} />
@@ -110,6 +185,7 @@ export default function App() {
           <Route path="*"               element={<NotFound />} />
         </Routes>
       </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

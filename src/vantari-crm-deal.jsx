@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   ArrowLeft, Loader2, AlertCircle, Scale, Building2, User, Trophy, XCircle,
   CheckCircle2, Phone, StickyNote, CalendarClock, Send, Clock, Pencil, Check, X,
-  Zap, Filter, ChevronLeft, ChevronRight, LogOut,
+  Zap, Filter, ChevronLeft, ChevronRight, LogOut, Trash2,
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -263,6 +263,7 @@ export default function DealDetail() {
   const [editing, setEditing] = useState(null); // 'deal' | 'processo' | 'person' | 'company'
   const [form, setForm] = useState({});
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
@@ -311,6 +312,19 @@ export default function DealDetail() {
     load();
   };
   const setOutcome = async (kind) => { const t = stages.find((s) => s.kind === kind); if (t) moveStage(t.id); };
+
+  const handleDeleteDeal = async () => {
+    setError(null);
+    const ok = confirm(
+      `Excluir este negócio definitivamente?\n\nIsso apaga o negócio${person?.full_name ? ` de "${person.full_name}"` : ""}, junto com as atividades registradas nele. O lead/pessoa e o processo continuam existindo. Não tem como desfazer.`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    const { error: e } = await supabase.schema("crm").rpc("delete_deal", { p_deal: deal.id });
+    setDeleting(false);
+    if (e) { setError(e.message); return; }
+    navigate("/crm");
+  };
 
   const addActivity = async () => {
     if (!actContent.trim()) return;
@@ -472,6 +486,10 @@ export default function DealDetail() {
                 <button onClick={() => setOutcome("lost")} disabled={busy} title="Marcar como Perdido"
                   style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: curStage?.kind === "lost" ? T.coral : T.surface, border: `1px solid ${T.coral}`, borderRadius: 9, cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: curStage?.kind === "lost" ? "#fff" : T.coral, fontFamily: T.font }}>
                   <XCircle size={14} /> Perdido
+                </button>
+                <button onClick={handleDeleteDeal} disabled={deleting} title="Excluir negócio definitivamente"
+                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1, fontSize: 12.5, fontWeight: 700, color: T.coral, fontFamily: T.font }}>
+                  {deleting ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={14} />} Excluir
                 </button>
               </div>
             </div>

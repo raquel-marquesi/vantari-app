@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard, Zap, Filter,
   ChevronLeft, ChevronRight, LogOut, Building2, Upload, Download, FileText,
-  CheckCircle2, ArrowRight, ArrowLeft, Edit3, Save,
+  CheckCircle2, ArrowRight, ArrowLeft, Edit3, Save, Trash2,
 } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
@@ -279,6 +279,8 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
   const [form, setForm] = useState({
     full_name: lead.full_name || "", cpf: lead.cpf || "",
     phone: lead.primary_phone || "", email: lead.primary_email || "",
@@ -312,6 +314,20 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
     setSaving(false);
     if (e) { setSaveError(e.message); return; }
     setEditing(false);
+    onSaved?.();
+  };
+
+  const handleDelete = async () => {
+    setDeleteError(null);
+    const dealsWord = deals.length ? ` e ${deals.length} negócio(s) vinculado(s)` : "";
+    const ok = confirm(
+      `Excluir "${lead.full_name || "este lead"}" definitivamente?\n\nIsso apaga a pessoa${dealsWord}, todo o histórico de eventos, atividades e conversas dela. Não tem como desfazer.`
+    );
+    if (!ok) return;
+    setDeleting(true);
+    const { error: e } = await supabase.schema("core").rpc("delete_person", { p_person: lead.id });
+    setDeleting(false);
+    if (e) { setDeleteError(e.message); return; }
     onSaved?.();
   };
 
@@ -359,9 +375,18 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
                 <Edit3 size={13} /> Editar
               </button>
             )}
+            <button onClick={handleDelete} disabled={deleting} title="Excluir lead definitivamente"
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, cursor: deleting ? "default" : "pointer", opacity: deleting ? 0.6 : 1, fontSize: 12.5, fontWeight: 700, color: T.coral, fontFamily: T.font }}>
+              {deleting ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Trash2 size={13} />} Excluir
+            </button>
             <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
           </div>
         </div>
+        {deleteError && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 24px", background: "#FFF1F0", color: "#9B2C2C", fontSize: 12.5, borderBottom: `1px solid ${T.border}` }}>
+            <AlertCircle size={14} color={T.coral} /> {deleteError}
+          </div>
+        )}
 
         <div style={{ padding: "18px 24px", overflowY: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>

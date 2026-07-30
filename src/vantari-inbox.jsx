@@ -35,6 +35,16 @@ function relTime(iso) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
+const dayKey = (iso) => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+function dayLabel(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  if (dayKey(iso) === dayKey(today)) return "Hoje";
+  if (dayKey(iso) === dayKey(yesterday)) return "Ontem";
+  return d.toLocaleDateString("pt-BR");
+}
 const fmtCpf = (v) => { if (!v) return null; const d = String(v).replace(/\D/g, ""); return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v; };
 const initialOf = (name, phone) => (name ? name.trim().charAt(0) : (phone ? phone.replace(/\D/g, "").slice(-2, -1) : "?")).toUpperCase();
 // placeholder que a Nina manda enquanto a transcrição do áudio não chega —
@@ -512,9 +522,25 @@ export default function InboxAtendimento() {
                   </div>
                 ) : messages.length === 0 ? (
                   <div style={{ textAlign: "center", color: T.muted, margin: "auto", fontSize: 13 }}>Nenhuma mensagem ainda nesta conversa.</div>
-                ) : messages.map((m, i) => (
-                  <MessageBubble key={m.id} m={m} grouped={i > 0 && messages[i - 1].sender === m.sender} />
-                ))}
+                ) : messages.map((m, i) => {
+                  const prev = messages[i - 1];
+                  const showDayDivider = i === 0 || dayKey(prev.created_at) !== dayKey(m.created_at);
+                  return (
+                    <div key={m.id}>
+                      {showDayDivider && (
+                        <div style={{ display: "flex", justifyContent: "center", margin: "14px 0" }}>
+                          <span style={{
+                            fontSize: 11, fontWeight: 700, color: T.muted, background: T.bg,
+                            padding: "4px 12px", borderRadius: 20, fontFamily: T.font,
+                          }}>
+                            {dayLabel(m.created_at)}
+                          </span>
+                        </div>
+                      )}
+                      <MessageBubble m={m} grouped={!showDayDivider && prev.sender === m.sender} />
+                    </div>
+                  );
+                })}
               </div>
 
               <div style={{ padding: "14px 22px", borderTop: `1px solid ${T.border}`, background: T.surface }}>

@@ -20,7 +20,15 @@ import { supabase } from "./supabase";
 //  2. ErrorBoundary: se mesmo assim algo quebrar (ex: um erro de verdade,
 //     não relacionado a deploy), mostra uma tela de erro com botão de
 //     recarregar em vez de ficar tudo branco sem explicação nenhuma.
-const CHUNK_RELOAD_KEY = "vantari_chunk_reload_attempted";
+// Guarda TIMESTAMP da última tentativa (não um boolean fixo). Um boolean
+// travado em "1" na sessionStorage ficaria preso pra sempre na mesma aba —
+// nem um Ctrl+Shift+R limpa sessionStorage, só fechar a aba/janela — então
+// se a 1ª tentativa de reload não resolvesse (ex: instabilidade momentânea
+// de rede), o usuário ficava preso na tela de erro mesmo dando refresh
+// manualmente depois. Com um cooldown curto, uma nova tentativa automática
+// volta a ser permitida passado esse tempo.
+const CHUNK_RELOAD_KEY = "vantari_chunk_reload_attempted_at";
+const CHUNK_RELOAD_COOLDOWN_MS = 8000;
 
 function lazyWithReload(factory) {
   return lazy(async () => {
@@ -30,10 +38,11 @@ function lazyWithReload(factory) {
       try { sessionStorage.removeItem(CHUNK_RELOAD_KEY); } catch {}
       return mod;
     } catch (err) {
-      let alreadyTried = false;
-      try { alreadyTried = sessionStorage.getItem(CHUNK_RELOAD_KEY) === "1"; } catch {}
-      if (!alreadyTried) {
-        try { sessionStorage.setItem(CHUNK_RELOAD_KEY, "1"); } catch {}
+      let lastAttempt = 0;
+      try { lastAttempt = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY)) || 0; } catch {}
+      const triedRecently = Date.now() - lastAttempt < CHUNK_RELOAD_COOLDOWN_MS;
+      if (!triedRecently) {
+        try { sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now())); } catch {}
         window.location.reload();
         // trava o carregamento suspenso até o reload acontecer, em vez de
         // deixar o React tentar renderizar um módulo quebrado
@@ -69,6 +78,20 @@ class ErrorBoundary extends Component {
           >
             Recarregar página
           </button>
+          {/* detalhe técnico visível na tela — sem isso, diagnosticar um erro
+              relatado por outro usuário depende de pedir pra ele abrir o
+              console do navegador, o que trava a investigação */}
+          <details style={{ marginTop: 10, maxWidth: 560, textAlign: "left" }}>
+            <summary style={{ cursor: "pointer", fontSize: 12, color: "#8696A5", fontWeight: 600 }}>Detalhes técnicos</summary>
+            <pre style={{
+              marginTop: 8, padding: 10, background: "#fff", border: "1px solid #E8EEF3", borderRadius: 8,
+              fontSize: 11, color: "#5A6B7A", whiteSpace: "pre-wrap", wordBreak: "break-word", maxHeight: 200, overflowY: "auto",
+            }}>
+              {String(this.state.error?.message || this.state.error)}
+              {"\n"}URL: {window.location.href}
+              {"\n"}Navegador: {navigator.userAgent}
+            </pre>
+          </details>
         </div>
       );
     }

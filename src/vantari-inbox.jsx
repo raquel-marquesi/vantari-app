@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Loader2, AlertCircle, Building2, Zap, Filter, ChevronLeft, ChevronRight, LogOut,
   Activity, ListChecks, AlertTriangle, Inbox, Send, UserCheck, UserX, Search,
-  Phone, IdCard, FileText, MessageCircle, Mic,
+  Phone, IdCard, FileText, MessageCircle, Mic, Archive, ArchiveRestore, ExternalLink,
 } from "lucide-react";
 
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
@@ -219,6 +219,7 @@ function MessageBubble({ m, grouped }) {
 }
 
 export default function InboxAtendimento() {
+  const navigate = useNavigate();
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -228,6 +229,9 @@ export default function InboxAtendimento() {
   const [messages, setMessages] = useState([]);
   const [msgLoading, setMsgLoading] = useState(false);
   const [processos, setProcessos] = useState([]);
+  const [dealByProcesso, setDealByProcesso] = useState({});
+  const [view, setView] = useState("active"); // "active" | "archived"
+  const [archiveBusy, setArchiveBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
@@ -304,15 +308,30 @@ export default function InboxAtendimento() {
   const selected = useMemo(() => conversations.find((c) => c.id === selectedId) || null, [conversations, selectedId]);
 
   useEffect(() => {
-    if (!selectedId) { setMessages([]); setProcessos([]); return; }
+    if (!selectedId) { setMessages([]); setProcessos([]); setDealByProcesso({}); return; }
     loadMessages(selectedId);
     const person = conversations.find((c) => c.id === selectedId)?.person_id;
     if (person) {
-      supabase.schema("crm").from("processos").select("id, numero_cnj, status, elegivel")
+      const crm = supabase.schema("crm");
+      crm.from("processos").select("id, numero_cnj, status, elegivel")
         .eq("reclamante_person_id", person).order("created_at", { ascending: false })
-        .then(({ data }) => setProcessos(data || []));
+        .then(async ({ data }) => {
+          const procs = data || [];
+          setProcessos(procs);
+          const processoIds = procs.map((p) => p.id);
+          if (processoIds.length) {
+            const { data: deals } = await crm.from("deals").select("id, processo_id")
+              .in("processo_id", processoIds).eq("person_id", person).eq("credit_type", "reclamante");
+            const map = {};
+            (deals || []).forEach((d) => { map[d.processo_id] = d.id; });
+            setDealByProcesso(map);
+          } else {
+            setDealByProcesso({});
+          }
+        });
     } else {
       setProcessos([]);
+      setDealByProcesso({});
     }
   }, [selectedId, loadMessages]);
 
@@ -354,14 +373,29 @@ export default function InboxAtendimento() {
 
   const filteredConvs = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return conversations;
     return conversations.filter((c) => {
+      const isArchived = !!c.archived_at;
+      if (view === "active" && isArchived) return false;
+      if (view === "archived" && !isArchived) return false;
+      if (!term) return true;
       const p = c.person;
       return (p?.full_name || "").toLowerCase().includes(term) ||
         (p?.primary_phone || "").includes(term) ||
         (p?.cpf || "").includes(term.replace(/\D/g, ""));
     });
-  }, [conversations, search]);
+  }, [conversations, search, view]);
+
+  const setArchived = async (archived) => {
+    if (!selected) return;
+    setArchiveBusy(true); setBanner(null);
+    const { error: e } = await supabase.schema("core").from("conversations")
+      .update({ archived_at: archived ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+      .eq("id", selected.id);
+    setArchiveBusy(false);
+    if (e) { setBanner({ type: "error", text: e.message }); return; }
+    if (archived) setSelectedId(null); // sai da conversa arquivada, ela some da aba Ativas
+    load({ silent: true });
+  };
 
   const callFn = async (fn, body) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -407,6 +441,15 @@ export default function InboxAtendimento() {
     </span>
   );
 
+  const archivedBadge = (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700,
+      padding: "3px 9px", borderRadius: 20, fontFamily: T.font, background: T.bg, color: T.muted,
+    }}>
+      <Archive size={10} /> Resolvida
+    </span>
+  );
+
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
       <style>{`
@@ -420,8 +463,20 @@ export default function InboxAtendimento() {
         <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.surface, display: "flex", flexDirection: "column" }}>
           <div style={{ padding: "20px 18px 12px" }}>
             <h1 style={{ fontSize: 20, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.02em", margin: 0 }}>Atendimento</h1>
-            <div style={{ fontSize: 12.5, color: T.muted, marginTop: 2 }}>{conversations.length} conversa{conversations.length === 1 ? "" : "s"}</div>
-            <div style={{ position: "relative", marginTop: 12 }}>
+            <div style={{ fontSize: 12.5, color: T.muted, marginTop: 2 }}>{filteredConvs.length} conversa{filteredConvs.length === 1 ? "" : "s"}</div>
+            <div style={{ display: "flex", gap: 6, marginTop: 12 }}>
+              {[{ v: "active", l: "Ativas" }, { v: "archived", l: "Resolvidas" }].map((t) => (
+                <button key={t.v} onClick={() => setView(t.v)}
+                  style={{
+                    flex: 1, padding: "6px 10px", borderRadius: 20, border: `1px solid ${view === t.v ? T.teal : T.border}`,
+                    background: view === t.v ? T.teal : T.surface, color: view === t.v ? "#fff" : T.text,
+                    fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.font,
+                  }}>
+                  {t.l}
+                </button>
+              ))}
+            </div>
+            <div style={{ position: "relative", marginTop: 10 }}>
               <Search size={14} color={T.faint3} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
               <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, telefone ou CPF..."
                 style={{ width: "100%", padding: "8px 10px 8px 30px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 12.5, fontFamily: T.font, outline: "none", boxSizing: "border-box" }} />
@@ -435,8 +490,14 @@ export default function InboxAtendimento() {
             ) : filteredConvs.length === 0 ? (
               <div style={{ textAlign: "center", color: T.muted, padding: "50px 20px", fontSize: 13 }}>
                 <Inbox size={26} color={T.faint3} style={{ marginBottom: 8 }} />
-                <div>Nenhuma conversa ainda.</div>
-                <div style={{ fontSize: 11.5, marginTop: 4 }}>Assim que a Nina começar a atender alguém no WhatsApp, a conversa aparece aqui.</div>
+                {view === "archived" ? (
+                  <div>Nenhuma conversa resolvida ainda.</div>
+                ) : (
+                  <>
+                    <div>Nenhuma conversa ativa.</div>
+                    <div style={{ fontSize: 11.5, marginTop: 4 }}>Assim que a Nina começar a atender alguém no WhatsApp, a conversa aparece aqui.</div>
+                  </>
+                )}
               </div>
             ) : filteredConvs.map((c) => {
               const p = c.person;
@@ -468,7 +529,7 @@ export default function InboxAtendimento() {
                         </span>
                       ) : (c.last_message_body || "—")}
                     </div>
-                    <div style={{ marginTop: 5 }}>{statusBadge(c.status)}</div>
+                    <div style={{ marginTop: 5, display: "flex", gap: 5, flexWrap: "wrap" }}>{statusBadge(c.status)}{c.archived_at && archivedBadge}</div>
                   </div>
                 </div>
               );
@@ -488,7 +549,7 @@ export default function InboxAtendimento() {
               <div style={{ padding: "14px 22px", borderBottom: `1px solid ${T.border}`, background: T.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, fontFamily: T.head }}>{selected.person?.full_name || selected.person?.primary_phone || "Contato sem nome"}</div>
-                  <div style={{ marginTop: 4 }}>{statusBadge(selected.status)}</div>
+                  <div style={{ marginTop: 4, display: "flex", gap: 6 }}>{statusBadge(selected.status)}{selected.archived_at && archivedBadge}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {selected.status === "nina" ? (
@@ -500,6 +561,17 @@ export default function InboxAtendimento() {
                     <button onClick={() => takeover("release")} disabled={actionBusy}
                       style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: actionBusy ? "default" : "pointer", opacity: actionBusy ? 0.7 : 1, fontFamily: T.font }}>
                       <UserX size={15} /> Devolver pra Nina
+                    </button>
+                  )}
+                  {selected.archived_at ? (
+                    <button onClick={() => setArchived(false)} disabled={archiveBusy} title="Reabrir esta conversa na lista de Ativas"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: archiveBusy ? "default" : "pointer", opacity: archiveBusy ? 0.7 : 1, fontFamily: T.font }}>
+                      <ArchiveRestore size={15} /> Reabrir
+                    </button>
+                  ) : (
+                    <button onClick={() => setArchived(true)} disabled={archiveBusy} title="Tira da lista de Ativas sem apagar o histórico"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: archiveBusy ? "default" : "pointer", opacity: archiveBusy ? 0.7 : 1, fontFamily: T.font }}>
+                      <Archive size={15} /> Encerrar conversa
                     </button>
                   )}
                 </div>
@@ -598,12 +670,25 @@ export default function InboxAtendimento() {
                 </div>
                 {processos.length === 0 ? (
                   <div style={{ fontSize: 12, color: T.faint3 }}>Nenhum processo capturado ainda.</div>
-                ) : processos.map((p) => (
-                  <div key={p.id} style={{ padding: "8px 10px", background: T.bg, borderRadius: 8, marginBottom: 6 }}>
-                    <div style={{ fontSize: 12, fontFamily: T.mono, color: T.ink, wordBreak: "break-all" }}>{p.numero_cnj}</div>
-                    <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, textTransform: "capitalize" }}>{p.status?.replace(/_/g, " ")}</div>
-                  </div>
-                ))}
+                ) : processos.map((p) => {
+                  const dealId = dealByProcesso[p.id];
+                  return (
+                    <div key={p.id} style={{ padding: "8px 10px", background: T.bg, borderRadius: 8, marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, fontFamily: T.mono, color: T.ink, wordBreak: "break-all" }}>{p.numero_cnj}</div>
+                      <div style={{ fontSize: 10.5, color: T.muted, marginTop: 2, textTransform: "capitalize" }}>{p.status?.replace(/_/g, " ")}</div>
+                      {dealId && (
+                        <button onClick={() => navigate(`/crm/${dealId}`)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 5, marginTop: 7, padding: "5px 9px",
+                            background: T.surface, border: `1px solid ${T.border}`, borderRadius: 7,
+                            color: T.teal, fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: T.font,
+                          }}>
+                          <ExternalLink size={12} /> Ver negócio no CRM
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>

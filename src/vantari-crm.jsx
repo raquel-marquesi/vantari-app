@@ -288,15 +288,19 @@ function Sidebar({ collapsed, onToggle }) {
 }
 
 /* ─── Card de negócio ─── */
-function DealCard({ deal, personName }) {
+function DealCard({ deal, personName, onDragStartDeal, onDragEndDeal, dragging }) {
   const [hov, setHov] = useState(false);
   const navigate = useNavigate();
   const valor = deal.valor_ofertado_cents ?? deal.valor_face_cents;
   return (
     <div onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)}
       onClick={() => navigate(`/crm/${deal.id}`)}
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData("text/plain", deal.id); e.dataTransfer.effectAllowed = "move"; onDragStartDeal?.(deal.id); }}
+      onDragEnd={() => onDragEndDeal?.()}
       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10,
-        padding: "11px 12px", cursor: "pointer", transition: "all 0.15s",
+        padding: "11px 12px", cursor: dragging ? "grabbing" : "grab", transition: "all 0.15s",
+        opacity: dragging ? 0.45 : 1,
         boxShadow: hov ? "0 8px 20px -12px rgba(14,26,36,.18)" : "0 1px 0 rgba(14,26,36,.03)",
         transform: hov ? "translateY(-1px)" : "none" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: T.ink, fontFamily: T.font, marginBottom: 3 }}>
@@ -400,10 +404,20 @@ function PrevisaoView({ stages, deals }) {
 }
 
 /* ─── Coluna do estágio ─── */
-function StageColumn({ stage, accent, deals, personMap }) {
+function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, setDraggingId }) {
+  const [dragOver, setDragOver] = useState(false);
   const total = deals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
   return (
-    <div style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+    <div
+      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (!dragOver) setDragOver(true); }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const dealId = e.dataTransfer.getData("text/plain");
+        if (dealId) onDropDeal?.(dealId, stage.id);
+      }}
+      style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
         <div style={{ height: 3, background: accent }} />
         <div style={{ padding: "10px 12px" }}>
@@ -415,8 +429,17 @@ function StageColumn({ stage, accent, deals, personMap }) {
           </div>
         </div>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        {deals.map((d) => <DealCard key={d.id} deal={d} personName={personMap[d.person_id]} />)}
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 8, minHeight: 60, borderRadius: 10,
+        border: dragOver ? `2px dashed ${T.teal}` : "2px dashed transparent",
+        background: dragOver ? `${T.teal}0A` : "transparent",
+        padding: dragOver ? 4 : 0, transition: "all 0.1s",
+      }}>
+        {deals.map((d) => (
+          <DealCard key={d.id} deal={d} personName={personMap[d.person_id]}
+            dragging={draggingId === d.id}
+            onDragStartDeal={setDraggingId} onDragEndDeal={() => setDraggingId(null)} />
+        ))}
       </div>
     </div>
   );
@@ -820,6 +843,7 @@ export default function CRM() {
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilter, setShowFilter] = useState(false);
+  const [draggingId, setDraggingId] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -839,10 +863,12 @@ export default function CRM() {
 
       const { data: dl, error: e3 } = await crm
         .from("deals")
-        .select("id,person_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status,captador")
+        .select("id,person_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status,captador,created_at")
         .eq("pipeline_id", pipe.id);
       if (e3) throw e3;
-      setDeals(dl || []);
+      // mais recente (chegada) primeiro em cada coluna do Kanban
+      const sorted = [...(dl || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setDeals(sorted);
 
       const ids = [...new Set((dl || []).map((d) => d.person_id).filter(Boolean))];
       if (ids.length) {
@@ -881,6 +907,17 @@ export default function CRM() {
   const activeFilterCount = countActiveFilters(filters);
   const dealsByStage = (stageId) => filteredDeals.filter((d) => d.stage_id === stageId);
   const totalGeral = filteredDeals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+
+  /* ─── arrastar card entre etapas ─── */
+  const moveDealStage = async (dealId, newStageId) => {
+    const prev = deals;
+    const current = deals.find((d) => d.id === dealId);
+    if (!current || current.stage_id === newStageId) return;
+    // atualização otimista — sobe a UI na hora, sem esperar o round-trip do banco
+    setDeals((ds) => ds.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)));
+    const { error: e } = await supabase.schema("crm").from("deals").update({ stage_id: newStageId }).eq("id", dealId);
+    if (e) { setDeals(prev); setError(e.message); }
+  };
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
@@ -967,7 +1004,8 @@ export default function CRM() {
         {!loading && !error && pipeline && (filteredDeals.length > 0 || deals.length === 0) && view === "kanban" && (
           <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
             {stages.map((s, i) => (
-              <StageColumn key={s.id} stage={s} accent={stageAccent(s, i)} deals={dealsByStage(s.id)} personMap={personMap} />
+              <StageColumn key={s.id} stage={s} accent={stageAccent(s, i)} deals={dealsByStage(s.id)} personMap={personMap}
+                onDropDeal={moveDealStage} draggingId={draggingId} setDraggingId={setDraggingId} />
             ))}
           </div>
         )}

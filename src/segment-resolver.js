@@ -29,6 +29,7 @@ const FIELDS = [
   { value: "company",         label: "Empresa",         type: "text",   src: "company" },
   { value: "visited_page",    label: "Visitou página",  type: "page",   src: "event" },
   { value: "unsubscribed",    label: "Descadastrado",   type: "bool",   src: "consent" },
+  { value: "email_status",    label: "Qualidade do email", type: "enum", src: "person", col: "email_status", opts: ["valid", "invalid", "risky"] },
 ];
 const fieldOf = (rule) => FIELDS.find(f => f.value === rule.field) || FIELDS[0];
 
@@ -103,6 +104,20 @@ async function buildPersonConstraints(filters) {
     const ids = Array.from(new Set((data || []).map(x => x.person_id)));
     if (unsub && unsub.value === "true") allowed = intersect(allowed, ids);
     else ids.forEach(i => exclude.add(i)); // default e caso "descadastrado=false": sempre exclui
+  }
+
+  // QUALIDADE DE EMAIL — core.persons.email_status (core.classify_email, trigger
+  // automático). Por padrão, email inválido (sintaxe quebrada ou domínio
+  // descartável) é SEMPRE excluído do envio — não existe motivo legítimo pra
+  // mandar campanha pra um email que já sabemos que vai bounce. Só não aplica
+  // esse padrão se o segmento tiver uma regra explícita sobre email_status
+  // (ex: alguém quer ver justamente os inválidos pra fins de limpeza de base).
+  const hasEmailStatusRule = rules.some(r => r.field === "email_status");
+  if (!hasEmailStatusRule) {
+    const { data, error } = await core().from("persons")
+      .select("id").eq("workspace_id", WORKSPACE_VANTARI).eq("email_status", "invalid").limit(5000);
+    if (error) throw error;
+    (data || []).forEach(p => exclude.add(p.id));
   }
 
   // EMPRESA — core.companies → company_id

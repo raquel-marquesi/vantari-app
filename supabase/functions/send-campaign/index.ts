@@ -140,10 +140,27 @@ Deno.serve(async (req) => {
     const skippedUnsubscribed = recipients.filter(r => r.person_id && revoked.has(r.person_id)).length;
     recipients = recipients.filter(r => !(r.person_id && revoked.has(r.person_id)));
 
+    // defesa em profundidade (2): exclui email_status='invalid' (core.classify_email,
+    // trigger automático) — sintaxe quebrada/domínio descartável, nunca deveria
+    // ter sido enviado mesmo que o front não tenha filtrado.
+    let invalidQuality = new Set<string>();
+    const remainingPersonIds = recipients.map(r => r.person_id).filter((x): x is string => !!x);
+    if (remainingPersonIds.length) {
+      const { data: personRows } = await supabase
+        .schema("core").from("persons")
+        .select("id")
+        .eq("email_status", "invalid")
+        .in("id", remainingPersonIds);
+      invalidQuality = new Set((personRows || []).map((p: any) => p.id));
+    }
+    const skippedInvalidQuality = recipients.filter(r => r.person_id && invalidQuality.has(r.person_id)).length;
+    recipients = recipients.filter(r => !(r.person_id && invalidQuality.has(r.person_id)));
+
     if (recipients.length === 0) {
       return new Response(JSON.stringify({
         sent: 0, total: 0, skipped_invalid: skippedInvalid, skipped_unsubscribed: skippedUnsubscribed,
-        error: "Todos os destinatários resolvidos já descadastraram email.",
+        skipped_invalid_quality: skippedInvalidQuality,
+        error: "Todos os destinatários resolvidos foram filtrados (descadastro ou email inválido).",
       }), { status: 400, headers: CORS });
     }
 
@@ -218,6 +235,7 @@ Deno.serve(async (req) => {
         total: recipients.length,
         skipped_invalid: skippedInvalid,
         skipped_unsubscribed: skippedUnsubscribed,
+        skipped_invalid_quality: skippedInvalidQuality,
         test: false,
       }),
       { headers: { ...CORS, "Content-Type": "application/json" } }

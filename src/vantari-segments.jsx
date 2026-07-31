@@ -188,6 +188,7 @@ const FIELDS = [
   { value: "company",         label: "Empresa",             type: "text",   src: "company" },
   { value: "visited_page",    label: "Visitou página",      type: "page",   src: "event" },   // core.events (inerte até tracker no core)
   { value: "unsubscribed",    label: "Descadastrado (email)", type: "bool", src: "consent" }, // core.consents (inerte até consent no core)
+  { value: "email_status",    label: "Qualidade do email",  type: "enum",   src: "person", col: "email_status", opts: ["valid", "invalid", "risky"] },
 ];
 // "id" é uma regra de sistema (lote estático vindo de importação de CSV em /leads),
 // nunca aparece no seletor de campos (FIELDS) — precisa de fallback próprio pra não
@@ -287,6 +288,19 @@ async function buildPersonConstraints(filters) {
     const ids = Array.from(new Set((data || []).map(x => x.person_id)));
     if (unsub.value === "true") allowed = intersect(allowed, ids);
     else ids.forEach(i => exclude.add(i));   // descadastrado = não → exclui revogados
+  }
+
+  // QUALIDADE DE EMAIL — core.persons.email_status (classificação automática
+  // via trigger, ver migration 20260731000004). Por padrão email inválido
+  // (sintaxe quebrada/domínio descartável) sempre é excluído de qualquer
+  // segmento — só não aplica se o usuário adicionou uma regra explícita sobre
+  // email_status (ex: quer ver justamente os inválidos pra limpar a base).
+  const hasEmailStatusRule = rules.some(r => r.field === "email_status");
+  if (!hasEmailStatusRule) {
+    const { data, error } = await core().from("persons")
+      .select("id").eq("workspace_id", WORKSPACE_VANTARI).eq("email_status", "invalid").limit(5000);
+    if (error) throw error;
+    (data || []).forEach(p => exclude.add(p.id));
   }
 
   // EMPRESA — resolve nome → company_ids (vira filtro direto persons.company_id in)
@@ -469,6 +483,22 @@ function SegmentModal({ segment, onClose, onSave }) {
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState(null);
 
+  // ─── Listas Inteligentes: presets de 1 clique sobre o mesmo motor de
+  // segmento dinâmico (nenhum dado novo, só combinações prontas de regras
+  // já existentes — reduz a fricção de montar do zero pra quem só quer
+  // um recorte comum).
+  const SMART_PRESETS = [
+    { label: "Emails de qualidade", name: "Emails de qualidade", description: "Emails que passaram na validação (sintaxe + domínio) — base segura pra campanha.", rules: [{ field: "email_status", op: "eq", value: "valid" }] },
+    { label: "Descadastrados",      name: "Descadastrados (supressão)", description: "Quem revogou consentimento de email — nunca deve receber campanha.", rules: [{ field: "unsubscribed", op: "eq", value: "true" }] },
+    { label: "Perfil ideal",        name: "Perfil ideal (Prioritário)", description: "Segmento de score \"Prioritário\" (Etapa 1) — maior prioridade de contato.", rules: [{ field: "segment_inicial", op: "eq", value: "Prioritário" }] },
+    { label: "Pendentes de CPF",    name: "Pendentes de identificação", description: "Leads sem CPF ainda (status pendente) — precisam completar cadastro.", rules: [{ field: "status", op: "eq", value: "pendente" }] },
+  ];
+  const applyPreset = (preset) => {
+    setName(preset.name);
+    setDesc(preset.description);
+    setFilters(preset.rules);
+  };
+
   const addRule = () => setFilters(f => [...f, { field: "score_inicial", op: "gte", value: "" }]);
   const updateRule = (i, r) => setFilters(f => f.map((x, idx) => idx === i ? r : x));
   const removeRule = (i) => setFilters(f => f.filter((_, idx) => idx !== i));
@@ -521,6 +551,25 @@ function SegmentModal({ segment, onClose, onSave }) {
               <div style={{ display: "flex", alignItems: "center", gap: 8, background: `${T.danger}14`, border: `1px solid ${T.danger}`, borderRadius: 8, padding: "9px 12px", marginBottom: 14 }}>
                 <AlertCircle size={15} color={T.danger} aria-hidden="true" />
                 <span style={{ fontSize: 13, color: T.danger, fontFamily: T.font }}>{error}</span>
+              </div>
+            )}
+
+            {!isEdit && filters.length === 0 && (
+              <div style={{ marginBottom: 16, padding: "12px 14px", background: T.faint, borderRadius: 10, border: `1px solid ${T.border}` }}>
+                <div style={{ fontFamily: T.head, fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>
+                  Listas Inteligentes (atalho)
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {SMART_PRESETS.map(p => (
+                    <button key={p.label} onClick={() => applyPreset(p)} type="button"
+                      style={{ fontFamily: T.font, fontSize: 11.5, fontWeight: 700, color: T.teal, background: "#fff", border: `1px solid ${T.teal}`, borderRadius: 20, padding: "5px 12px", cursor: "pointer" }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ fontFamily: T.font, fontSize: 11, color: T.muted, marginTop: 8 }}>
+                  Preenche nome, descrição e regras prontas — pode ajustar antes de salvar.
+                </div>
               </div>
             )}
 

@@ -300,6 +300,25 @@ function EventRow({ ev }) {
   );
 }
 
+/* selo de qualidade do email — core.persons.email_status (classificado
+   automaticamente por core.classify_email via trigger, ver migration
+   20260731000004). null = sem email cadastrado ainda, não mostra nada. */
+function EmailQualityBadge({ status }) {
+  if (!status) return null;
+  const map = {
+    valid:   { label: "Válido",   bg: "#F0FDF7", cl: "#0F6E4E" },
+    risky:   { label: "Genérico", bg: "#FFF8E6", cl: "#9A6A00" },
+    invalid: { label: "Inválido", bg: "#FEF2F2", cl: "#B91C1C" },
+  };
+  const s = map[status];
+  if (!s) return null;
+  return (
+    <span style={{ fontSize: 9.5, fontWeight: 700, padding: "1px 6px", borderRadius: 99, background: s.bg, color: s.cl, marginLeft: 6, whiteSpace: "nowrap" }}>
+      {s.label}
+    </span>
+  );
+}
+
 function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -464,7 +483,7 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 22 }}>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>CPF</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.cpf ? maskCpf(lead.cpf) : "—"}</div></div>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Telefone</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{lead.primary_phone ? maskPhone(lead.primary_phone) : "—"}</div></div>
-              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text }}>{lead.primary_email || "—"}</div></div>
+              <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text, display: "flex", alignItems: "center" }}>{lead.primary_email || "—"}<EmailQualityBadge status={lead.email_status} /></div></div>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Empresa</div><div style={{ fontSize: 13, color: T.text }}>{companyName || "—"}</div></div>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Criado em</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{fmtDate(lead.created_at)}</div></div>
             </div>
@@ -790,7 +809,7 @@ export default function Contatos() {
     try {
       const core = supabase.schema("core");
       let query = core.from("persons")
-        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at")
+        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at,email_status")
         .order("created_at", { ascending: false }).limit(500);
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       const term = q.trim();
@@ -899,7 +918,7 @@ export default function Contatos() {
                       <td style={{ ...td, fontWeight: 700, color: T.ink }}>{r.full_name || "—"}</td>
                       <td style={{ ...td, fontFamily: T.mono }}>{r.cpf ? maskCpf(r.cpf) : "—"}</td>
                       <td style={{ ...td, fontFamily: T.mono }}>{r.primary_phone ? maskPhone(r.primary_phone) : "—"}</td>
-                      <td style={td}>{r.primary_email || "—"}</td>
+                      <td style={{ ...td, display: "flex", alignItems: "center" }}>{r.primary_email || "—"}<EmailQualityBadge status={r.email_status} /></td>
                       <td style={td}>{r.company_id ? (companies[r.company_id] || "—") : "—"}</td>
                       <td style={td}>
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99, background: sb.bg, color: sb.color, border: `1px solid ${sb.border}` }}>{sb.label}</span>

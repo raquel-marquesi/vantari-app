@@ -91,14 +91,18 @@ async function buildPersonConstraints(filters) {
   }
 
   // DESCADASTRO — core.consents
+  // Regra explícita no segmento ("descadastrado" = true/false) continua
+  // funcionando normalmente. Mas por padrão — mesmo sem regra nenhuma —
+  // quem revogou email é SEMPRE excluído de envio (LGPD/compliance não pode
+  // depender de alguém lembrar de adicionar esse filtro no segmento).
   const unsub = rules.find(r => r.field === "unsubscribed");
-  if (unsub) {
+  {
     const { data, error } = await core().from("consents")
       .select("person_id").eq("channel", "email").eq("status", "revoked").limit(5000);
     if (error) throw error;
     const ids = Array.from(new Set((data || []).map(x => x.person_id)));
-    if (unsub.value === "true") allowed = intersect(allowed, ids);
-    else ids.forEach(i => exclude.add(i));
+    if (unsub && unsub.value === "true") allowed = intersect(allowed, ids);
+    else ids.forEach(i => exclude.add(i)); // default e caso "descadastrado=false": sempre exclui
   }
 
   // EMPRESA — core.companies → company_id

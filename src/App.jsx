@@ -119,6 +119,7 @@ const Tarefas          = lazyWithReload(() => import("./vantari-crm-tarefas"));
 const EmRisco          = lazyWithReload(() => import("./vantari-crm-em-risco"));
 const InboxAtendimento = lazyWithReload(() => import("./vantari-inbox"));
 const PublicForm       = lazyWithReload(() => import("./vantari-public-form"));
+const Unsubscribe      = lazyWithReload(() => import("./vantari-unsubscribe"));
 
 function PageLoader() {
   return (
@@ -184,6 +185,8 @@ export default function App() {
           <Route path="/login"          element={<AuthSystem />} />
           {/* Rota pública: form embedável /f/:slug */}
           <Route path="/f/:slug"        element={<PublicForm />} />
+          {/* Rota pública: descadastro de email (link "Descadastrar" nas campanhas) */}
+          <Route path="/unsubscribe"    element={<Unsubscribe />} />
           <Route path="/dashboard"      element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           {/* /leads abre a tela do core (antes era public.leads, agora core.persons) */}
           <Route path="/leads"          element={<ProtectedRoute><Contatos /></ProtectedRoute>} />

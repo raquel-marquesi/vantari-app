@@ -15,7 +15,7 @@ import {
   Hash, Table2, PieChart as PieIcon, BookOpen, KeyRound,
   Monitor, ClipboardList, Activity, Bell, Clock,
   FileSpreadsheet, AlertCircle,
-  ChevronRight, ChevronLeft, CheckCircle2, LogOut
+  ChevronRight, ChevronLeft, CheckCircle2, LogOut, Loader2
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -86,15 +86,16 @@ const T = {
   mono:    "'JetBrains Mono', monospace",
 };
 
+const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+
 /* ───── MOCK DATA ─────
-   Só o que ainda é consumido de verdade fica aqui. channelData/attributionData
-   seguem mock até a aba "Canais" ganhar busca real (fora do escopo desta
-   rodada de correções). monthlyTrend/savedReports seguem mock até
-   "Relatórios" ganhar persistência real no banco (idem). */
+   Só o que ainda é consumido de verdade fica aqui. monthlyTrend/savedReports
+   seguem mock até "Relatórios" ganhar persistência real no banco. A aba
+   "Canais" (ChannelSection) já busca dado real via core.get_channel_funnel —
+   ver função abaixo. */
 const monthlyTrend = [];
-const channelData = [];
-const attributionData = [];
 const savedReports = [];
+const CHANNEL_COLORS = [T.teal, T.green, T.brand2, T.violet, T.amber, T.coral, "#0A66C2", T.cyan];
 
 const METRIC_OPTIONS = [
   "Total Leads","MQLs","SQLs","Clientes","Taxa Conversão",
@@ -1074,7 +1075,46 @@ const ReportBuilder = () => {
    SECTION 4 — ANALYTICS POR CANAL
 ═══════════════════════════════════════════════════════════ */
 const ChannelSection = () => {
-  const [attribution, setAttribution] = useState("multi");
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setLoading(true); setError(null);
+      const { data, error: e } = await supabase.schema("core")
+        .rpc("get_channel_funnel", { p_workspace: WORKSPACE_VANTARI });
+      if (!alive) return;
+      if (e) { setError(e.message); setLoading(false); return; }
+      const withRates = (data || []).map((r, i) => ({
+        ...r,
+        cor: CHANNEL_COLORS[i % CHANNEL_COLORS.length],
+        convDeals: r.leads > 0 ? Math.round((r.negocios / r.leads) * 1000) / 10 : 0,
+        convWon: r.negocios > 0 ? Math.round((r.ganhos / r.negocios) * 1000) / 10 : 0,
+      }));
+      setRows(withRates);
+      setLoading(false);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const totalLeads = rows.reduce((s, r) => s + Number(r.leads), 0);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 240, color: T.muted, gap: 10, fontSize: 14 }}>
+        <Loader2 size={18} style={{ animation: "spin 1s linear infinite" }} /> Carregando canais...
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#FFF1F0", border: `1px solid ${T.coral}`, color: "#9B2C2C", borderRadius: 12, padding: "14px 16px", fontSize: 13 }}>
+        <AlertCircle size={18} color={T.coral} /> <span><strong>Erro:</strong> {error}</span>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -1084,123 +1124,110 @@ const ChannelSection = () => {
       }}>
         <AlertCircle size={16} color={T.amber} style={{ flexShrink: 0 }} />
         <span style={{ fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: T.font }}>
-          Esta aba ainda não busca dados reais — precisa antes definir de onde vem canal/origem e custo por canal. Os gráficos abaixo ficam vazios até essa fonte existir.
+          Canal é o primeiro toque de cada lead (UTM da URL, ou a origem quando não há UTM — ex: WhatsApp). Custo por canal e ROI ainda não entram aqui — dependem de conectar Google Ads/Meta Ads.
         </span>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
-        <Card>
-          <SectionTitle sub="Leads gerados vs custo por canal — últimos 30 dias">Performance por Fonte</SectionTitle>
-          <ResponsiveContainer width="100%" height={240}>
-            <ComposedChart data={channelData} layout="vertical" margin={{ left: 10, right: 20 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 10, fontFamily: T.font, fill: T.muted }} axisLine={false} tickLine={false} />
-              <YAxis dataKey="canal" type="category" tick={{ fontSize: 11, fontFamily: T.font, fill: T.text }} axisLine={false} tickLine={false} width={80} />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="leads" name="Leads" radius={[0, 4, 4, 0]} fill={T.teal} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </Card>
 
-        <Card>
-          <SectionTitle>ROI por Canal</SectionTitle>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {channelData.map((c, i) => (
-              <div key={i}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, fontWeight: 600 }}>{c.canal}</span>
-                  <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, fontWeight: 700 }}>
-                    {c.roi === 9999 ? "∞" : `${c.roi}%`}
-                  </span>
-                </div>
-                <div style={{ height: 6, background: T.border, borderRadius: 99, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min((c.roi / 1000) * 100, 100)}%`, background: c.roi > 500 ? T.green : c.cor, borderRadius: 99, transition: "width 0.6s ease" }} />
-                </div>
-                <div style={{ fontSize: 10, color: T.muted, fontFamily: T.font, marginTop: 2, fontWeight: 600 }}>
-                  Conv: {c.conversao}% · {c.custo > 0 ? `R$ ${c.custo.toLocaleString("pt-BR")}` : "Sem custo"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      </div>
+      {rows.length === 0 && (
+        <Card><div style={{ padding: 20, textAlign: "center", color: T.muted, fontSize: 13 }}>Nenhum lead com canal identificado ainda.</div></Card>
+      )}
 
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <SectionTitle sub="Crédito de conversão por modelo de atribuição">Attribution Modeling</SectionTitle>
-          <div style={{ display: "flex", gap: 6 }}>
-            {[{ k: "first", label: "First Touch" }, { k: "last", label: "Last Touch" }, { k: "multi", label: "Multi-Touch" }].map(m => (
-              <button key={m.k} onClick={() => setAttribution(m.k)}
-                style={{ background: attribution === m.k ? T.teal : "#fff", color: attribution === m.k ? "#fff" : T.muted, border: `1px solid ${attribution === m.k ? T.teal : T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 700, fontFamily: T.font, cursor: "pointer" }}>
-                {m.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <ResponsiveContainer width="100%" height={200}>
-            <PieChart>
-              <Pie data={attributionData.map(d => ({ name: d.name, value: d[attribution] }))}
-                cx="50%" cy="50%" outerRadius={80} innerRadius={40} dataKey="value" nameKey="name">
-                {attributionData.map((_, i) => (
-                  <Cell key={i} fill={[T.teal, T.green, "#1877F2", T.brand2, "#0A66C2", T.amber][i]} />
+      {rows.length > 0 && (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
+            <Card>
+              <SectionTitle sub={`${totalLeads.toLocaleString("pt-BR")} leads no total, por canal de origem`}>Leads por Canal</SectionTitle>
+              <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 36)}>
+                <ComposedChart data={rows} layout="vertical" margin={{ left: 10, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" horizontal={false} />
+                  <XAxis type="number" tick={{ fontSize: 10, fontFamily: T.font, fill: T.muted }} axisLine={false} tickLine={false} allowDecimals={false} />
+                  <YAxis dataKey="channel" type="category" tick={{ fontSize: 11, fontFamily: T.font, fill: T.text }} axisLine={false} tickLine={false} width={140} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Bar dataKey="leads" name="Leads" radius={[0, 4, 4, 0]} fill={T.teal} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </Card>
+
+            <Card>
+              <SectionTitle sub="Negócios criados ÷ leads, por canal">Conversão por Canal</SectionTitle>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {rows.map((c, i) => (
+                  <div key={i}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                      <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, fontWeight: 600 }}>{c.channel}</span>
+                      <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, fontWeight: 700 }}>{c.convDeals}%</span>
+                    </div>
+                    <div style={{ height: 6, background: T.border, borderRadius: 99, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(c.convDeals, 100)}%`, background: c.cor, borderRadius: 99, transition: "width 0.6s ease" }} />
+                    </div>
+                    <div style={{ fontSize: 10, color: T.muted, fontFamily: T.font, marginTop: 2, fontWeight: 600 }}>
+                      {c.negocios} negócio{c.negocios === 1 ? "" : "s"} · {c.ganhos} ganho{c.ganhos === 1 ? "" : "s"}
+                    </div>
+                  </div>
                 ))}
-              </Pie>
-              <Tooltip formatter={v => `${v}%`} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
-            {attributionData.map((d, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 10, height: 10, borderRadius: "50%", background: [T.teal, T.green, "#1877F2", T.brand2, "#0A66C2", T.amber][i], flexShrink: 0 }} />
-                <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, flex: 1, fontWeight: 600 }}>{d.name}</span>
-                <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.head, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{d[attribution]}%</span>
               </div>
-            ))}
+            </Card>
           </div>
-        </div>
-      </Card>
 
-      <Card>
-        <SectionTitle sub="vs. período anterior (30 dias)">Comparação de Canais</SectionTitle>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: T.font }}>
-            <thead>
-              <tr style={{ borderBottom: `2px solid ${T.border}` }}>
-                {["Canal","Leads","Δ Leads","Conv. %","Δ Conv.","Custo/Lead","ROI"].map(h => (
-                  <th key={h} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
+          <Card>
+            <SectionTitle sub="Distribuição de leads por canal (primeiro toque)">Origem dos Leads</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={rows.map(r => ({ name: r.channel, value: Number(r.leads) }))}
+                    cx="50%" cy="50%" outerRadius={80} innerRadius={40} dataKey="value" nameKey="name">
+                    {rows.map((r, i) => <Cell key={i} fill={r.cor} />)}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 8 }}>
+                {rows.map((r, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: r.cor, flexShrink: 0 }} />
+                    <span style={{ fontSize: 12, fontFamily: T.font, color: T.text, flex: 1, fontWeight: 600 }}>{r.channel}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, fontFamily: T.head, color: T.ink, fontVariantNumeric: "tabular-nums" }}>
+                      {totalLeads > 0 ? Math.round((r.leads / totalLeads) * 100) : 0}%
+                    </span>
+                  </div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {channelData.map((c, i) => {
-                const deltaLeads = [+12, -4, +8, +23, +6, +31][i];
-                const deltaCnv   = [+0.3, -0.2, +0.1, +0.8, -0.1, +1.2][i];
-                const cpLead     = c.custo > 0 ? `R$ ${Math.round(c.custo / c.leads)}` : "—";
-                return (
-                  <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? T.faint : "#fff" }}>
-                    <td style={{ padding: "11px 12px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.cor }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{c.canal}</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{c.leads?.toLocaleString("pt-BR")}</td>
-                    <td style={{ padding: "11px 12px" }}><TrendChip value={deltaLeads} /></td>
-                    <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted, fontWeight: 600 }}>{c.conversao}%</td>
-                    <td style={{ padding: "11px 12px" }}><TrendChip value={deltaCnv} /></td>
-                    <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted, fontWeight: 600 }}>{cpLead}</td>
-                    <td style={{ padding: "11px 12px" }}>
-                      <span style={{ fontWeight: 700, color: c.roi > 500 ? T.green : c.roi > 200 ? T.amber : T.coral, fontSize: 13 }}>
-                        {c.roi === 9999 ? "∞" : `${c.roi}%`}
-                      </span>
-                    </td>
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <SectionTitle>Comparação de Canais</SectionTitle>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: T.font }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid ${T.border}` }}>
+                    {["Canal","Leads","Negócios","Ganhos","Conversão","Fechamento"].map(h => (
+                      <th key={h} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 700, color: T.muted, textTransform: "uppercase" }}>{h}</th>
+                    ))}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+                </thead>
+                <tbody>
+                  {rows.map((c, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${T.border}`, background: i % 2 === 0 ? T.faint : "#fff" }}>
+                      <td style={{ padding: "11px 12px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: c.cor }} />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{c.channel}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: "11px 12px", fontSize: 13, fontWeight: 700, color: T.ink, fontVariantNumeric: "tabular-nums" }}>{Number(c.leads).toLocaleString("pt-BR")}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 13, color: T.text, fontWeight: 600 }}>{c.negocios}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 13, color: T.text, fontWeight: 600 }}>{c.ganhos}</td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted, fontWeight: 600 }}>{c.convDeals}%</td>
+                      <td style={{ padding: "11px 12px", fontSize: 12, color: T.muted, fontWeight: 600 }}>{c.convWon}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </>
+      )}
     </div>
   );
 };

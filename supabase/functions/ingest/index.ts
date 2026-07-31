@@ -23,6 +23,9 @@
 //   "attributes": {                                  // opcional → scoring Etapa 1
 //     "cidade_estado":"sao_paulo", "nivel_urgencia":"alta_dividas", ...
 //   }                                                // chaves/valores canônicos: ver 0007
+//   "utm": {                                          // opcional → canal de aquisição (primeiro toque)
+//     "source":"google", "medium":"cpc", "campaign":"...", "content":"...", "term":"..."
+//   }
 //   "processo": {                                     // opcional → cria/atualiza negócio no CRM
 //     "numero_cnj": "0001085-82.2025.5.07.0015",       // se vier, entra em crm.processos
 //     "honorarios_pct": 30                             // opcional, guardado no negócio
@@ -127,6 +130,9 @@ serve(async (req) => {
     workspaceId = ws.id;
   }
 
+  // —— UTM (opcional) — canal de aquisição, gravado como primeiro toque ——
+  const utm = body.utm && typeof body.utm === "object" ? body.utm : {};
+
   // —— resolver/criar a pessoa canônica ——
   const { data: personId, error: rpcErr } = await core.rpc("resolve_person", {
     p_workspace: workspaceId,
@@ -135,6 +141,11 @@ serve(async (req) => {
     p_email: email,
     p_name:  name,
     p_source: source,
+    p_utm_source:   utm.source   ?? null,
+    p_utm_medium:   utm.medium   ?? null,
+    p_utm_campaign: utm.campaign ?? null,
+    p_utm_content:  utm.content  ?? null,
+    p_utm_term:     utm.term     ?? null,
   });
   if (rpcErr) {
     // CPF inválido cai aqui (raise exception no banco) → 422

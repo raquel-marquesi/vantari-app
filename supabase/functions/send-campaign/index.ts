@@ -179,9 +179,21 @@ Deno.serve(async (req) => {
         });
       } else {
         sentCount += batch.length;
-        batch.forEach(r => {
+        // resend /emails/batch responde { data: [{ id }, ...] } na mesma ordem
+        // do array enviado — guardamos esse id pra correlacionar com o webhook
+        // de bounce/complaint/open/click (resend-webhook) depois.
+        let resendIds: (string | undefined)[] = [];
+        try {
+          const body = await res.json();
+          resendIds = Array.isArray(body?.data) ? body.data.map((d: any) => d?.id) : [];
+        } catch { /* segue sem ids — tracking básico ainda funciona */ }
+        batch.forEach((r, idx) => {
           if (r.person_id) {
-            sendRecords.push({ workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id, status: "sent", sent_at: new Date().toISOString() });
+            sendRecords.push({
+              workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id,
+              status: "sent", sent_at: new Date().toISOString(),
+              resend_email_id: resendIds[idx] ?? null,
+            });
           }
         });
       }

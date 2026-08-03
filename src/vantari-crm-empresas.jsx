@@ -10,6 +10,7 @@ import {
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { Inbox } from "lucide-react";
+import { FileBarChart } from "lucide-react";
 
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
 const T = {
@@ -159,6 +160,7 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
         <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
         <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
+        <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />

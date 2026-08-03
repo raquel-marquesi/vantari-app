@@ -12,6 +12,7 @@ import { IdCard } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { Inbox } from "lucide-react";
+import { FileBarChart } from "lucide-react";
 /* ───── DESIGN TOKENS (padrão Vantari) ───── */
 const T = {
   teal: "#0D7491", blue: "#0D7491", green: "#14A273", brand2: "#1F76BC", deep: "#0A3D4D",
@@ -25,6 +26,17 @@ const T = {
 };
 
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+const LOST_REASONS = [
+  { v: "reclamada_insolvente", l: "Reclamada insolvente" },
+  { v: "reclamada_em_rj", l: "Reclamada em recuperação judicial" },
+  { v: "tese_restritiva", l: "Tese jurídica restritiva" },
+  { v: "processo_inelegivel", l: "Processo não elegível" },
+  { v: "cliente_desistiu", l: "Cliente desistiu" },
+  { v: "proposta_recusada", l: "Cliente recusou a proposta" },
+  { v: "documentacao_incompleta", l: "Documentação incompleta" },
+  { v: "sem_contato", l: "Perda de contato com o cliente" },
+  { v: "outro", l: "Outro" },
+];
 
 // Cores de coluna por posição/tipo (won=verde, lost=coral, demais por ordem)
 const STAGE_ACCENTS = [T.blue, T.violet, T.amber, T.coral, T.green, T.faint3];
@@ -263,6 +275,7 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
         <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
         <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
+        <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
@@ -844,6 +857,7 @@ export default function CRM() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilter, setShowFilter] = useState(false);
   const [draggingId, setDraggingId] = useState(null);
+  const [lostModal, setLostModal] = useState(null); // { dealId, stageId } | null
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -909,14 +923,22 @@ export default function CRM() {
   const totalGeral = filteredDeals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
 
   /* ─── arrastar card entre etapas ─── */
-  const moveDealStage = async (dealId, newStageId) => {
+  const moveDealStage = async (dealId, newStageId, extra) => {
     const prev = deals;
     const current = deals.find((d) => d.id === dealId);
     if (!current || current.stage_id === newStageId) return;
+    // mover pra uma etapa "Perdido" exige motivo — abre modal em vez de gravar direto
+    const target = stages.find((s) => s.id === newStageId);
+    if (target?.kind === "lost" && !extra) { setLostModal({ dealId, stageId: newStageId }); return; }
     // atualização otimista — sobe a UI na hora, sem esperar o round-trip do banco
-    setDeals((ds) => ds.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)));
-    const { error: e } = await supabase.schema("crm").from("deals").update({ stage_id: newStageId }).eq("id", dealId);
+    setDeals((ds) => ds.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId, ...(extra || {}) } : d)));
+    const { error: e } = await supabase.schema("crm").from("deals").update({ stage_id: newStageId, ...(extra || {}) }).eq("id", dealId);
     if (e) { setDeals(prev); setError(e.message); }
+    setLostModal(null);
+  };
+  const confirmLostReason = (reason, detail) => {
+    if (!lostModal) return;
+    moveDealStage(lostModal.dealId, lostModal.stageId, { lost_reason: reason, lost_reason_detail: detail || null });
   };
 
   return (
@@ -1048,6 +1070,53 @@ export default function CRM() {
           </span>
         </div>
       )}
+
+      {/* Motivo de declínio, obrigatório antes de mover pra etapa "Perdido" */}
+      {lostModal && (
+        <LostReasonModal onCancel={() => setLostModal(null)} onConfirm={confirmLostReason} />
+      )}
+    </div>
+  );
+}
+
+function LostReasonModal({ onCancel, onConfirm }) {
+  const [reason, setReason] = useState("");
+  const [detail, setDetail] = useState("");
+  const [saving, setSaving] = useState(false);
+  const needsDetail = reason === "outro";
+  const canConfirm = !!reason && (!needsDetail || detail.trim());
+  const iSt = { width: "100%", padding: "9px 11px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
+  const lSt = { fontSize: 11.5, fontWeight: 600, color: T.text, display: "block", marginBottom: 5, fontFamily: T.font };
+  const handleConfirm = () => { setSaving(true); onConfirm(reason, detail.trim()); };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => e.target === e.currentTarget && !saving && onCancel()}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "90%", maxWidth: 420, boxShadow: "0 25px 60px rgba(0,0,0,0.18)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
+          <h3 style={{ margin: 0, fontFamily: T.head, fontSize: 15.5, fontWeight: 700, color: T.ink }}>Motivo do declínio</h3>
+          <button onClick={onCancel} disabled={saving} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 12 }}>
+            Antes de marcar como Perdido, registre por quê — isso alimenta o relatório mensal de declínios.
+          </div>
+          <label style={lSt}>Motivo</label>
+          <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...iSt, marginBottom: 12 }}>
+            <option value="">— selecionar —</option>
+            {LOST_REASONS.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+          </select>
+          <label style={lSt}>Detalhe {needsDetail ? "" : "(opcional)"}</label>
+          <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3}
+            placeholder={needsDetail ? "Descreva o motivo..." : "Contexto adicional (opcional)"} style={{ ...iSt, resize: "vertical" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: `1px solid ${T.border}` }}>
+          <button onClick={onCancel} disabled={saving} style={{ padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 12.5, fontWeight: 600, color: T.text, cursor: "pointer", fontFamily: T.font }}>Cancelar</button>
+          <button onClick={handleConfirm} disabled={!canConfirm || saving}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: T.coral, border: "none", borderRadius: 9, fontSize: 12.5, fontWeight: 700, color: "#fff", cursor: !canConfirm || saving ? "default" : "pointer", opacity: !canConfirm || saving ? 0.6 : 1, fontFamily: T.font }}>
+            {saving ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <XCircle size={14} />} Confirmar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

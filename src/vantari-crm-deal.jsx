@@ -13,6 +13,7 @@ import { IdCard } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import { Inbox } from "lucide-react";
+import { FileBarChart } from "lucide-react";
 /* ───── DESIGN TOKENS ───── */
 const T = {
   teal: "#0D7491", blue: "#0D7491", green: "#14A273", brand2: "#1F76BC", deep: "#0A3D4D",
@@ -31,6 +32,17 @@ const CNDT_OPTS = [
   { v: "positiva", l: "Positiva (veta)" },
 ];
 const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
+const LOST_REASONS = [
+  { v: "reclamada_insolvente", l: "Reclamada insolvente" },
+  { v: "reclamada_em_rj", l: "Reclamada em recuperação judicial" },
+  { v: "tese_restritiva", l: "Tese jurídica restritiva" },
+  { v: "processo_inelegivel", l: "Processo não elegível" },
+  { v: "cliente_desistiu", l: "Cliente desistiu" },
+  { v: "proposta_recusada", l: "Cliente recusou a proposta" },
+  { v: "documentacao_incompleta", l: "Documentação incompleta" },
+  { v: "sem_contato", l: "Perda de contato com o cliente" },
+  { v: "outro", l: "Outro" },
+];
 
 /* ─── helpers (duplicados do form, padrão self-contained) ─── */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
@@ -186,6 +198,7 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
         <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
         <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
+        <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
         <NavSection label="Ferramentas" collapsed={collapsed} />
         <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
         <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
@@ -302,16 +315,24 @@ export default function DealDetail() {
 
   const stageById = (id) => stages.find((s) => s.id === id);
   const curStage = deal ? stageById(deal.stage_id) : null;
+  const [lostModalStage, setLostModalStage] = useState(null); // stage_id pendente aguardando motivo
 
-  const moveStage = async (stageId) => {
+  const moveStage = async (stageId, extra) => {
     if (!deal || stageId === deal.stage_id) return;
+    const target = stageById(stageId);
+    // mover pra uma etapa "Perdido" exige motivo — abre modal em vez de gravar direto
+    if (target?.kind === "lost" && !extra) { setLostModalStage(stageId); return; }
     setBusy(true);
-    const { error: e } = await supabase.schema("crm").from("deals").update({ stage_id: stageId }).eq("id", deal.id);
+    const { error: e } = await supabase.schema("crm").from("deals").update({ stage_id: stageId, ...(extra || {}) }).eq("id", deal.id);
     setBusy(false);
     if (e) { setError(e.message); return; }
+    setLostModalStage(null);
     load();
   };
   const setOutcome = async (kind) => { const t = stages.find((s) => s.kind === kind); if (t) moveStage(t.id); };
+  const confirmLostReason = async (reason, detail) => {
+    await moveStage(lostModalStage, { lost_reason: reason, lost_reason_detail: detail || null });
+  };
 
   const handleDeleteDeal = async () => {
     setError(null);
@@ -651,6 +672,12 @@ export default function DealDetail() {
                       <Row label="Valor ofertado" value={deal.valor_ofertado_cents != null ? fmtBRL(deal.valor_ofertado_cents) : "—"} />
                       <Row label="Deságio" value={deal.desagio_pct != null ? `${Number(deal.desagio_pct).toFixed(0)}%` : "—"} />
                       <Row label="Captador/a" value={deal.captador} />
+                      {deal.status === "lost" && (
+                        <>
+                          <Row label="Motivo do declínio" value={LOST_REASONS.find((r) => r.v === deal.lost_reason)?.l || "—"} />
+                          {deal.lost_reason_detail && <Row label="Detalhe" value={deal.lost_reason_detail} />}
+                        </>
+                      )}
                     </>
                   )}
                 </EditCard>
@@ -658,6 +685,53 @@ export default function DealDetail() {
             </div>
           </>
         )}
+
+        {lostModalStage && (
+          <LostReasonModal
+            busy={busy}
+            onCancel={() => setLostModalStage(null)}
+            onConfirm={confirmLostReason}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LostReasonModal({ busy, onCancel, onConfirm }) {
+  const [reason, setReason] = useState("");
+  const [detail, setDetail] = useState("");
+  const needsDetail = reason === "outro";
+  const canConfirm = !!reason && (!needsDetail || detail.trim());
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(4px)" }}
+      onClick={(e) => e.target === e.currentTarget && !busy && onCancel()}>
+      <div style={{ background: "#fff", borderRadius: 16, width: "90%", maxWidth: 420, boxShadow: "0 25px 60px rgba(0,0,0,0.18)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${T.border}` }}>
+          <h3 style={{ margin: 0, fontFamily: T.head, fontSize: 15.5, fontWeight: 700, color: T.ink }}>Motivo do declínio</h3>
+          <button onClick={onCancel} disabled={busy} style={{ background: "none", border: "none", cursor: "pointer", color: T.muted }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: 20 }}>
+          <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 12 }}>
+            Antes de marcar como Perdido, registre por quê — isso alimenta o relatório mensal de declínios.
+          </div>
+          <label style={labelSt}>Motivo</label>
+          <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputSt, marginBottom: 12 }}>
+            <option value="">— selecionar —</option>
+            {LOST_REASONS.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+          </select>
+          <label style={labelSt}>Detalhe {needsDetail ? "" : "(opcional)"}</label>
+          <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3}
+            placeholder={needsDetail ? "Descreva o motivo..." : "Contexto adicional (opcional)"}
+            style={{ width: "100%", padding: "9px 11px", border: `1px solid ${T.border}`, borderRadius: 8, fontSize: 13, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", resize: "vertical" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "14px 20px", borderTop: `1px solid ${T.border}` }}>
+          <button onClick={onCancel} disabled={busy} style={{ padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 12.5, fontWeight: 600, color: T.text, cursor: "pointer", fontFamily: T.font }}>Cancelar</button>
+          <button onClick={() => onConfirm(reason, detail.trim())} disabled={!canConfirm || busy}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 16px", background: T.coral, border: "none", borderRadius: 9, fontSize: 12.5, fontWeight: 700, color: "#fff", cursor: !canConfirm || busy ? "default" : "pointer", opacity: !canConfirm || busy ? 0.6 : 1, fontFamily: T.font }}>
+            {busy ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <XCircle size={14} />} Confirmar
+          </button>
+        </div>
       </div>
     </div>
   );

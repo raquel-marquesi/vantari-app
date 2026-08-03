@@ -43,7 +43,13 @@ function lazyWithReload(factory) {
       const triedRecently = Date.now() - lastAttempt < CHUNK_RELOAD_COOLDOWN_MS;
       if (!triedRecently) {
         try { sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now())); } catch {}
-        window.location.reload();
+        // reload "normal" confia no Cache-Control do index.html (agora
+        // no-cache, ver vercel.json) — mas alguns proxies corporativos
+        // ignoram esse header. Um querystring novo garante URL diferente
+        // pra qualquer cache no meio do caminho, sem depender só do header.
+        const url = new URL(window.location.href);
+        url.searchParams.set("_r", String(Date.now()));
+        window.location.replace(url.toString());
         // trava o carregamento suspenso até o reload acontecer, em vez de
         // deixar o React tentar renderizar um módulo quebrado
         return new Promise(() => {});
@@ -70,7 +76,11 @@ class ErrorBoundary extends Component {
             Isso costuma acontecer logo depois de uma atualização do sistema. Clique no botão abaixo pra recarregar.
           </span>
           <button
-            onClick={() => window.location.reload()}
+            onClick={() => {
+              const url = new URL(window.location.href);
+              url.searchParams.set("_r", String(Date.now()));
+              window.location.replace(url.toString());
+            }}
             style={{
               padding: "10px 20px", background: "linear-gradient(135deg, #0D7491 0%, #14A273 100%)",
               border: "none", borderRadius: 9, color: "#fff", fontSize: 13.5, fontWeight: 700, cursor: "pointer",

@@ -30,10 +30,13 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { toWhatsAppPhone, ninaCallWithPhoneRetry, healPhoneIfNeeded } from "../_shared/nina-phone.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const INGEST_SECRET = Deno.env.get("INGEST_SECRET") ?? "";
+const NINA_API_URL    = Deno.env.get("NINA_API_URL") ?? "";
+const NINA_API_SECRET = Deno.env.get("NINA_API_SECRET") ?? "";
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -126,6 +129,33 @@ serve(async (req) => {
   }
 
   const row = Array.isArray(msgResult) ? msgResult[0] : msgResult;
+
+  // Investigação (04/08/2026): a Nina respondendo mesmo com a conversa já
+  // assumida por um humano (status='human' ANTES desta mensagem). O Next já
+  // avisa a Nina do status a cada "Assumir/Devolver conversa"
+  // (/conversation-takeover) — isso aqui é só reforço: se ela mesmo assim
+  // respondeu, core.ingest_message já deixou um rastro em core.events
+  // (nina_replied_during_human) e a gente reenvia o status pra ela de novo,
+  // best-effort, sem travar a resposta desta função por causa disso.
+  if (sender === "nina" && direction === "out" && row?.prior_status === "human" && NINA_API_URL && NINA_API_SECRET) {
+    try {
+      const { data: person } = await core
+        .from("persons")
+        .select("primary_phone, cpf")
+        .eq("id", personId)
+        .maybeSingle();
+      const phoneOnFile = toWhatsAppPhone(person?.primary_phone);
+      const result = await ninaCallWithPhoneRetry(`${NINA_API_URL}/conversation-status`, NINA_API_SECRET, {
+        cpf: person?.cpf ?? null,
+        external_conversation_id: row?.external_conversation_id ?? body.external_conversation_id ?? null,
+        status: "human",
+      }, phoneOnFile);
+      await healPhoneIfNeeded(core, workspaceId, personId, phoneOnFile, result);
+    } catch {
+      // best-effort — não deve derrubar o registro da mensagem por isso
+    }
+  }
+
   return jsonResp({
     person_id: personId,
     conversation_id: row?.conversation_id,

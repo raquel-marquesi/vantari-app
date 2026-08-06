@@ -26,6 +26,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { toWhatsAppPhone, ninaCallWithPhoneRetry, healPhoneIfNeeded } from "../_shared/nina-phone.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -43,18 +44,6 @@ function jsonResp(body: unknown, status = 200) {
     status,
     headers: { ...CORS, "Content-Type": "application/json" },
   });
-}
-
-// core.persons.primary_phone é normalizado por core.normalize_phone_br SEM
-// o código do país (ex: "11977773870") — mas o WhatsApp/Nina identifica
-// contato pelo número completo (ex: "+5511977773870"). Sem isso, a Nina
-// não encontra o contato e responde 404 "Contact not found".
-function toWhatsAppPhone(raw: string | null | undefined): string | null {
-  if (!raw) return null;
-  const digits = String(raw).replace(/\D/g, "");
-  if (!digits) return null;
-  if (digits.startsWith("55") && digits.length >= 12) return `+${digits}`;
-  return `+55${digits}`;
 }
 
 serve(async (req) => {
@@ -104,22 +93,20 @@ serve(async (req) => {
     .eq("id", conv.person_id)
     .maybeSingle();
 
+  const phoneOnFile = toWhatsAppPhone(person?.primary_phone);
   try {
-    const ninaRes = await fetch(`${NINA_API_URL}/send-message`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Nina-Secret": NINA_API_SECRET },
-      body: JSON.stringify({
-        phone: toWhatsAppPhone(person?.primary_phone),
-        cpf: person?.cpf ?? null,
-        external_conversation_id: conv.external_conversation_id,
-        body: text,
-        sender: "human",
-      }),
-    });
-    if (!ninaRes.ok) {
-      const detail = await ninaRes.text().catch(() => "");
-      return jsonResp({ error: `Nina retornou erro (${ninaRes.status}) ao despachar a mensagem`, detail }, 502);
+    const result = await ninaCallWithPhoneRetry(`${NINA_API_URL}/send-message`, NINA_API_SECRET, {
+      cpf: person?.cpf ?? null,
+      external_conversation_id: conv.external_conversation_id,
+      body: text,
+      sender: "human",
+    }, phoneOnFile);
+    if (!result.ok) {
+      return jsonResp({ error: `Nina retornou erro (${result.status}) ao despachar a mensagem`, detail: result.detail }, 502);
     }
+    // autocura silenciosa: se o formato alternativo funcionou, corrige
+    // primary_phone pra essa pessoa nunca mais cair nesse retry
+    await healPhoneIfNeeded(core, conv.workspace_id, conv.person_id, phoneOnFile, result);
   } catch (e) {
     return jsonResp({ error: `Não foi possível conectar ao backend da Nina: ${e.message}` }, 502);
   }

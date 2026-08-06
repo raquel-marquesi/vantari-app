@@ -866,6 +866,23 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
 ═══════════════════════════════════════════════════ */
 const SEGMENTS = ["Todos os leads","Newsletter","Demo Solicitada","Inativos 30d","MQL + SQL","Alto Valor B2B","Leads Quentes"];
 
+const WEEKDAY_LABELS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
+
+// Espelho de supabase/functions/run-scheduled-campaigns/index.ts::nextOccurrenceUtc
+// — só pra preview ("próximo disparo: ...") na tela. Quem manda de verdade é
+// a Edge Function, que recalcula isso a cada disparo. Brasil não observa mais
+// horário de verão desde 2019, então América/São Paulo = UTC-3 fixo o ano
+// todo (dá pra fazer a conta na mão sem lib de timezone).
+const BR_OFFSET_MS = 3 * 3600_000;
+function nextOccurrenceUtc(dayOfWeek, hour, minute, afterUtc) {
+  const localRef = new Date(afterUtc.getTime() - BR_OFFSET_MS);
+  const candidate = new Date(Date.UTC(localRef.getUTCFullYear(), localRef.getUTCMonth(), localRef.getUTCDate(), hour, minute, 0));
+  const diffDays = (dayOfWeek - candidate.getUTCDay() + 7) % 7;
+  candidate.setUTCDate(candidate.getUTCDate() + diffDays);
+  if (candidate.getTime() <= localRef.getTime()) candidate.setUTCDate(candidate.getUTCDate() + 7);
+  return new Date(candidate.getTime() + BR_OFFSET_MS);
+}
+
 const CAMPAIGN_TYPES = [
   { val:"newsletter",  Icon:Newspaper,       label:"Newsletter"  },
   { val:"promotional", Icon:Tag,             label:"Promocional" },
@@ -881,16 +898,32 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     sender:     campaign?.sender     ||"marketing@vantari.com.br",
     replyTo:    campaign?.replyTo    ||"",
     audience:   campaign?.audience   ||"Todos os leads",
-    schedule:   campaign?.scheduledAt?"scheduled":"immediate",
+    schedule:   campaign?.recurrenceEnabled ? "recurring" : campaign?.scheduledAt ? "scheduled" : "immediate",
     scheduledAt:campaign?.scheduledAt?new Date(campaign.scheduledAt).toISOString().slice(0,16):"",
     timezone:   "America/Sao_Paulo",
     throttle:   "1000",
     type:       campaign?.type       ||"newsletter",
     htmlContent:campaign?.htmlContent||"",
     emailBlocks:campaign?.emailBlocks||null,
+    // recorrência semanal (pedido da Catarina, 06/08/2026 — equivalente ao
+    // disparo programado do RD Station): precisa de um SEGMENTO REAL
+    // (public.segments), diferente do seletor "Audiência" acima (que é só
+    // um rótulo/estimativa mockada, não usado no envio de verdade)
+    segmentId:          campaign?.segmentId || "",
+    recurrenceDayOfWeek: campaign?.recurrenceDayOfWeek ?? 1, // 1 = segunda
+    recurrenceHour:      campaign?.recurrenceHour ?? 9,
+    recurrenceMinute:    campaign?.recurrenceMinute ?? 0,
   });
   const upd = (k,v)=>setForm(p=>({...p,[k]:v}));
   const audienceCount = {"Todos os leads":6284,"Newsletter":3820,"Demo Solicitada":91,"Inativos 30d":840,"MQL + SQL":2460,"Alto Valor B2B":420,"Leads Quentes":1200}[form.audience]||0;
+
+  const [realSegments, setRealSegments] = useState([]);
+  useEffect(() => { loadEmailSegments().then(setRealSegments).catch(() => setRealSegments([])); }, []);
+
+  const nextRunPreview = useMemo(() => {
+    if (form.schedule !== "recurring") return null;
+    return nextOccurrenceUtc(Number(form.recurrenceDayOfWeek), Number(form.recurrenceHour), Number(form.recurrenceMinute), new Date());
+  }, [form.schedule, form.recurrenceDayOfWeek, form.recurrenceHour, form.recurrenceMinute]);
 
   const SectionTitle = ({children}) => (
     <div style={{fontFamily:T.head,fontSize:14,fontWeight:700,color:T.ink,letterSpacing:"-0.01em",marginBottom:16,paddingBottom:8,borderBottom:`0.5px solid ${T.border}`}}>{children}</div>
@@ -958,7 +991,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
           <div style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,padding:"22px"}}>
             <SectionTitle>Agendamento</SectionTitle>
             <div style={{display:"flex",gap:10,marginBottom:14}}>
-              {[{val:"immediate",Icon:Zap,lbl:"Enviar agora"},{val:"scheduled",Icon:Calendar,lbl:"Agendar envio"}].map(({val,Icon:SI,lbl})=>(
+              {[{val:"immediate",Icon:Zap,lbl:"Enviar agora"},{val:"scheduled",Icon:Calendar,lbl:"Agendar envio"},{val:"recurring",Icon:RefreshCw,lbl:"Repetir semanalmente"}].map(({val,Icon:SI,lbl})=>(
                 <button key={val} onClick={()=>upd("schedule",val)}
                   style={{flex:1,padding:"12px",fontFamily:T.font,fontSize:13,fontWeight:700,border:`1px solid ${form.schedule===val?T.blue:T.border}`,borderRadius:10,background:form.schedule===val?T.blueL:T.white,color:form.schedule===val?T.blue:T.ink,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:7}}>
                   <SI size={14} aria-hidden="true"/> {lbl}
@@ -975,6 +1008,56 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
                     {["America/Sao_Paulo","America/New_York","Europe/London","America/Chicago"].map(tz=><option key={tz}>{tz}</option>)}
                   </select>
                 </div>
+              </div>
+            )}
+            {form.schedule==="recurring"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                <div>
+                  <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Segmento (destinatários reais)</label>
+                  <select value={form.segmentId} onChange={e=>upd("segmentId",e.target.value)}
+                    style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
+                    <option value="">Selecione um segmento…</option>
+                    {realSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  {!form.segmentId && (
+                    <p style={{margin:"6px 0 0",fontFamily:T.font,fontSize:11,fontWeight:600,color:T.amber}}>Sem segmento selecionado, o disparo semanal não sabe pra quem enviar.</p>
+                  )}
+                </div>
+                <div>
+                  <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Dia da semana</label>
+                  <div style={{display:"flex",gap:6}}>
+                    {WEEKDAY_LABELS.map((lbl,i)=>(
+                      <button key={i} onClick={()=>upd("recurrenceDayOfWeek",i)}
+                        style={{flex:1,padding:"8px 0",fontFamily:T.font,fontSize:12,fontWeight:700,border:`1px solid ${Number(form.recurrenceDayOfWeek)===i?T.blue:T.border}`,borderRadius:8,background:Number(form.recurrenceDayOfWeek)===i?T.blueL:T.white,color:Number(form.recurrenceDayOfWeek)===i?T.blue:T.ink,cursor:"pointer"}}>
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  <div>
+                    <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Hora</label>
+                    <select value={form.recurrenceHour} onChange={e=>upd("recurrenceHour",Number(e.target.value))}
+                      style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
+                      {Array.from({length:24},(_,h)=><option key={h} value={h}>{String(h).padStart(2,"0")}h</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Minuto</label>
+                    <select value={form.recurrenceMinute} onChange={e=>upd("recurrenceMinute",Number(e.target.value))}
+                      style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
+                      {[0,5,10,15,20,25,30,35,40,45,50,55].map(m=><option key={m} value={m}>{String(m).padStart(2,"0")}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {nextRunPreview && (
+                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:"#ECFDF5",border:`1px solid ${T.green}44`,borderRadius:8}}>
+                    <RefreshCw size={14} color={T.green} aria-hidden="true"/>
+                    <span style={{fontFamily:T.font,fontSize:12,fontWeight:700,color:T.green}}>
+                      Próximo disparo: {nextRunPreview.toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})} (e depois, toda semana no mesmo horário)
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1026,8 +1109,10 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
             </div>
           </div>
 
-          <Btn onClick={()=>onSave({...form,status:form.schedule==="immediate"?"sending":"scheduled"})} variant="ink" size="lg" full icon={Send}>
-            {form.schedule==="immediate"?"Enviar Agora":"Agendar Envio"}
+          <Btn onClick={()=>onSave({...form,status:form.schedule==="immediate"?"sending":"scheduled"})}
+            variant="ink" size="lg" full icon={Send}
+            disabled={form.schedule==="recurring" && !form.segmentId}>
+            {form.schedule==="immediate"?"Enviar Agora":form.schedule==="recurring"?"Ativar Recorrência Semanal":"Agendar Envio"}
           </Btn>
         </div>
       </div>
@@ -1189,6 +1274,15 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
                     <Users size={13} color={T.blue} aria-hidden="true"/>
                     <span style={{fontFamily:T.font,fontSize:12,fontWeight:600,color:T.ink}}><strong>{camp.audienceCount.toLocaleString("pt-BR")}</strong> leads · {camp.audience}</span>
                     {camp.scheduledAt&&<span style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,marginLeft:"auto"}}>{new Date(camp.scheduledAt).toLocaleDateString("pt-BR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</span>}
+                  </div>
+                )}
+                {camp.recurrenceEnabled && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:12,padding:"7px 10px",background:"#ECFDF5",border:`0.5px solid ${T.green}33`,borderRadius:8}}>
+                    <RefreshCw size={12} color={T.green} aria-hidden="true"/>
+                    <span style={{fontFamily:T.font,fontSize:11,fontWeight:700,color:T.green}}>
+                      Recorrente ({WEEKDAY_LABELS[camp.recurrenceDayOfWeek]} {String(camp.recurrenceHour).padStart(2,"0")}:{String(camp.recurrenceMinute).padStart(2,"0")})
+                      {camp.nextRunAt && ` · próx: ${new Date(camp.nextRunAt).toLocaleString("pt-BR",{timeZone:"America/Sao_Paulo",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}`}
+                    </span>
                   </div>
                 )}
                 <div style={{display:"flex",gap:6}}>
@@ -2419,6 +2513,7 @@ export default function VantariEmailMarketing() {
         .schema("mkt")
         .from("campaigns")
         .select(`id, name, subject, template_html, email_blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+                 segment_id, recurrence_enabled, recurrence_day_of_week, recurrence_hour, recurrence_minute, next_run_at, last_run_at,
                  campaign_sends(status, sent_at, opened_at, clicked_at, converted_at)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
@@ -2445,6 +2540,13 @@ export default function VantariEmailMarketing() {
           audience:      c.audience || "Todos os leads",
           audienceCount: c.audience_count || 0,
           scheduledAt:   c.scheduled_at,
+          segmentId:           c.segment_id || "",
+          recurrenceEnabled:   !!c.recurrence_enabled,
+          recurrenceDayOfWeek: c.recurrence_day_of_week,
+          recurrenceHour:      c.recurrence_hour,
+          recurrenceMinute:    c.recurrence_minute,
+          nextRunAt:           c.next_run_at,
+          lastRunAt:           c.last_run_at,
           thumbnail:     c.type || "newsletter",
           metrics: {
             sent, delivered, opened, clicked, bounced, unsubscribed,
@@ -2484,6 +2586,16 @@ export default function VantariEmailMarketing() {
       scheduled_at:   data.schedule === "scheduled" && data.scheduledAt
                         ? new Date(data.scheduledAt).toISOString()
                         : null,
+      // recorrência semanal — cron run-scheduled-campaigns lê essas colunas
+      // (mkt.campaigns) pra saber o que disparar e quando
+      segment_id:             data.schedule === "recurring" ? (data.segmentId || null) : null,
+      recurrence_enabled:     data.schedule === "recurring",
+      recurrence_day_of_week: data.schedule === "recurring" ? Number(data.recurrenceDayOfWeek) : null,
+      recurrence_hour:        data.schedule === "recurring" ? Number(data.recurrenceHour) : null,
+      recurrence_minute:      data.schedule === "recurring" ? Number(data.recurrenceMinute ?? 0) : 0,
+      next_run_at:            data.schedule === "recurring"
+                                ? nextOccurrenceUtc(Number(data.recurrenceDayOfWeek), Number(data.recurrenceHour), Number(data.recurrenceMinute ?? 0), new Date()).toISOString()
+                                : null,
     };
     const { error: err } = editCamp?.id
       ? await supabase.schema("mkt").from("campaigns").update(payload).eq("id", editCamp.id)

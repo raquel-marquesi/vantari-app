@@ -35,7 +35,7 @@
 // Deploy: supabase functions deploy send-campaign
 // ════════════════════════════════════════════════════════════════
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -67,14 +67,17 @@ Deno.serve(async (req) => {
     /* ── fetch campaign (schema correto: mkt, não public) ── */
     const { data: campaign, error: campErr } = await mkt
       .from("campaigns")
-      .select("id, workspace_id, name, subject, from_name, from_email, template_html, status")
+      .select("id, workspace_id, name, subject, from_name, from_email, template_html, status, recurrence_enabled")
       .eq("id", campaign_id)
       .single();
 
     if (campErr || !campaign) {
       return new Response(JSON.stringify({ error: "Campanha não encontrada" }), { status: 404, headers: CORS });
     }
-    if (campaign.status === "sent" && !test_email) {
+    // campanhas recorrentes (recurrence_enabled) disparam de novo toda semana —
+    // status "sent" nelas só significa "já rodou uma vez", não "não pode mais
+    // enviar". O guard de "já enviada" só vale pra campanha avulsa mesmo.
+    if (campaign.status === "sent" && !test_email && !campaign.recurrence_enabled) {
       return new Response(JSON.stringify({ error: "Campanha já foi enviada" }), { status: 400, headers: CORS });
     }
 
@@ -170,6 +173,10 @@ Deno.serve(async (req) => {
     const BATCH = 100;
     let sentCount = 0;
     const sendRecords: object[] = [];
+    // mesmo timestamp pra TODOS os registros deste disparo — é o que distingue
+    // "semana 1" de "semana 2" numa campanha recorrente (ver constraint
+    // send_unico = UNIQUE(campaign_id, person_id, run_at) na migration).
+    const runAt = new Date().toISOString();
 
     for (let i = 0; i < recipients.length; i += BATCH) {
       const batch = recipients.slice(i, i + BATCH);
@@ -191,7 +198,7 @@ Deno.serve(async (req) => {
         console.error("Resend error:", errBody);
         batch.forEach(r => {
           if (r.person_id) {
-            sendRecords.push({ workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id, status: "failed", error: errBody.slice(0, 500) });
+            sendRecords.push({ workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id, status: "failed", error: errBody.slice(0, 500), run_at: runAt });
           }
         });
       } else {
@@ -210,6 +217,7 @@ Deno.serve(async (req) => {
               workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id,
               status: "sent", sent_at: new Date().toISOString(),
               resend_email_id: resendIds[idx] ?? null,
+              run_at: runAt,
             });
           }
         });
@@ -222,7 +230,12 @@ Deno.serve(async (req) => {
       if (sendErr) console.error("Falha ao gravar campaign_sends:", sendErr.message);
     }
 
-    const finalStatus = sentCount > 0 ? "sent" : "failed";
+    // campanha recorrente: mantém status "scheduled" (Agendada) depois de
+    // cada disparo — ela não "terminou", só está armada pra próxima semana.
+    // Campanha avulsa: vira "sent" (terminal) normalmente.
+    const finalStatus = campaign.recurrence_enabled
+      ? (sentCount > 0 ? "scheduled" : "failed")
+      : (sentCount > 0 ? "sent" : "failed");
     await mkt.from("campaigns").update({
       status: finalStatus,
       sent_at: sentCount > 0 ? new Date().toISOString() : null,

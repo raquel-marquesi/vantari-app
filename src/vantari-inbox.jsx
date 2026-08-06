@@ -238,9 +238,19 @@ export default function InboxAtendimento() {
   const [sending, setSending] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [banner, setBanner] = useState(null);
+  // aviso persistente (não é limpo por ações como o `banner` de resultado):
+  // a Nina respondeu no WhatsApp mesmo com a conversa já em atendimento
+  // humano nas últimas 24h — ver core.events tipo nina_replied_during_human
+  const [ninaDrift, setNinaDrift] = useState(null);
   const scrollRef = useRef(null);
   const convReqId = useRef(0);
   const msgReqId = useRef(0);
+  // guarda síncrona contra envio duplicado: o estado `sending` (via setState)
+  // só atualiza no próximo render, então duas invocações de send() disparadas
+  // no mesmo tick (Enter + clique quase simultâneos, ou o próprio evento de
+  // teclado disparando duas vezes) ainda viam sending=false e mandavam a
+  // mensagem duas vezes pra Nina. useRef atualiza na hora, sem esperar o render.
+  const sendingRef = useRef(false);
 
   // silent=true é usado no realtime/polling em segundo plano — nunca deve
   // fazer a lista inteira piscar pra "Carregando...", só o primeiro load
@@ -310,7 +320,7 @@ export default function InboxAtendimento() {
   const selected = useMemo(() => conversations.find((c) => c.id === selectedId) || null, [conversations, selectedId]);
 
   useEffect(() => {
-    if (!selectedId) { setMessages([]); setProcessos([]); setDealByProcesso({}); return; }
+    if (!selectedId) { setMessages([]); setProcessos([]); setDealByProcesso({}); setNinaDrift(null); return; }
     loadMessages(selectedId);
     const person = conversations.find((c) => c.id === selectedId)?.person_id;
     if (person) {
@@ -331,9 +341,21 @@ export default function InboxAtendimento() {
             setDealByProcesso({});
           }
         });
+      // A Nina só devia responder de novo depois que um humano assume se o
+      // cliente pedir um follow-up — se ela respondeu mesmo assim, o Next
+      // registra em core.events (nina_replied_during_human). Mostra um aviso
+      // aqui se isso aconteceu nas últimas 24h, pra equipe perceber sem
+      // precisar rodar SQL manual.
+      setNinaDrift(null);
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      supabase.schema("core").from("events").select("occurred_at, payload")
+        .eq("person_id", person).eq("type", "nina_replied_during_human")
+        .gte("occurred_at", since).order("occurred_at", { ascending: false }).limit(1)
+        .then(({ data }) => { if (data && data[0]) setNinaDrift(data[0]); });
     } else {
       setProcessos([]);
       setDealByProcesso({});
+      setNinaDrift(null);
     }
   }, [selectedId, loadMessages]);
 
@@ -387,14 +409,26 @@ export default function InboxAtendimento() {
     });
   }, [conversations, search, view]);
 
+  // 06/08/2026 — antes disso, "Encerrar conversa" fazia um UPDATE direto no
+  // banco (archived_at) e NUNCA avisava a Nina — ela continuava respondendo
+  // no WhatsApp com o caso já em "Resolvido" no Next, o que gerou reclamação
+  // de reputação da marca. Agora passa pela Edge Function
+  // conversation-takeover (actions "resolve"/"reopen"), que sempre notifica
+  // o backend da Nina (/conversation-status com status="resolved") antes de
+  // considerar a conversa encerrada.
   const setArchived = async (archived) => {
     if (!selected) return;
     setArchiveBusy(true); setBanner(null);
-    const { error: e } = await supabase.schema("core").from("conversations")
-      .update({ archived_at: archived ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
-      .eq("id", selected.id);
+    const { ok, json } = await callFn("conversation-takeover", {
+      conversation_id: selected.id,
+      action: archived ? "resolve" : "reopen",
+    });
     setArchiveBusy(false);
-    if (e) { setBanner({ type: "error", text: e.message }); return; }
+    if (!ok && !("archived" in (json || {}))) {
+      setBanner({ type: "error", text: json?.error || "Falha ao atualizar conversa." });
+      return;
+    }
+    if (json?.warning) setBanner({ type: "warning", text: json.warning });
     if (archived) setSelectedId(null); // sai da conversa arquivada, ela some da aba Ativas
     load({ silent: true });
   };
@@ -423,12 +457,18 @@ export default function InboxAtendimento() {
 
   const send = async () => {
     if (!draft.trim() || !selected) return;
+    if (sendingRef.current) return; // já tem um envio em andamento — ignora a segunda chamada
+    sendingRef.current = true;
     setSending(true); setBanner(null);
-    const { ok, json } = await callFn("conversation-send", { conversation_id: selected.id, body: draft.trim() });
-    setSending(false);
-    if (!ok) { setBanner({ type: "error", text: json?.error || "Falha ao enviar mensagem." }); return; }
-    setDraft("");
-    loadMessages(selected.id);
+    try {
+      const { ok, json } = await callFn("conversation-send", { conversation_id: selected.id, body: draft.trim() });
+      if (!ok) { setBanner({ type: "error", text: json?.error || "Falha ao enviar mensagem." }); return; }
+      setDraft("");
+      loadMessages(selected.id);
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
   };
 
   const statusBadge = (status) => (
@@ -586,6 +626,16 @@ export default function InboxAtendimento() {
                   color: banner.type === "error" ? "#9B2C2C" : "#8A6100", borderBottom: `1px solid ${T.border}`,
                 }}>
                   <AlertCircle size={14} /> {banner.text}
+                </div>
+              )}
+
+              {ninaDrift && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8, padding: "9px 22px", fontSize: 12.5,
+                  background: "#FFF8E6", color: "#8A6100", borderBottom: `1px solid ${T.border}`,
+                }}>
+                  <AlertCircle size={14} />
+                  A Nina respondeu por conta própria às {fmtTime(ninaDrift.occurred_at)} mesmo com esta conversa em atendimento humano — avise quem cuida da Nina.
                 </div>
               )}
 

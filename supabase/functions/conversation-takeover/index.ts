@@ -2,26 +2,46 @@
 // Edge Function: /conversation-takeover
 // ────────────────────────────────────────────────────────────────
 // Chamada pela tela /inbox do Next quando um atendente clica em
-// "Assumir conversa" ou "Devolver pra Nina". Faz duas coisas:
+// "Assumir conversa", "Devolver pra Nina", "Encerrar conversa" ou
+// "Reabrir". Faz duas coisas:
 //
-//   1. Atualiza core.conversations.status no PRÓPRIO banco do Next
-//      (com o client autenticado do usuário — respeita RLS normalmente).
-//   2. Avisa o backend da Nina (webhook) pra ela também mudar o status
-//      do lado dela — é ESSE status que a Nina consulta antes de
-//      responder no WhatsApp. Sem esse passo 2, a Nina continuaria
-//      respondendo mesmo com o humano "assumindo" só visualmente no Next.
+//   1. Atualiza core.conversations no PRÓPRIO banco do Next (com o
+//      client autenticado do usuário — respeita RLS normalmente).
+//   2. Avisa o backend da Nina (webhook /conversation-status) pra ela
+//      também mudar o status do lado dela — é ESSE status que a Nina
+//      consulta antes de responder no WhatsApp. Sem esse passo 2, a Nina
+//      continuaria respondendo mesmo com a conversa "assumida"/"resolvida"
+//      só visualmente no Next.
 //
-// O passo 2 depende de duas secrets ainda não configuradas em produção:
+// 06/08/2026 — BUG CRÍTICO CORRIGIDO: até esta versão, o botão "Encerrar
+// conversa" em /inbox fazia um UPDATE direto em core.conversations
+// (archived_at) no FRONTEND, sem NUNCA chamar este endpoint — ou seja, a
+// Nina nunca era avisada de que a conversa tinha sido encerrada e continuava
+// respondendo no WhatsApp mesmo com o caso em "Resolvido" no Next. A sessão
+// da Nina implementou um novo status "resolved" em /conversation-status
+// (além de "human") e pediu que o Next passasse a chamá-lo ao encerrar.
+// Agora as ações "resolve"/"reopen" passam por AQUI, então nenhum encerrar/
+// reabrir escapa sem notificar a Nina.
+//
+//   - action "take":    status -> human    (Nina passa a ignorar essa conversa)
+//   - action "release": status -> nina     (Nina volta a responder)
+//   - action "resolve": archived_at = now(), avisa Nina status="resolved"
+//                       (não mexe na coluna status — é ortogonal a human/nina)
+//   - action "reopen":  archived_at = null, avisa Nina com o status ATUAL da
+//                       coluna (human ou nina) — ela pode ter sido encerrada
+//                       enquanto um humano ou a própria Nina estava com ela
+//
+// O passo 2 depende de duas secrets já configuradas em produção:
 //   NINA_API_URL    — base URL do backend da Nina
 //   NINA_API_SECRET — secret compartilhado (Nina expõe um endpoint que
 //                     aceita { phone|cpf, external_conversation_id, status })
-// Enquanto essas secrets não existirem, a função aplica a mudança só no
-// Next e devolve nina_synced:false com um aviso — não trava o atendente.
+// Se essas secrets faltarem, a função aplica a mudança só no Next e devolve
+// nina_synced:false com um aviso — não trava o atendente.
 //
 // Auth: JWT do usuário logado no Next (verify_jwt = true, padrão).
 //
-// Body: { "conversation_id": "<uuid>", "action": "take" | "release" }
-// Resposta: { conversation_id, status, nina_synced, warning? }
+// Body: { "conversation_id": "<uuid>", "action": "take" | "release" | "resolve" | "reopen" }
+// Resposta: { conversation_id, status, archived, nina_synced, warning? }
 // ════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -71,8 +91,8 @@ serve(async (req) => {
   const conversationId = body.conversation_id;
   const action = body.action;
   if (!conversationId) return jsonResp({ error: "conversation_id obrigatório" }, 400);
-  if (!["take", "release"].includes(action)) {
-    return jsonResp({ error: "action deve ser 'take' ou 'release'" }, 400);
+  if (!["take", "release", "resolve", "reopen"].includes(action)) {
+    return jsonResp({ error: "action deve ser 'take', 'release', 'resolve' ou 'reopen'" }, 400);
   }
 
   // client autenticado como o usuário chamador — respeita a RLS de
@@ -89,23 +109,52 @@ serve(async (req) => {
 
   const { data: conv, error: convErr } = await core
     .from("conversations")
-    .select("id, workspace_id, person_id, external_conversation_id, status")
+    .select("id, workspace_id, person_id, external_conversation_id, status, archived_at")
     .eq("id", conversationId)
     .maybeSingle();
   if (convErr) return jsonResp({ error: "falha ao buscar conversa", detail: convErr.message }, 500);
   if (!conv)   return jsonResp({ error: "conversa não encontrada" }, 404);
 
-  const newStatus = action === "take" ? "human" : "nina";
+  // "resolve"/"reopen" mexem em archived_at (aba Resolvido), não na coluna
+  // status (human/nina) — são conceitos ortogonais. "take"/"release" mexem
+  // só na coluna status.
+  const isResolveAction = action === "resolve" || action === "reopen";
+  const dbUpdate: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  let statusForNina: string;
+
+  if (action === "take") {
+    dbUpdate.status = "human";
+    dbUpdate.assigned_user_id = userId;
+    statusForNina = "human";
+  } else if (action === "release") {
+    dbUpdate.status = "nina";
+    dbUpdate.assigned_user_id = null;
+    statusForNina = "nina";
+  } else if (action === "resolve") {
+    dbUpdate.archived_at = new Date().toISOString();
+    statusForNina = "resolved";
+  } else {
+    // reopen: some da coluna archived_at; a Nina volta a obedecer o status
+    // que já estava valendo (human ou nina) antes de ter sido encerrada
+    dbUpdate.archived_at = null;
+    statusForNina = conv.status || "nina";
+  }
+
   const { error: updErr } = await core
     .from("conversations")
-    .update({ status: newStatus, assigned_user_id: action === "take" ? userId : null, updated_at: new Date().toISOString() })
+    .update(dbUpdate)
     .eq("id", conversationId);
   if (updErr) return jsonResp({ error: "falha ao atualizar conversa", detail: updErr.message }, 500);
 
+  const responseBase = {
+    conversation_id: conversationId,
+    status: isResolveAction ? conv.status : statusForNina,
+    archived: action === "resolve" ? true : action === "reopen" ? false : !!conv.archived_at,
+  };
+
   if (!NINA_API_URL || !NINA_API_SECRET) {
     return jsonResp({
-      conversation_id: conversationId,
-      status: newStatus,
+      ...responseBase,
       nina_synced: false,
       warning: "NINA_API_URL/NINA_API_SECRET ainda não configuradas — a mudança só foi aplicada no Next. A Nina pode continuar respondendo até isso ser configurado.",
     });
@@ -125,22 +174,22 @@ serve(async (req) => {
         phone: toWhatsAppPhone(person?.primary_phone),
         cpf: person?.cpf ?? null,
         external_conversation_id: conv.external_conversation_id,
-        status: newStatus,
+        status: statusForNina,
       }),
     });
     if (!ninaRes.ok) {
       const detail = await ninaRes.text().catch(() => "");
       return jsonResp({
-        conversation_id: conversationId, status: newStatus, nina_synced: false,
+        ...responseBase, nina_synced: false,
         warning: `Nina retornou erro (${ninaRes.status}) ao sincronizar status. Detalhe: ${detail}`,
       }, 207);
     }
   } catch (e) {
     return jsonResp({
-      conversation_id: conversationId, status: newStatus, nina_synced: false,
+      ...responseBase, nina_synced: false,
       warning: `Não foi possível conectar ao backend da Nina: ${e.message}`,
     }, 207);
   }
 
-  return jsonResp({ conversation_id: conversationId, status: newStatus, nina_synced: true });
+  return jsonResp({ ...responseBase, nina_synced: true });
 });

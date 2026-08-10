@@ -5,8 +5,9 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Loader2, AlertCircle, Building2, Zap, Filter, ChevronLeft, ChevronRight, LogOut,
-  Activity, ListChecks, AlertTriangle, Inbox, Send, UserCheck, UserX, Search,
+  Activity, ListChecks, AlertTriangle, Inbox, Send, UserCheck, Search,
   Phone, IdCard, FileText, MessageCircle, Mic, Archive, ArchiveRestore, ExternalLink,
+  ChevronDown,
 } from "lucide-react";
 import { FileBarChart } from "lucide-react";
 
@@ -48,6 +49,7 @@ function dayLabel(iso) {
 }
 const fmtCpf = (v) => { if (!v) return null; const d = String(v).replace(/\D/g, ""); return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v; };
 const initialOf = (name, phone) => (name ? name.trim().charAt(0) : (phone ? phone.replace(/\D/g, "").slice(-2, -1) : "?")).toUpperCase();
+const firstName = (name) => (name ? name.trim().split(/\s+/)[0] : null);
 // placeholder que a Nina manda enquanto a transcrição do áudio não chega —
 // detecta pra desenhar como "transcrevendo" em vez de texto normal
 const isAudioProcessing = (body) => !!body && /\[?\s*áudio\s*-?\s*processando\s*transcri/i.test(body);
@@ -220,6 +222,76 @@ function MessageBubble({ m, grouped }) {
   );
 }
 
+/* ─── seletor de atendente (10/08/2026) ───
+   Botão + dropdown no cabeçalho do chat pra atribuir/reatribuir a conversa
+   pra qualquer pessoa do workspace, ou devolver pra Nina. Substitui o par
+   de botões "Assumir conversa" / "Devolver pra Nina" — agora é uma escolha
+   só, e dá pra passar o caso de um atendente pro outro sem precisar que o
+   atendente atual "solte" a conversa antes. */
+function AssigneeMenu({ status, assignedUserId, team, myUserId, busy, onPick, onRelease }) {
+  const [open, setOpen] = useState(false);
+  const assignedName = team.find((t) => t.user_id === assignedUserId)?.name;
+  const label = status === "human" ? (assignedName || "Atribuído") : "Nina (automático)";
+  const rowStyle = (activeRow) => ({
+    display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", fontSize: 13,
+    fontWeight: activeRow ? 700 : 500, color: T.text, cursor: "pointer", fontFamily: T.font,
+    background: activeRow ? T.bg : "transparent",
+  });
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen((o) => !o)} disabled={busy}
+        style={{
+          display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
+          background: status === "human" ? T.gradient : T.surface,
+          border: status === "human" ? "none" : `1px solid ${T.border}`,
+          borderRadius: 9, color: status === "human" ? "#fff" : T.text, fontSize: 13, fontWeight: 700,
+          cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, fontFamily: T.font,
+        }}>
+        {status === "human" ? <UserCheck size={15} /> : <Bot size={15} />}
+        {label}
+        <ChevronDown size={14} />
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 25 }} />
+          <div style={{
+            position: "absolute", top: "100%", right: 0, marginTop: 6, background: T.surface,
+            border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: "0 8px 24px -8px rgba(0,0,0,.25)",
+            minWidth: 210, zIndex: 30, overflow: "hidden",
+          }}>
+            <div style={{ padding: "8px 12px 6px", fontSize: 10.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Atribuir a
+            </div>
+            {team.length === 0 ? (
+              <div style={{ padding: "9px 12px", fontSize: 12.5, color: T.faint3 }}>Ninguém com acesso ainda.</div>
+            ) : team.map((t) => {
+              const activeRow = status === "human" && t.user_id === assignedUserId;
+              return (
+                <div key={t.user_id} onClick={() => { setOpen(false); onPick(t.user_id); }}
+                  style={rowStyle(activeRow)}
+                  onMouseEnter={(e) => { if (!activeRow) e.currentTarget.style.background = T.bg; }}
+                  onMouseLeave={(e) => { if (!activeRow) e.currentTarget.style.background = "transparent"; }}>
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: T.gradient, color: "#fff", display: "grid", placeItems: "center", fontSize: 10, fontWeight: 700, fontFamily: T.head, flexShrink: 0 }}>
+                    {t.name.charAt(0).toUpperCase()}
+                  </div>
+                  {t.name}{t.user_id === myUserId ? " (você)" : ""}
+                </div>
+              );
+            })}
+            <div style={{ borderTop: `1px solid ${T.border}` }} />
+            <div onClick={() => { setOpen(false); onRelease(); }}
+              style={rowStyle(status === "nina")}
+              onMouseEnter={(e) => { if (status !== "nina") e.currentTarget.style.background = T.bg; }}
+              onMouseLeave={(e) => { if (status !== "nina") e.currentTarget.style.background = "transparent"; }}>
+              <Bot size={14} color={T.teal} /> Devolver pra Nina
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function InboxAtendimento() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useSidebarCollapsed();
@@ -238,6 +310,14 @@ export default function InboxAtendimento() {
   const [sending, setSending] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [banner, setBanner] = useState(null);
+  // 10/08/2026 — seletor de atendente: lista de quem tem acesso real ao
+  // workspace (via RPC public.list_workspace_team, que resolve o nome a
+  // partir do auth.users — a tabela public.team_members usada em
+  // Configurações → Equipe não é a mesma coisa: alguém pode estar cadastrado
+  // lá sem ter login de verdade, e nesse caso não aparece aqui pra ser
+  // atribuído até ganhar um acesso.
+  const [team, setTeam] = useState([]);
+  const [myUserId, setMyUserId] = useState(null);
   // aviso persistente (não é limpo por ações como o `banner` de resultado):
   // a Nina respondeu no WhatsApp mesmo com a conversa já em atendimento
   // humano nas últimas 24h — ver core.events tipo nina_replied_during_human
@@ -285,6 +365,14 @@ export default function InboxAtendimento() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id || null));
+    supabase.rpc("list_workspace_team", { p_workspace: WORKSPACE_VANTARI })
+      .then(({ data, error: e }) => { if (!e) setTeam(data || []); });
+  }, []);
+
+  const teamById = useMemo(() => Object.fromEntries(team.map((t) => [t.user_id, t.name])), [team]);
 
   // realtime: qualquer criação/atualização de conversa reordena/atualiza a
   // lista — silencioso, nunca mostra spinner (senão a lista pisca a cada
@@ -445,10 +533,12 @@ export default function InboxAtendimento() {
     return { ok: res.ok, status: res.status, json };
   };
 
-  const takeover = async (action) => {
+  const takeover = async (action, assignedUserId) => {
     if (!selected) return;
     setActionBusy(true); setBanner(null);
-    const { ok, json } = await callFn("conversation-takeover", { conversation_id: selected.id, action });
+    const body = { conversation_id: selected.id, action };
+    if (assignedUserId) body.assigned_user_id = assignedUserId;
+    const { ok, json } = await callFn("conversation-takeover", body);
     setActionBusy(false);
     if (!ok && !json?.status) { setBanner({ type: "error", text: json?.error || "Falha ao atualizar conversa." }); return; }
     if (json?.warning) setBanner({ type: "warning", text: json.warning });
@@ -471,7 +561,7 @@ export default function InboxAtendimento() {
     }
   };
 
-  const statusBadge = (status) => (
+  const statusBadge = (status, assignedName) => (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700,
       padding: "3px 9px", borderRadius: 20, fontFamily: T.font,
@@ -480,6 +570,7 @@ export default function InboxAtendimento() {
     }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: status === "human" ? T.green : T.teal }} />
       {status === "human" ? "Com humano" : "Nina respondendo"}
+      {status === "human" && assignedName ? ` · ${assignedName}` : ""}
     </span>
   );
 
@@ -571,7 +662,10 @@ export default function InboxAtendimento() {
                         </span>
                       ) : (c.last_message_body || "—")}
                     </div>
-                    <div style={{ marginTop: 5, display: "flex", gap: 5, flexWrap: "wrap" }}>{statusBadge(c.status)}{c.archived_at && archivedBadge}</div>
+                    <div style={{ marginTop: 5, display: "flex", gap: 5, flexWrap: "wrap" }}>
+                      {statusBadge(c.status, c.status === "human" ? firstName(teamById[c.assigned_user_id]) : null)}
+                      {c.archived_at && archivedBadge}
+                    </div>
                   </div>
                 </div>
               );
@@ -594,17 +688,15 @@ export default function InboxAtendimento() {
                   <div style={{ marginTop: 4, display: "flex", gap: 6 }}>{statusBadge(selected.status)}{selected.archived_at && archivedBadge}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
-                  {selected.status === "nina" ? (
-                    <button onClick={() => takeover("take")} disabled={actionBusy}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.gradient, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: actionBusy ? "default" : "pointer", opacity: actionBusy ? 0.7 : 1, fontFamily: T.font }}>
-                      <UserCheck size={15} /> Assumir conversa
-                    </button>
-                  ) : (
-                    <button onClick={() => takeover("release")} disabled={actionBusy}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: actionBusy ? "default" : "pointer", opacity: actionBusy ? 0.7 : 1, fontFamily: T.font }}>
-                      <UserX size={15} /> Devolver pra Nina
-                    </button>
-                  )}
+                  <AssigneeMenu
+                    status={selected.status}
+                    assignedUserId={selected.assigned_user_id}
+                    team={team}
+                    myUserId={myUserId}
+                    busy={actionBusy}
+                    onPick={(uid) => takeover("take", uid)}
+                    onRelease={() => takeover("release")}
+                  />
                   {selected.archived_at ? (
                     <button onClick={() => setArchived(false)} disabled={archiveBusy} title="Reabrir esta conversa na lista de Ativas"
                       style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: archiveBusy ? "default" : "pointer", opacity: archiveBusy ? 0.7 : 1, fontFamily: T.font }}>

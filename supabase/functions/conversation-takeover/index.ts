@@ -24,7 +24,12 @@
 // reabrir escapa sem notificar a Nina.
 //
 //   - action "take":    status -> human    (Nina passa a ignorar essa conversa)
-//   - action "release": status -> nina     (Nina volta a responder)
+//                       assigned_user_id -> quem chamou, OU o "assigned_user_id"
+//                       informado no body (atribuir/reatribuir pra outra
+//                       pessoa do time — 10/08/2026, seletor de atendente no
+//                       /inbox). O alvo precisa pertencer ao mesmo workspace.
+//   - action "release": status -> nina     (Nina volta a responder),
+//                       assigned_user_id -> null
 //   - action "resolve": archived_at = now(), avisa Nina status="resolved"
 //                       (não mexe na coluna status — é ortogonal a human/nina)
 //   - action "reopen":  archived_at = null, avisa Nina com o status ATUAL da
@@ -40,8 +45,9 @@
 //
 // Auth: JWT do usuário logado no Next (verify_jwt = true, padrão).
 //
-// Body: { "conversation_id": "<uuid>", "action": "take" | "release" | "resolve" | "reopen" }
-// Resposta: { conversation_id, status, archived, nina_synced, warning? }
+// Body: { "conversation_id": "<uuid>", "action": "take" | "release" | "resolve" | "reopen",
+//          "assigned_user_id"?: "<uuid>" }   // só usado em action="take"
+// Resposta: { conversation_id, status, archived, assigned_user_id, nina_synced, warning? }
 // ════════════════════════════════════════════════════════════════
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
@@ -112,8 +118,19 @@ serve(async (req) => {
   let statusForNina: string;
 
   if (action === "take") {
+    let targetUserId = userId;
+    if (body.assigned_user_id && body.assigned_user_id !== userId) {
+      const { data: isMember, error: memberErr } = await userClient.rpc("is_workspace_member", {
+        _workspace_id: conv.workspace_id,
+        _user_id: body.assigned_user_id,
+      });
+      if (memberErr || !isMember) {
+        return jsonResp({ error: "usuário informado não pertence a este workspace" }, 400);
+      }
+      targetUserId = body.assigned_user_id;
+    }
     dbUpdate.status = "human";
-    dbUpdate.assigned_user_id = userId;
+    dbUpdate.assigned_user_id = targetUserId;
     statusForNina = "human";
   } else if (action === "release") {
     dbUpdate.status = "nina";
@@ -139,6 +156,7 @@ serve(async (req) => {
     conversation_id: conversationId,
     status: isResolveAction ? conv.status : statusForNina,
     archived: action === "resolve" ? true : action === "reopen" ? false : !!conv.archived_at,
+    assigned_user_id: "assigned_user_id" in dbUpdate ? dbUpdate.assigned_user_id : undefined,
   };
 
   if (!NINA_API_URL || !NINA_API_SECRET) {

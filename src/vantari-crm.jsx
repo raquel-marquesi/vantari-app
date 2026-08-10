@@ -430,8 +430,8 @@ function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, 
         const dealId = e.dataTransfer.getData("text/plain");
         if (dealId) onDropDeal?.(dealId, stage.id);
       }}
-      style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden" }}>
+      style={{ width: 280, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10, maxHeight: "100%" }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
         <div style={{ height: 3, background: accent }} />
         <div style={{ padding: "10px 12px" }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.04em", color: T.ink, fontFamily: T.head, textTransform: "uppercase" }}>
@@ -442,11 +442,16 @@ function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, 
           </div>
         </div>
       </div>
-      <div style={{
+      {/* 10/08/2026 — scroll próprio por coluna: antes essa lista crescia sem
+          limite e a página inteira virava uma rolagem infinita (a coluna mais
+          cheia ditava a altura de todas). Agora cada coluna rola sozinha,
+          independente das outras — o cabeçalho acima fica sempre fixo. */}
+      <div className="vantari-kanban-col" style={{
         display: "flex", flexDirection: "column", gap: 8, minHeight: 60, borderRadius: 10,
         border: dragOver ? `2px dashed ${T.teal}` : "2px dashed transparent",
         background: dragOver ? `${T.teal}0A` : "transparent",
-        padding: dragOver ? 4 : 0, transition: "all 0.1s",
+        padding: dragOver ? 4 : 0, paddingRight: 4, transition: "all 0.1s",
+        overflowY: "auto", maxHeight: "calc(100vh - 300px)",
       }}>
         {deals.map((d) => (
           <DealCard key={d.id} deal={d} personName={personMap[d.person_id]}

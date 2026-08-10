@@ -794,10 +794,27 @@ function ImportLeadsModal({ onClose, onDone }) {
   );
 }
 
+const LEADS_PAGE_SIZE = 50;
+
+// janela de páginas mostradas (ex: 1 … 4 5 [6] 7 8 … 12) — evita uma barra
+// de paginação infinita quando a base crescer bastante
+function pageWindow(current, total) {
+  const delta = 1;
+  const range = [];
+  for (let i = Math.max(2, current - delta); i <= Math.min(total - 1, current + delta); i++) range.push(i);
+  if (current - delta > 2) range.unshift("…");
+  if (current + delta < total - 1) range.push("…");
+  range.unshift(1);
+  if (total > 1) range.push(total);
+  return [...new Set(range)];
+}
+
 export default function Contatos() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [rows, setRows] = useState([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [page, setPage] = useState(1);
   const [companies, setCompanies] = useState({});
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -806,13 +823,17 @@ export default function Contatos() {
   const [selectedLead, setSelectedLead] = useState(null);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
 
+  // busca ou filtro de status muda → sempre volta pra página 1 (senão o
+  // usuário pode ficar "preso" numa página que não existe mais pro novo filtro)
+  useEffect(() => { setPage(1); }, [q, statusFilter]);
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
       const core = supabase.schema("core");
       let query = core.from("persons")
-        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at,email_status")
-        .order("created_at", { ascending: false }).limit(500);
+        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at,email_status", { count: "exact" })
+        .order("created_at", { ascending: false });
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       const term = q.trim();
       if (term) {
@@ -821,9 +842,12 @@ export default function Contatos() {
         if (d) { ors.push(`cpf.ilike.%${d}%`); ors.push(`primary_phone.ilike.%${d}%`); }
         query = query.or(ors.join(","));
       }
-      const { data, error: e } = await query;
+      const from = (page - 1) * LEADS_PAGE_SIZE;
+      query = query.range(from, from + LEADS_PAGE_SIZE - 1);
+      const { data, error: e, count } = await query;
       if (e) throw e;
       setRows(data || []);
+      setTotalCount(count ?? 0);
       const ids = [...new Set((data || []).map((r) => r.company_id).filter(Boolean))];
       if (ids.length) {
         const { data: co } = await core.from("companies").select("id,name").in("id", ids);
@@ -834,9 +858,17 @@ export default function Contatos() {
     } finally {
       setLoading(false);
     }
-  }, [q, statusFilter]);
+  }, [q, statusFilter, page]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / LEADS_PAGE_SIZE));
+  const pagerBtnSt = (disabled, activePage) => ({
+    minWidth: 28, height: 28, padding: "0 6px", display: "flex", alignItems: "center", justifyContent: "center",
+    border: `1px solid ${activePage ? T.teal : T.border}`, borderRadius: 7,
+    background: activePage ? T.teal : T.surface, color: activePage ? "#fff" : disabled ? T.faint3 : T.text,
+    cursor: disabled ? "default" : "pointer", fontSize: 12.5, fontWeight: activePage ? 700 : 600, fontFamily: T.font,
+  });
 
   const exportCsv = () => {
     const header = ["Nome", "CPF", "Telefone", "E-mail", "Empresa", "Status", "Criado em"];
@@ -858,7 +890,7 @@ export default function Contatos() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 20 }}>
           <div>
             <h1 style={{ fontSize: 26, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>Leads</h1>
-            <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Pessoas do cadastro único (core) · {rows.length}{rows.length === 500 ? "+" : ""}</div>
+            <div style={{ fontSize: 13, color: T.muted, marginTop: 4 }}>Pessoas do cadastro único (core) · {totalCount}</div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setShowImport(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, cursor: "pointer", fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.font }}>
@@ -931,6 +963,26 @@ export default function Contatos() {
                 })}
               </tbody>
             </table>
+          )}
+          {!loading && rows.length > 0 && totalPages > 1 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, padding: "12px 14px", borderTop: `1px solid ${T.border}` }}>
+              <div style={{ fontSize: 12.5, color: T.muted, fontFamily: T.font }}>
+                Mostrando {(page - 1) * LEADS_PAGE_SIZE + 1}–{Math.min(page * LEADS_PAGE_SIZE, totalCount)} de {totalCount}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} style={pagerBtnSt(page === 1)}>
+                  <ChevronLeft size={14} />
+                </button>
+                {pageWindow(page, totalPages).map((p, i) => p === "…" ? (
+                  <span key={`e${i}`} style={{ padding: "0 4px", color: T.faint3, fontSize: 12.5 }}>…</span>
+                ) : (
+                  <button key={p} onClick={() => setPage(p)} style={pagerBtnSt(false, p === page)}>{p}</button>
+                ))}
+                <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={pagerBtnSt(page === totalPages)}>
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>

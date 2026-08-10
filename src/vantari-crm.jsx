@@ -451,7 +451,7 @@ function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, 
         border: dragOver ? `2px dashed ${T.teal}` : "2px dashed transparent",
         background: dragOver ? `${T.teal}0A` : "transparent",
         padding: dragOver ? 4 : 0, paddingRight: 4, transition: "all 0.1s",
-        overflowY: "auto", maxHeight: "calc(100vh - 300px)",
+        overflowY: "auto", maxHeight: "calc(100vh - 210px)",
       }}>
         {deals.map((d) => (
           <DealCard key={d.id} deal={d} personName={personMap[d.person_id]}

@@ -24,6 +24,20 @@
 // Usado por: conversation-send, conversation-takeover, ingest-message.
 // Qualquer nova função que fale com a Nina usando telefone deve importar
 // daqui, não duplicar a lógica.
+//
+// 11/08/2026 — o 404 voltou a aparecer, mas dessa vez em contatos com
+// telefone JÁ formatado corretamente e que já tinham conversa ativa com a
+// Nina dias antes — ou seja, não é mais o bug de formatação, é uma
+// instabilidade do lado da infraestrutura da Nina (sessão do WhatsApp
+// caindo/reconectando, cache de contato sumindo etc.). Duas camadas novas:
+//   4. Se os dois formatos de telefone falharem, espera um instante e tenta
+//      mais uma vez com o telefone original — cobre blips passageiros sem
+//      incomodar ninguém.
+//   5. Se mesmo assim falhar, registra em core.events (nina_call_failed)
+//      pra ficar um rastro permanente (os logs da Edge Function somem em
+//      24h). O /inbox varre esses eventos e avisa a equipe com um banner se
+//      houver 3+ falhas nos últimos 10 minutos — em vez de cada atendente
+//      só ver um erro avulso e achar que é coisa dele.
 // ════════════════════════════════════════════════════════════════
 
 // core.persons.primary_phone é normalizado por core.normalize_phone_br SEM
@@ -70,16 +84,59 @@ async function attemptNinaCall(
   return { ok: res.ok, status: res.status, detail, phoneUsed: phone };
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export async function ninaCallWithPhoneRetry(
   url: string, secret: string, payload: Record<string, unknown>, phone: string | null
 ): Promise<NinaCallResult> {
   const first = await attemptNinaCall(url, secret, payload, phone);
-  if (first.ok || first.status !== 404) return first;
+  if (first.ok) return first;
 
-  const alt = altWhatsAppPhone(phone);
-  if (!alt) return first;
-  const second = await attemptNinaCall(url, secret, payload, alt);
-  return second.ok ? second : first; // se o alternativo também falhar, reporta o erro do formato "oficial"
+  let best = first;
+  if (first.status === 404) {
+    const alt = altWhatsAppPhone(phone);
+    if (alt) {
+      const second = await attemptNinaCall(url, secret, payload, alt);
+      if (second.ok) return second;
+      best = second.status !== 404 ? second : first; // prefere guardar o erro mais informativo
+    }
+  }
+
+  // última tentativa, com uma pequena pausa — cobre instabilidade passageira
+  // da Nina (ex: sessão do WhatsApp reconectando) que não tem nada a ver com
+  // formato de telefone e se resolveria sozinha numa tentativa seguinte.
+  await sleep(800);
+  const retry = await attemptNinaCall(url, secret, payload, phone);
+  return retry.ok ? retry : best;
+}
+
+// registra em core.events toda falha definitiva (depois de esgotar os
+// retries) — cria um rastro permanente que os logs efêmeros da Edge
+// Function (24h) não dão. É a partir daqui que o /inbox detecta picos de
+// falha e avisa a equipe, em vez de cada atendente ver só um erro isolado.
+export async function logNinaFailure(
+  core: any, // supabase client já com .schema('core')
+  workspaceId: string,
+  personId: string | null,
+  endpoint: string,
+  result: NinaCallResult,
+): Promise<void> {
+  try {
+    await core.from("events").insert({
+      workspace_id: workspaceId,
+      person_id: personId,
+      source: "nina",
+      type: "nina_call_failed",
+      payload: {
+        endpoint,
+        status: result.status,
+        detail: (result.detail || "").slice(0, 500),
+        phone_used: result.phoneUsed,
+      },
+    });
+  } catch {
+    // log é best-effort — não deve derrubar a chamada principal por causa disso
+  }
 }
 
 // autocorrige core.persons.primary_phone (+ person_identifiers) quando o

@@ -322,6 +322,13 @@ export default function InboxAtendimento() {
   // a Nina respondeu no WhatsApp mesmo com a conversa já em atendimento
   // humano nas últimas 24h — ver core.events tipo nina_replied_during_human
   const [ninaDrift, setNinaDrift] = useState(null);
+  // 11/08/2026 — detector de instabilidade da Nina: cada chamada ao backend
+  // dela que falha em definitivo (depois de esgotar os retries em
+  // _shared/nina-phone.ts) grava um core.events tipo "nina_call_failed".
+  // Se aparecerem 3+ nos últimos 10 minutos, é sinal de instabilidade
+  // sistêmica do lado da Nina (não um erro isolado de um atendente) — mostra
+  // um aviso global no topo pra ninguém achar que "quebrou por causa dele".
+  const [ninaOutage, setNinaOutage] = useState(null);
   const scrollRef = useRef(null);
   const convReqId = useRef(0);
   const msgReqId = useRef(0);
@@ -373,6 +380,28 @@ export default function InboxAtendimento() {
   }, []);
 
   const teamById = useMemo(() => Object.fromEntries(team.map((t) => [t.user_id, t.name])), [team]);
+
+  // varre core.events por falhas recentes de chamada à Nina — silencioso,
+  // roda em background igual ao polling de segurança das conversas
+  const checkNinaOutage = useCallback(async () => {
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data, error: e } = await supabase.schema("core").from("events")
+      .select("occurred_at")
+      .eq("workspace_id", WORKSPACE_VANTARI)
+      .eq("type", "nina_call_failed")
+      .gte("occurred_at", since)
+      .order("occurred_at", { ascending: false })
+      .limit(50);
+    if (e) return;
+    const count = data?.length ?? 0;
+    setNinaOutage(count >= 3 ? { count, latest: data[0]?.occurred_at } : null);
+  }, []);
+
+  useEffect(() => {
+    checkNinaOutage();
+    const id = setInterval(checkNinaOutage, 15000);
+    return () => clearInterval(id);
+  }, [checkNinaOutage]);
 
   // realtime: qualquer criação/atualização de conversa reordena/atualiza a
   // lista — silencioso, nunca mostra spinner (senão a lista pisca a cada
@@ -590,7 +619,20 @@ export default function InboxAtendimento() {
         @keyframes pulseAudio { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
       `}</style>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
-      <div style={{ marginLeft: collapsed ? 64 : 240, transition: "margin-left 0.15s", height: "100vh", display: "flex" }}>
+      <div style={{ marginLeft: collapsed ? 64 : 240, transition: "margin-left 0.15s", height: "100vh", display: "flex", flexDirection: "column" }}>
+
+        {ninaOutage && (
+          <div style={{
+            flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "10px 22px",
+            fontSize: 12.5, fontWeight: 600, background: "#FFF1F0", color: "#9B2C2C",
+            borderBottom: `1px solid ${T.border}`, fontFamily: T.font,
+          }}>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            A Nina está instável: {ninaOutage.count} falha{ninaOutage.count === 1 ? "" : "s"} de comunicação nos últimos 10 minutos (última às {fmtTime(ninaOutage.latest)}). Não é erro de vocês — já estamos verificando com o time da Nina.
+          </div>
+        )}
+
+        <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
 
         {/* ─── lista de conversas ─── */}
         <div style={{ width: 320, flexShrink: 0, borderRight: `1px solid ${T.border}`, background: T.surface, display: "flex", flexDirection: "column" }}>
@@ -837,6 +879,7 @@ export default function InboxAtendimento() {
             </div>
           </div>
         )}
+        </div>
       </div>
     </div>
   );

@@ -514,15 +514,20 @@ export default function InboxAtendimento() {
 
   const filteredConvs = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const termDigits = term.replace(/\D/g, "");
     return conversations.filter((c) => {
       const isArchived = !!c.archived_at;
       if (view === "active" && isArchived) return false;
       if (view === "archived" && !isArchived) return false;
       if (!term) return true;
       const p = c.person;
-      return (p?.full_name || "").toLowerCase().includes(term) ||
-        (p?.primary_phone || "").includes(term) ||
-        (p?.cpf || "").includes(term.replace(/\D/g, ""));
+      if ((p?.full_name || "").toLowerCase().includes(term)) return true;
+      if (termDigits) {
+        if ((p?.primary_phone || "").replace(/\D/g, "").includes(termDigits)) return true;
+        if ((p?.cpf || "").replace(/\D/g, "").includes(termDigits)) return true;
+      }
+      if ((c.last_message_body || "").toLowerCase().includes(term)) return true;
+      return false;
     });
   }, [conversations, search, view]);
 

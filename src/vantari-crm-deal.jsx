@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   ArrowLeft, Loader2, AlertCircle, Scale, Building2, User, Trophy, XCircle,
   CheckCircle2, Phone, StickyNote, CalendarClock, Send, Clock, Pencil, Check, X,
-  Zap, Filter, ChevronLeft, ChevronRight, LogOut, Trash2,
+  Zap, Filter, ChevronLeft, ChevronRight, LogOut, Trash2, MessageCircle, ExternalLink,
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -313,6 +313,37 @@ export default function DealDetail() {
 
   useEffect(() => { load(); }, [load]);
 
+  const [conv, setConv] = useState(null);
+  const [convMessages, setConvMessages] = useState([]);
+  const [convLoading, setConvLoading] = useState(true);
+
+  useEffect(() => {
+    if (!deal?.person_id) return;
+    let alive = true;
+    (async () => {
+      setConvLoading(true);
+      const core = supabase.schema("core");
+      const { data: convs } = await core.from("conversations")
+        .select("id, status, last_message_at")
+        .eq("person_id", deal.person_id)
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(1);
+      const c = convs?.[0] || null;
+      if (!alive) return;
+      setConv(c);
+      if (c) {
+        const { data: msgs } = await core.from("messages")
+          .select("id, direction, sender, body, created_at")
+          .eq("conversation_id", c.id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (alive) setConvMessages((msgs || []).reverse());
+      }
+      if (alive) setConvLoading(false);
+    })();
+    return () => { alive = false; };
+  }, [deal?.person_id]);
+
   const stageById = (id) => stages.find((s) => s.id === id);
   const curStage = deal ? stageById(deal.stage_id) : null;
   const [lostModalStage, setLostModalStage] = useState(null); // stage_id pendente aguardando motivo
@@ -567,6 +598,54 @@ export default function DealDetail() {
                     })}
                   </div>
                 </div>
+              </div>
+
+              {/* Conversa com a Nina */}
+              <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, color: T.ink, fontFamily: T.head, fontWeight: 700, fontSize: 13 }}>
+                    <MessageCircle size={15} color={T.teal} /> Conversa com a Nina
+                  </div>
+                  {conv && (
+                    <button onClick={() => navigate("/inbox", { state: { selectConvId: conv.id } })}
+                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", background: "none", border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.teal, fontFamily: T.font }}>
+                      <ExternalLink size={11} /> Abrir no Atendimento
+                    </button>
+                  )}
+                </div>
+                {convLoading && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.muted, fontSize: 13 }}>
+                    <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Carregando...
+                  </div>
+                )}
+                {!convLoading && !conv && (
+                  <div style={{ color: T.muted, fontSize: 13 }}>Nenhuma conversa registrada com este cliente ainda.</div>
+                )}
+                {!convLoading && conv && convMessages.length === 0 && (
+                  <div style={{ color: T.muted, fontSize: 13 }}>Conversa encontrada, mas sem mensagens registradas.</div>
+                )}
+                {!convLoading && conv && convMessages.length > 0 && (
+                  <div style={{ background: T.bg, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+                    {convMessages.map((m) => {
+                      const isNina = m.sender === "nina";
+                      const isHuman = m.sender === "human";
+                      const isOut = m.direction === "out";
+                      return (
+                        <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isOut ? "flex-end" : "flex-start" }}>
+                          <div style={{ maxWidth: "82%", padding: "7px 10px", borderRadius: isOut ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                            background: isNina ? T.teal : isHuman ? T.violet : T.surface,
+                            color: isOut ? "#fff" : T.text, fontSize: 12.5, lineHeight: 1.45, fontFamily: T.font,
+                            border: isOut ? "none" : `1px solid ${T.border}` }}>
+                            {m.body || "—"}
+                          </div>
+                          <div style={{ fontSize: 10, color: T.faint3, marginTop: 2, fontFamily: T.mono }}>
+                            {isNina ? "Nina" : isHuman ? "Humano" : "Cliente"} · {new Date(m.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Direita: blocos editáveis */}

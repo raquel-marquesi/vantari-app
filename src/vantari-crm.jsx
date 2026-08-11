@@ -5,7 +5,7 @@ import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings,
   Briefcase, Plus, Filter, Loader2, AlertCircle, Kanban, List, TrendingUp,
-  X, Scale, Building2, UserPlus, CheckCircle2, XCircle, Zap, ChevronLeft, ChevronRight, LogOut,
+  X, Scale, Building2, UserPlus, CheckCircle2, XCircle, Zap, ChevronLeft, ChevronRight, LogOut, Search,
 } from "lucide-react";
 
 import { IdCard } from "lucide-react";
@@ -861,6 +861,7 @@ export default function CRM() {
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilter, setShowFilter] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [draggingId, setDraggingId] = useState(null);
   const [lostModal, setLostModal] = useState(null); // { dealId, stageId } | null
 
@@ -911,6 +912,7 @@ export default function CRM() {
   const filteredDeals = useMemo(() => {
     const min = filters.valorMin ? parseInt(filters.valorMin, 10) * 100 : null;
     const max = filters.valorMax ? parseInt(filters.valorMax, 10) * 100 : null;
+    const q = searchTerm.trim().toLowerCase();
     return deals.filter((d) => {
       if (filters.stageIds.length && !filters.stageIds.includes(d.stage_id)) return false;
       if (filters.creditType !== "all" && d.credit_type !== filters.creditType) return false;
@@ -919,9 +921,14 @@ export default function CRM() {
       const valor = d.valor_ofertado_cents ?? d.valor_face_cents ?? 0;
       if (min != null && valor < min) return false;
       if (max != null && valor > max) return false;
+      if (q) {
+        const name = (personMap[d.person_id] || "").toLowerCase();
+        const id = d.id.toLowerCase();
+        if (!name.includes(q) && !id.includes(q)) return false;
+      }
       return true;
     });
-  }, [deals, filters]);
+  }, [deals, filters, searchTerm, personMap]);
 
   const activeFilterCount = countActiveFilters(filters);
   const dealsByStage = (stageId) => filteredDeals.filter((d) => d.stage_id === stageId);
@@ -999,6 +1006,27 @@ export default function CRM() {
             </button>
           </div>
         </div>
+
+        {/* Barra de busca */}
+        {!loading && !error && pipeline && (
+          <div style={{ position: "relative", marginBottom: 18, maxWidth: 420 }}>
+            <Search size={15} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: T.faint3, pointerEvents: "none" }} />
+            <input
+              type="text"
+              placeholder="Buscar por cliente ou ID do negócio..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: "100%", padding: "9px 36px 9px 36px", border: `1px solid ${T.border}`, borderRadius: 9,
+                fontSize: 13, color: T.text, background: T.surface, fontFamily: T.font, outline: "none", boxSizing: "border-box" }}
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm("")}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: T.faint3, padding: 2, display: "flex" }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Estados */}
         {loading && (

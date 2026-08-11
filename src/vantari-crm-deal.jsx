@@ -33,15 +33,28 @@ const CNDT_OPTS = [
 ];
 const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
 const LOST_REASONS = [
-  { v: "reclamada_insolvente", l: "Reclamada insolvente" },
-  { v: "reclamada_em_rj", l: "Reclamada em recuperação judicial" },
-  { v: "tese_restritiva", l: "Tese jurídica restritiva" },
-  { v: "processo_inelegivel", l: "Processo não elegível" },
-  { v: "cliente_desistiu", l: "Cliente desistiu" },
-  { v: "proposta_recusada", l: "Cliente recusou a proposta" },
-  { v: "documentacao_incompleta", l: "Documentação incompleta" },
-  { v: "sem_contato", l: "Perda de contato com o cliente" },
-  { v: "outro", l: "Outro" },
+  { v: "valor_abaixo_regua",          l: "Valor abaixo da régua de compra" },
+  { v: "valor_acima_regua",           l: "Valor acima da régua de compra" },
+  { v: "acordo_formalizado",          l: "Acordo formalizado no processo" },
+  { v: "fase_avancada_execucao",      l: "Fase avançada de execução" },
+  { v: "reclamada_pf_mei",            l: "Reclamada Pessoa Física / MEI" },
+  { v: "reclamada_me_epp",            l: "Reclamada ME / EPP" },
+  { v: "recuperacao_judicial_falencia", l: "Recuperação Judicial / Falência" },
+  { v: "risco_solvencia",             l: "Risco de solvência da reclamada" },
+  { v: "cnpj_baixado",                l: "CNPJ baixado / empresa inativa" },
+  { v: "processo_plurimo",            l: "Processo plúrimo" },
+  { v: "verbas_nao_passiveis",        l: "Verbas não passíveis de compra" },
+  { v: "concentracao_risco_verba",    l: "Concentração de risco em verba relevante" },
+  { v: "risco_juridico_elevado",      l: "Risco jurídico elevado" },
+  { v: "incerteza_liquidacao",        l: "Incerteza na liquidação / cálculo do crédito" },
+  { v: "processo_suspenso",           l: "Processo suspenso / sobrestado" },
+  { v: "advogado_nao_aceita_termos",  l: "Advogado não aceita os termos contratuais" },
+  { v: "documentacao_impeditiva",     l: "Documentação ou condição impeditiva" },
+  { v: "fora_politica_interna",       l: "Fora da política interna de aquisição" },
+  { v: "cliente_desistiu",            l: "Cliente desistiu da antecipação" },
+  { v: "cliente_fechou_concorrente",  l: "Cliente fechou com concorrente" },
+  { v: "sem_retorno",                 l: "Sem retorno do cliente" },
+  { v: "outro",                       l: "Outro" },
 ];
 
 /* ─── helpers (duplicados do form, padrão self-contained) ─── */

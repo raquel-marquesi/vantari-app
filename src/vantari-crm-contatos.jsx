@@ -6,7 +6,7 @@ import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
   Plus, Search, Loader2, AlertCircle, X, UserPlus, IdCard, Zap, Filter,
   ChevronLeft, ChevronRight, LogOut, Building2, Upload, Download, FileText,
-  CheckCircle2, ArrowRight, ArrowLeft, Edit3, Save, Trash2,
+  CheckCircle2, ArrowRight, ArrowLeft, Edit3, Save, Trash2, MessageCircle, ExternalLink,
 } from "lucide-react";
 import { Activity, ListChecks } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
@@ -322,10 +322,14 @@ function EmailQualityBadge({ status }) {
 }
 
 function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deals, setDeals] = useState([]);
   const [events, setEvents] = useState([]);
+  const [conv, setConv] = useState(null);
+  const [convMessages, setConvMessages] = useState([]);
+  const [convLoading, setConvLoading] = useState(true);
   const sb = statusBadge(lead.status);
 
   const [editing, setEditing] = useState(false);
@@ -406,6 +410,32 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
       } finally {
         if (alive) setLoading(false);
       }
+    })();
+    return () => { alive = false; };
+  }, [lead.id]);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setConvLoading(true);
+      const core = supabase.schema("core");
+      const { data: convs } = await core.from("conversations")
+        .select("id, status, last_message_at, last_message_body")
+        .eq("person_id", lead.id)
+        .order("last_message_at", { ascending: false, nullsFirst: false })
+        .limit(1);
+      const c = convs?.[0] || null;
+      if (!alive) return;
+      setConv(c);
+      if (c) {
+        const { data: msgs } = await core.from("messages")
+          .select("id, direction, sender, body, created_at")
+          .eq("conversation_id", c.id)
+          .order("created_at", { ascending: false })
+          .limit(10);
+        if (alive) setConvMessages((msgs || []).reverse());
+      }
+      if (alive) setConvLoading(false);
     })();
     return () => { alive = false; };
   }, [lead.id]);
@@ -527,6 +557,53 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
           {!loading && !error && events.length > 0 && (
             <div>
               {groupEvents(events).map((ev) => <EventRow key={ev.id} ev={ev} />)}
+            </div>
+          )}
+
+          {/* Conversa com a Nina */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "22px 0 10px" }}>
+            <div style={{ fontFamily: T.head, fontSize: 12.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "flex", alignItems: "center", gap: 6 }}>
+              <MessageCircle size={13} /> Conversa com a Nina
+            </div>
+            {conv && (
+              <button onClick={() => { onClose(); navigate("/inbox", { state: { selectConvId: conv.id } }); }}
+                style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", background: "none", border: `1px solid ${T.border}`, borderRadius: 7, cursor: "pointer", fontSize: 11.5, fontWeight: 600, color: T.teal, fontFamily: T.font }}>
+                <ExternalLink size={11} /> Abrir no Atendimento
+              </button>
+            )}
+          </div>
+
+          {convLoading && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, color: T.muted, fontSize: 13 }}>
+              <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Carregando conversa...
+            </div>
+          )}
+          {!convLoading && !conv && (
+            <div style={{ fontSize: 13, color: T.muted }}>Nenhuma conversa registrada com esta pessoa ainda.</div>
+          )}
+          {!convLoading && conv && convMessages.length === 0 && (
+            <div style={{ fontSize: 13, color: T.muted }}>Conversa encontrada, mas sem mensagens registradas.</div>
+          )}
+          {!convLoading && conv && convMessages.length > 0 && (
+            <div style={{ background: T.bg, borderRadius: 10, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+              {convMessages.map((m) => {
+                const isNina = m.sender === "nina";
+                const isHuman = m.sender === "human";
+                const isOut = m.direction === "out";
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isOut ? "flex-end" : "flex-start" }}>
+                    <div style={{ maxWidth: "80%", padding: "7px 10px", borderRadius: isOut ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
+                      background: isNina ? T.teal : isHuman ? T.violet : T.surface,
+                      color: isOut ? "#fff" : T.text, fontSize: 12.5, lineHeight: 1.45, fontFamily: T.font,
+                      border: isOut ? "none" : `1px solid ${T.border}` }}>
+                      {m.body || "—"}
+                    </div>
+                    <div style={{ fontSize: 10, color: T.faint3, marginTop: 2, fontFamily: T.mono }}>
+                      {isNina ? "Nina" : isHuman ? "Humano" : "Cliente"} · {new Date(m.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

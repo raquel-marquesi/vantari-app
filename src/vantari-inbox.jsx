@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSidebarCollapsed } from "./sidebar-collapsed";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
   BarChart2, Users, Mail, Star, LayoutTemplate, Bot, Plug, Settings, Briefcase,
@@ -294,6 +294,7 @@ function AssigneeMenu({ status, assignedUserId, team, myUserId, busy, onPick, on
 
 export default function InboxAtendimento() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useSidebarCollapsed();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -372,6 +373,11 @@ export default function InboxAtendimento() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const convId = location.state?.selectConvId;
+    if (convId) setSelectedId(convId);
+  }, [location.state]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id || null));

@@ -410,7 +410,7 @@ const OnboardingCard = () => {
 };
 
 const WorkspaceTab = ({toast}) => {
-  const [f,setF] = useState({companyName:"Vantari",domain:"vantari.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491"});
+  const [f,setF] = useState({companyName:"Vantari",domain:"vantari.com.br",timezone:"America/Sao_Paulo",dateFormat:"DD/MM/YYYY",language:"pt-BR",primaryColor:"#0D7491",whatsappNumber:"5511952135676"});
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
   const fileRef = useRef();
@@ -426,6 +426,7 @@ const WorkspaceTab = ({toast}) => {
         dateFormat: data.date_format || "DD/MM/YYYY",
         language: data.language || "pt-BR",
         primaryColor: data.primary_color || "#0D7491",
+        whatsappNumber: data.whatsapp_number || "5511952135676",
       });
       setLoading(false);
     })();
@@ -441,6 +442,7 @@ const WorkspaceTab = ({toast}) => {
       date_format: f.dateFormat,
       language: f.language,
       primary_color: f.primaryColor,
+      whatsapp_number: f.whatsappNumber,
       updated_at: new Date().toISOString(),
     });
     setSaving(false);
@@ -488,6 +490,11 @@ const WorkspaceTab = ({toast}) => {
             </div>
           </div>
         </div>
+      </Card>
+
+      <Card>
+        <SectionTitle sub="Número usado no botão de WhatsApp das landing pages publicadas (next.vantari.com.br/landing-pages/*)">Atendimento via WhatsApp</SectionTitle>
+        <Input label="Número de WhatsApp" value={f.whatsappNumber} onChange={e=>u("whatsappNumber",e.target.value.replace(/\D/g,""))} placeholder="5511999999999" hint="DDI + DDD + número, só dígitos. Ex: 5511999999999. Ao salvar, o botão e o link de WhatsApp nas 3 landing pages atualizam automaticamente — sem precisar editar o HTML."/>
       </Card>
 
       <Card>

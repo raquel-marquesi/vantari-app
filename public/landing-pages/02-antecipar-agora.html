@@ -1294,7 +1294,7 @@
                   <a style="color:rgba(255,255,255,.8);">Blog</a>
                 </div>
                 <div class="actions">
-                  <span class="phone" style="color:#fff;">(11) 95213-5676</span>
+                  <span class="phone" style="color:#fff;" data-wa-label>(11) 95213-5676</span>
                   <a class="wa" data-wa><span class="dot"></span> WhatsApp · 2h resp.</a>
                 </div>
               </nav>
@@ -1421,7 +1421,7 @@
                   <div>
                     <h5>Atendimento</h5>
                     <a>WhatsApp · 2h resp.</a>
-                    <a>(11) 95213-5676</a>
+                    <a data-wa-label>(11) 95213-5676</a>
                     <a>contato@vantari.com.br</a>
                   </div>
                   <div>
@@ -1472,10 +1472,38 @@
       f.src = formUrl;
     });
     document.querySelectorAll('a[data-next-form]').forEach(function (a) { a.href = formUrl; });
-    if (cfg.whatsapp) {
-      var wa = 'https://wa.me/' + cfg.whatsapp;
-      document.querySelectorAll('[data-wa]').forEach(function (a) { a.href = wa; a.target = '_blank'; a.rel = 'noopener'; });
+
+    // WhatsApp: aplica o número hardcoded acima como fallback imediato, depois
+    // troca pelo valor salvo em /settings (Workspace) assim que a busca responde —
+    // assim dá pra trocar o número em produção sem editar/redeployar este HTML.
+    var WA_SUPABASE_URL = 'https://ejhrlrasepowdcdnggmv.supabase.co';
+    var WA_SUPABASE_KEY = 'sb_publishable_EF4Yrx206q65ZQ_eJeh6NQ_2FVi92oJ';
+
+    function formatWaLabel(raw) {
+      var d = String(raw || '').replace(/\D/g, '');
+      if (d.length > 11 && d.slice(0, 2) === '55') d = d.slice(2);
+      if (d.length === 11) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 7) + '-' + d.slice(7);
+      if (d.length === 10) return '(' + d.slice(0, 2) + ') ' + d.slice(2, 6) + '-' + d.slice(6);
+      return raw;
     }
+
+    function applyWhatsapp(number) {
+      if (!number) return;
+      var wa = 'https://wa.me/' + number;
+      document.querySelectorAll('[data-wa]').forEach(function (a) { a.href = wa; a.target = '_blank'; a.rel = 'noopener'; });
+      var label = formatWaLabel(number);
+      document.querySelectorAll('[data-wa-label]').forEach(function (el) { el.textContent = label; });
+    }
+
+    applyWhatsapp(cfg.whatsapp);
+    fetch(WA_SUPABASE_URL + '/rest/v1/rpc/get_lp_whatsapp', {
+      method: 'POST',
+      headers: { 'apikey': WA_SUPABASE_KEY, 'Authorization': 'Bearer ' + WA_SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: '{}',
+    }).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (num) { if (num) applyWhatsapp(num); })
+      .catch(function () { /* mantém o número hardcoded como fallback */ });
+
     // O bloco de formulário do Next pode publicar sua altura para ajuste automático.
     window.addEventListener('message', function (e) {
       var d = e.data || {};

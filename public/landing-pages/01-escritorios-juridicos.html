@@ -1280,7 +1280,8 @@
   window.VANTARI_NEXT = {
     base: window.location.origin,  // ← detecta sozinho o ambiente (localhost em dev, domínio real em produção)
     formSlug: "escritorios-juridicos",  // ← slug do formulário (Next › /f/:slug)
-    whatsapp: "5511952135676"  // ← WhatsApp: DDI+DDD+número, só dígitos
+    whatsapp: "5511952135676",  // ← WhatsApp: DDI+DDD+número, só dígitos
+    waMessage: "Olá! Sou advogado e gostaria de saber como funciona a antecipação de honorários trabalhistas."  // ← mensagem pré-preenchida no wa.me, identifica a origem do lead
   };
 </script>
 <!-- Vantari Lead Tracker — registra a visita para métricas de acesso da LP. -->
@@ -1515,6 +1516,7 @@
     function applyWhatsapp(number) {
       if (!number) return;
       var wa = 'https://wa.me/' + number;
+      if (cfg.waMessage) wa += '?text=' + encodeURIComponent(cfg.waMessage);
       document.querySelectorAll('[data-wa]').forEach(function (a) { a.href = wa; a.target = '_blank'; a.rel = 'noopener'; });
       var label = formatWaLabel(number);
       document.querySelectorAll('[data-wa-label]').forEach(function (el) { el.textContent = label; });

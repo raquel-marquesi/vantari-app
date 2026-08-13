@@ -415,36 +415,39 @@ function useIntegrationCredentials(provider) {
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState(null);
 
+  // Nunca acessa integration_credentials direto do navegador — a tabela guarda
+  // client_secret/access_token em texto puro e só service_role pode lê-la
+  // desde o hardening de RLS. A função integration-credentials é a única ponte,
+  // e devolve tudo mascarado (has_client_id/has_client_secret, nunca o valor).
+  const call = useCallback(async (action, extra) => {
+    const { data, error: err } = await supabase.functions.invoke("integration-credentials", {
+      body: { action, provider, ...extra },
+    });
+    if (err) { setError(err.message); return null; }
+    if (data?.error) { setError(data.error); return null; }
+    return data;
+  }, [provider]);
+
   const reload = useCallback(async () => {
     setLoading(true); setError(null);
-    const { data, error: err } = await supabase
-      .from("integration_credentials")
-      .select("*")
-      .eq("provider", provider)
-      .maybeSingle();
+    const data = await call("status");
     setLoading(false);
-    if (err) { setError(err.message); return; }
-    setRow(data || null);
-  }, [provider]);
+    setRow(data);
+  }, [call]);
 
   useEffect(() => { reload(); }, [reload]);
 
   const save = useCallback(async (patch) => {
-    const { error: err } = await supabase
-      .from("integration_credentials")
-      .upsert({ provider, ...patch }, { onConflict: "provider" });
-    if (err) { setError(err.message); return false; }
-    await reload();
+    const data = await call("save", patch);
+    if (!data) return false;
+    setRow(data);
     return true;
-  }, [provider, reload]);
+  }, [call]);
 
   const disconnect = useCallback(async () => {
-    await supabase
-      .from("integration_credentials")
-      .update({ status: "disconnected", access_token: null, refresh_token: null, expires_at: null })
-      .eq("provider", provider);
-    await reload();
-  }, [provider, reload]);
+    const data = await call("disconnect");
+    if (data) setRow(data);
+  }, [call]);
 
   return { row, loading, error, save, disconnect, reload };
 }
@@ -461,21 +464,22 @@ const CredentialsCard = ({ provider }) => {
   useEffect(() => {
     if (row) {
       setClientId(row.client_id || "");
-      setClientSecret(row.client_secret || "");
+      // O Secret nunca volta do servidor depois de salvo — o campo fica em
+      // branco (com um placeholder indicando que já existe um valor salvo).
+      setClientSecret("");
       setAccountId(row.account_id || "");
     }
   }, [row]);
 
   const onSave = async () => {
     setSaving(true);
-    const ok = await save({
-      client_id:     clientId.trim() || null,
-      client_secret: clientSecret.trim() || null,
-      account_id:    accountId.trim() || null,
-      status:        row?.status === "connected" ? "connected" : (clientId && clientSecret ? "pending" : "disconnected"),
-    });
+    // Só envia client_secret se a pessoa digitou um valor novo — em branco
+    // significa "manter o que já está salvo", não "apagar".
+    const patch = { client_id: clientId.trim() || null, account_id: accountId.trim() || null };
+    if (clientSecret.trim()) patch.client_secret = clientSecret.trim();
+    const ok = await save(patch);
     setSaving(false);
-    if (ok) { setSavedMsg("Credenciais salvas."); setTimeout(()=>setSavedMsg(""), 2500); }
+    if (ok) { setClientSecret(""); setSavedMsg("Credenciais salvas."); setTimeout(()=>setSavedMsg(""), 2500); }
   };
 
   const onConnect = () => {
@@ -516,7 +520,9 @@ const CredentialsCard = ({ provider }) => {
       )}
 
       <Input label={meta.clientIdLabel}     value={clientId}     onChange={setClientId}     mono required/>
-      <Input label={meta.clientSecretLabel} value={clientSecret} onChange={setClientSecret} mono required type="password" hint="Armazenado no Supabase com RLS. Para produção, mover para vault."/>
+      <Input label={meta.clientSecretLabel} value={clientSecret} onChange={setClientSecret} mono required={!row?.has_client_secret} type="password"
+        placeholder={row?.has_client_secret ? "•••••••• (já salvo — digite só se quiser trocar)" : ""}
+        hint="Nunca é reexibido depois de salvo — só um servidor interno consegue lê-lo."/>
       <Input label="Account ID / Customer ID" value={accountId} onChange={setAccountId} mono hint={provider==="meta"?"ID da conta de anúncios (act_xxxxxxxxx)":"Customer ID do Google Ads (xxx-xxx-xxxx)"}/>
 
       <div style={{marginTop:12,padding:"10px 12px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,fontSize:11,fontFamily:T.mono,color:T.muted,wordBreak:"break-all"}}>

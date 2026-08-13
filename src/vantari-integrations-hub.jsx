@@ -556,17 +556,69 @@ const MetaView = ({ integration, onBack }) => {
   const [tab,setTab] = useState("leads");
   const [cfg,setCfg] = useState({...integration.config});
   const [audiences]  = useState([{id:"aud_1",name:"Site Visitors 30d",size:"14.2K",status:"active"},{id:"aud_2",name:"Leads Qualificados",size:"3.8K",status:"active"},{id:"aud_3",name:"Clientes Ativos",size:"892",status:"syncing"}]);
-  const leads = DB.external_leads.filter(l=>l.source==="meta_form");
   const tabs  = [{id:"leads",label:"Leads de Formulário"},{id:"pixel",label:"Pixels"},{id:"audiences",label:"Audiências"},{id:"config",label:"Configuração"}];
   const [syncing,setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
+
+  // Leads sincronizados de verdade — vivem em core.events (source=meta,
+  // type=lead_created), a mesma pessoa canônica que /leads e /crm usam.
+  const [metaLeads, setMetaLeads] = useState([]);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+  const loadMetaLeads = useCallback(async () => {
+    setLoadingLeads(true);
+    const { data: events } = await supabase.schema("core").from("events")
+      .select("id, occurred_at, payload, person_id")
+      .eq("source", "meta").eq("type", "lead_created")
+      .order("occurred_at", { ascending: false }).limit(50);
+    const personIds = [...new Set((events || []).map(e => e.person_id).filter(Boolean))];
+    let personsById = {};
+    if (personIds.length) {
+      const { data: persons } = await supabase.schema("core").from("persons")
+        .select("id, full_name, primary_email, primary_phone").in("id", personIds);
+      personsById = Object.fromEntries((persons || []).map(p => [p.id, p]));
+    }
+    setMetaLeads((events || []).map(e => ({ ...e, person: personsById[e.person_id] })));
+    setLoadingLeads(false);
+  }, []);
+  useEffect(() => { loadMetaLeads(); }, [loadMetaLeads]);
+
+  // Formulários de Lead Ads configurados pra sincronizar (config.form_ids)
+  const [formIds, setFormIds] = useState(integration.config?.form_ids || []);
+  const [newFormId, setNewFormId] = useState("");
+  const [newFormLabel, setNewFormLabel] = useState("");
+  const [savingForms, setSavingForms] = useState(false);
+  useEffect(() => { setFormIds(integration.config?.form_ids || []); }, [integration.config?.form_ids]);
+
+  const saveFormIds = async (next) => {
+    setSavingForms(true);
+    const { data } = await supabase.functions.invoke("integration-credentials", {
+      body: { action: "save", provider: "meta", form_ids: next },
+    });
+    setSavingForms(false);
+    if (data && !data.error) setFormIds(data.config?.form_ids || next);
+  };
+  const addFormId = () => {
+    if (!newFormId.trim()) return;
+    const next = [...formIds, { id: newFormId.trim(), label: newFormLabel.trim() || null }];
+    setNewFormId(""); setNewFormLabel("");
+    saveFormIds(next);
+  };
+  const removeFormId = (id) => saveFormIds(formIds.filter(f => f.id !== id));
+
   const handleSync = async () => {
     if (integration.status !== "connected") { setSyncMsg("Conecte a integração antes de sincronizar."); setTimeout(()=>setSyncMsg(""),3000); return; }
+    if (!formIds.length) { setSyncMsg("Adicione ao menos um formulário em \"Configuração\" antes de sincronizar."); setTimeout(()=>setSyncMsg(""),4000); return; }
     setSyncing(true); setSyncMsg("");
-    await new Promise(r=>setTimeout(r, 900));
+    const { data, error } = await supabase.functions.invoke("sync-meta-leads", { body: { provider: "meta" } });
     setSyncing(false);
-    setSyncMsg(`Sincronizado às ${new Date().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})}.`);
-    setTimeout(()=>setSyncMsg(""),4000);
+    if (error || data?.error) {
+      setSyncMsg(data?.error || error.message || "Falha ao sincronizar.");
+    } else {
+      const errs = (data.forms || []).filter(f => f.error);
+      setSyncMsg(`${data.synced} lead(s) novo(s) · ${data.skipped} já existiam${errs.length ? ` · ${errs.length} formulário(s) com erro` : ""}.`);
+      loadMetaLeads();
+    }
+    setTimeout(()=>setSyncMsg(""),6000);
   };
 
   return (
@@ -592,24 +644,43 @@ const MetaView = ({ integration, onBack }) => {
 
       {tab==="leads"&&(
         <div>
-          <PreviewBanner>Prévia — a importação automática de leads de formulários do Meta ainda não foi construída (depende de um Meta Developer App configurado). Quando o Meta estiver conectado de verdade, os leads reais aparecem aqui.</PreviewBanner>
-          <SectionHeader title="Leads de Formulários" subtitle={`${leads.length} leads importados`} action={
+          <Card style={{marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.font,marginBottom:10}}>Formulários de Lead Ads a sincronizar</div>
+            {formIds.length===0 && <div style={{fontSize:12.5,color:T.muted,fontFamily:T.font,marginBottom:10}}>Nenhum formulário configurado ainda. Adicione o ID do Lead Ads Form (encontrado no Meta Business Suite → Formulários de instant.).</div>}
+            {formIds.map(f=>(
+              <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
+                <span style={{fontFamily:T.mono,fontSize:12,fontWeight:700,color:T.text}}>{f.id}</span>
+                {f.label && <span style={{fontSize:12,color:T.muted,fontFamily:T.font}}>— {f.label}</span>}
+                <Btn size="xs" variant="ghost" onClick={()=>removeFormId(f.id)} style={{marginLeft:"auto"}}>Remover</Btn>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:8,marginTop:10}}>
+              <Input value={newFormId} onChange={setNewFormId} placeholder="ID do formulário (ex: 123456789012345)" mono/>
+              <Input value={newFormLabel} onChange={setNewFormLabel} placeholder="Rótulo (opcional)"/>
+              <Btn size="sm" onClick={addFormId} disabled={savingForms || !newFormId.trim()}>Adicionar</Btn>
+            </div>
+          </Card>
+
+          <SectionHeader title="Leads de Formulários" subtitle={`${metaLeads.length} lead(s) sincronizado(s)`} action={
             <div style={{display:"flex",alignItems:"center",gap:10}}>
               {syncMsg && <span style={{fontSize:11.5,fontWeight:600,color:T.green,fontFamily:T.font}}>{syncMsg}</span>}
-              <Btn size="sm" icon="↻" disabled title="Em breve — sincronização automática ainda não construída">Sincronizar Agora</Btn>
+              <Btn size="sm" icon="↻" onClick={handleSync} disabled={syncing}>{syncing?"Sincronizando…":"Sincronizar Agora"}</Btn>
             </div>
           }/>
           <div style={{display:"flex",flexDirection:"column",gap:0,border:`0.5px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
-            <div style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr 1fr",padding:"10px 16px",background:T.faint,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>
-              <span>Nome</span><span>Email</span><span>Campanha</span><span>Data</span><span>Status</span>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr",padding:"10px 16px",background:T.faint,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>
+              <span>Nome</span><span>Email / Telefone</span><span>Campanha</span><span>Data</span>
             </div>
-            {leads.map((l,i)=>(
-              <div key={l.id} style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr 1fr",padding:"12px 16px",borderTop:`0.5px solid ${T.border}`,background:i%2===0?T.surface:T.faint,fontSize:13,fontFamily:T.font}}>
-                <span style={{fontWeight:700,color:T.text}}>{l.raw_data.full_name}</span>
-                <span style={{fontWeight:600,color:T.muted}}>{l.raw_data.email}</span>
-                <span style={{fontWeight:600,color:T.text}}>{l.raw_data.campaign}</span>
-                <span style={{fontWeight:600,color:T.muted}}>{fmtDate(l.imported_at)}</span>
-                <StatusBadge status={l.processed?"success":"warning"}/>
+            {loadingLeads ? (
+              <div style={{padding:24,textAlign:"center",color:T.muted,fontSize:13,fontFamily:T.font}}>Carregando…</div>
+            ) : metaLeads.length===0 ? (
+              <div style={{padding:24,textAlign:"center",color:T.muted,fontSize:13,fontFamily:T.font}}>Nenhum lead sincronizado ainda — clique em "Sincronizar Agora" depois de conectar e configurar um formulário.</div>
+            ) : metaLeads.map((l,i)=>(
+              <div key={l.id} style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr",padding:"12px 16px",borderTop:`0.5px solid ${T.border}`,background:i%2===0?T.surface:T.faint,fontSize:13,fontFamily:T.font}}>
+                <span style={{fontWeight:700,color:T.text}}>{l.person?.full_name || "—"}</span>
+                <span style={{fontWeight:600,color:T.muted}}>{l.person?.primary_email || l.person?.primary_phone || "—"}</span>
+                <span style={{fontWeight:600,color:T.text}}>{l.payload?.campaign_name || "—"}</span>
+                <span style={{fontWeight:600,color:T.muted}}>{fmtDate(l.occurred_at)}</span>
               </div>
             ))}
           </div>
@@ -1152,10 +1223,16 @@ export default function VantariIntegrationsHub() {
   const extLeads     = DB.external_leads;
   const pendingLeads = extLeads.filter(l=>!l.processed).length;
 
-  // Carrega credenciais reais do Supabase e mergeia com metadata estática
+  // Carrega credenciais reais (via edge function — integration_credentials não
+  // é mais acessível direto do navegador, ver integration-credentials/index.ts)
+  // e mergeia com metadata estática.
   const reloadIntegrations = useCallback(async () => {
-    const { data } = await supabase.from("integration_credentials").select("*");
-    const byProvider = Object.fromEntries((data || []).map(r => [r.provider, r]));
+    const providers = ["meta", "google"];
+    const results = await Promise.all(providers.map(provider =>
+      supabase.functions.invoke("integration-credentials", { body: { action: "status", provider } })
+        .then(({ data }) => data).catch(() => null)
+    ));
+    const byProvider = Object.fromEntries(providers.map((p, i) => [p, results[i]]).filter(([, r]) => r && !r.error));
     const merged = DB.integrations.map(stub => {
       const r = byProvider[stub.provider];
       if (!r) return stub;

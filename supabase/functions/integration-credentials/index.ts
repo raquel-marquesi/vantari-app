@@ -59,6 +59,8 @@ function mask(row: any, provider: string) {
     last_sync:         row?.last_sync || null,
     expires_at:        row?.expires_at || null,
     error_message:     row?.error_message || null,
+    // config não é sensível (ex: form_ids do Meta Lead Ads a sincronizar).
+    config:            row?.config || {},
   };
 }
 
@@ -95,7 +97,7 @@ serve(async (req) => {
   if (action === "status") {
     const { data, error } = await admin
       .from("integration_credentials")
-      .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message")
+      .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message, config")
       .eq("provider", provider)
       .maybeSingle();
     if (error) return jsonResp({ error: error.message }, 500);
@@ -112,9 +114,16 @@ serve(async (req) => {
 
     const { data: existing } = await admin
       .from("integration_credentials")
-      .select("status, client_id, client_secret")
+      .select("status, client_id, client_secret, config")
       .eq("provider", provider)
       .maybeSingle();
+
+    // form_ids (config.form_ids): lista de formulários de Lead Ads a sincronizar.
+    // Mescla com o config existente em vez de substituir tudo, pra não perder
+    // outras chaves que possam existir ali no futuro.
+    if (Array.isArray(body.form_ids)) {
+      patch.config = { ...(existing?.config || {}), form_ids: body.form_ids };
+    }
 
     const hasId     = patch.client_id     !== undefined ? !!patch.client_id     : !!existing?.client_id;
     const hasSecret = patch.client_secret !== undefined ? !!patch.client_secret : !!existing?.client_secret;
@@ -125,7 +134,7 @@ serve(async (req) => {
     const { data, error } = await admin
       .from("integration_credentials")
       .upsert(patch, { onConflict: "provider" })
-      .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message")
+      .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message, config")
       .single();
     if (error) return jsonResp({ error: error.message }, 500);
     return jsonResp(mask(data, provider));
@@ -136,7 +145,7 @@ serve(async (req) => {
     .from("integration_credentials")
     .update({ status: "disconnected", access_token: null, refresh_token: null, expires_at: null })
     .eq("provider", provider)
-    .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message")
+    .select("status, account_id, client_id, client_secret, scope, last_sync, expires_at, error_message, config")
     .single();
   if (error) return jsonResp({ error: error.message }, 500);
   return jsonResp(mask(data, provider));

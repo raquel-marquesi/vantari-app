@@ -1,11 +1,16 @@
 # Vantari — CLAUDE.md
 
-> ⚠️ **REESTRUTURAÇÃO EM ANDAMENTO (jun/2026).** Está sendo construída uma nova
-> arquitetura de **core canônico** (schemas `core`/`crm`/`mkt`/`fin` em
-> `supabase/proposals/`) e o domínio real foi confirmado: **cessão/antecipação de
-> crédito trabalhista**. Os schemas novos ainda **não foram aplicados ao banco**.
-> A descrição abaixo reflete o app de marketing **atual** (Vite SPA, tabelas
-> `public.*`). Para a direção nova, ver **[REESTRUTURACAO.md](REESTRUTURACAO.md)**.
+> ⚠️ **REESTRUTURAÇÃO EM ANDAMENTO — ATUALIZADO ago/2026.** Os schemas do core
+> canônico (`core`/`crm`/`mkt`/`fin`) **já estão aplicados em produção** (confirmado
+> ao vivo no banco, ago/2026) e já são usados por telas atuais — ex.: `/leads`
+> (`vantari-crm-contatos.jsx`) lê `core.persons`/`core.events`, `/crm` lê
+> `crm.deals`, `/email` usa `mkt.*`. A frase antiga "schemas ainda não aplicados"
+> estava desatualizada — não confiar nela sem checar o banco (`list_tables`) antes
+> de decidir contra qual schema construir algo novo. Domínio real: **cessão/
+> antecipação de crédito trabalhista**. Partes do app (ex.: builder de Landing
+> Pages, algumas integrações) ainda operam só em `public.*` ou são mock — checar
+> caso a caso, não assumir por módulo. Para o histórico da reestruturação, ver
+> **[REESTRUTURACAO.md](REESTRUTURACAO.md)** (também pode estar desatualizado).
 > Nota de segurança: a RLS de produção foi fechada (anon não lê mais leads/CPF) —
 > ver `supabase/proposals/0003_rls_hardening.sql`.
 

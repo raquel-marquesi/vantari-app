@@ -483,7 +483,10 @@ const CredentialsCard = ({ provider }) => {
   };
 
   const onConnect = () => {
-    if (!clientId || !clientSecret) { alert("Salve App ID e Secret antes de conectar."); return; }
+    // clientSecret local fica vazio de propósito depois de salvo (nunca é
+    // reexibido) — o que importa aqui é se já existe um secret salvo no
+    // servidor (row.has_client_secret) OU se a pessoa acabou de digitar um novo.
+    if (!clientId || !(clientSecret || row?.has_client_secret)) { alert("Salve App ID e Secret antes de conectar."); return; }
     const supaUrl = import.meta.env.VITE_SUPABASE_URL || "";
     if (!supaUrl) { alert("VITE_SUPABASE_URL não configurada."); return; }
     const redirectUri = `${supaUrl}/functions/v1/oauth-callback?provider=${provider}`;

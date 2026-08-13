@@ -336,6 +336,18 @@ API JS no site:
    - Insere `lead_event` com `form_submit` (+10 pts via `scoring_rules`)
 5. Source do lead = `forms.source_label` ou `"Form: <name>"`
 
+## Landing pages reais — como publicar
+
+As 3 LPs reais (`public/landing-pages/*.html`) são páginas estáticas
+feitas sob encomenda, **não** o builder mock de `/landing → Páginas`
+(decisão de ago/2026: volume baixo de LPs novas não justifica um sistema
+de autoatendimento — ver checklist completo em
+**[docs/NOVA_LANDING_PAGE.md](docs/NOVA_LANDING_PAGE.md)** antes de criar
+uma nova). Resumo: duplicar uma LP existente, ajustar `formSlug`/`waMessage`
+no bloco `CONFIG`, criar o form correspondente, cadastrar a URL em
+`tracked_pages`, deploy, testar. O número de WhatsApp é centralizado em
+`/settings → Workspace` (não precisa editar HTML pra trocar).
+
 ## Bibliotecas de templates (Etapa 11)
 
 ### Email — Biblioteca Vantari (`/email → Templates → Biblioteca Vantari`)

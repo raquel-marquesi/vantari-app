@@ -2106,6 +2106,12 @@ export default function VantariLandingPages() {
     return matchSearch&&matchStatus;
   }),[pages,search,filterStatus]);
 
+  const filteredRealLPs = useMemo(()=>realLPs.filter(lp=>{
+    const matchSearch = lp.name.toLowerCase().includes(search.toLowerCase())||lp.path.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus==="all"||(filterStatus==="published"&&lp.active);
+    return matchSearch&&matchStatus;
+  }),[realLPs,search,filterStatus]);
+
   const allPageMetrics  = [...realLPs.map(p=>p.metrics), ...pages.map(p=>p.metrics)];
   const totalVisitors  = allPageMetrics.reduce((a,m)=>a+m.visitors,0);
   const totalLeads     = allPageMetrics.reduce((a,m)=>a+m.leads,0);
@@ -2290,7 +2296,7 @@ export default function VantariLandingPages() {
             </div>
           </div>
 
-          {!search && (
+          {filteredRealLPs.length>0 && (
             <div style={{marginBottom:28}}>
               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
                 <div style={{fontSize:13,fontWeight:700,color:T.text,fontFamily:T.head}}>Landing pages publicadas</div>
@@ -2298,7 +2304,7 @@ export default function VantariLandingPages() {
                 {loadingReal && <Loader2 size={13} color={T.muted} style={{animation:"spin 1s linear infinite"}}/>}
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:18}}>
-                {realLPs.map(lp => <StaticLPCard key={lp.id} lp={lp} />)}
+                {filteredRealLPs.map(lp => <StaticLPCard key={lp.id} lp={lp} />)}
               </div>
             </div>
           )}

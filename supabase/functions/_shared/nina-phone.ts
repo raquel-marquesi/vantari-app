@@ -67,11 +67,21 @@ export function altWhatsAppPhone(phone: string | null): string | null {
   return null;
 }
 
-type NinaCallResult = { ok: boolean; status: number; detail: string; phoneUsed: string | null };
+type NinaCallResult = {
+  ok: boolean; status: number; detail: string; phoneUsed: string | null;
+  requestUrl?: string; finalUrl?: string; contentType?: string;
+};
 
 // dispara POST pro endpoint da Nina informado; se vier 404 e existir
 // formato alternativo plausível, tenta mais uma vez antes de desistir.
 // NÃO faz autocura sozinho — ver callNinaWithPhoneRetry para isso.
+//
+// 11/08/2026 (diagnóstico do 404 que bloqueava o envio de mensagens pro
+// Gustavo) — passou a capturar requestUrl/finalUrl/contentType em toda
+// falha: o 404 investigado nesse dia veio com corpo HTML (não JSON da API
+// da Nina), sinal de que a chamada pode estar caindo em domínio/rota
+// errada em vez de bater na API de verdade. res.url mostra se houve
+// redirect pra outro host.
 async function attemptNinaCall(
   url: string, secret: string, payload: Record<string, unknown>, phone: string | null
 ): Promise<NinaCallResult> {
@@ -81,7 +91,10 @@ async function attemptNinaCall(
     body: JSON.stringify({ ...payload, phone }),
   });
   const detail = res.ok ? "" : await res.text().catch(() => "");
-  return { ok: res.ok, status: res.status, detail, phoneUsed: phone };
+  return {
+    ok: res.ok, status: res.status, detail, phoneUsed: phone,
+    requestUrl: url, finalUrl: res.url, contentType: res.headers.get("content-type") || "",
+  };
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -130,8 +143,11 @@ export async function logNinaFailure(
       payload: {
         endpoint,
         status: result.status,
-        detail: (result.detail || "").slice(0, 500),
+        detail: (result.detail || "").slice(0, 2000),
         phone_used: result.phoneUsed,
+        request_url: result.requestUrl,
+        final_url: result.finalUrl,
+        content_type: result.contentType,
       },
     });
   } catch {

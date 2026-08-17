@@ -1,5 +1,10 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/escritorios-juridicos", "destination": "/landing-pages/01-escritorios-juridicos.html" },
+    { "source": "/antecipar-agora", "destination": "/landing-pages/02-antecipar-agora.html" },
+    { "source": "/antecipar-acao", "destination": "/landing-pages/03-antecipar-acao-trabalhista.html" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

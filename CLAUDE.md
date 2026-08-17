@@ -258,13 +258,13 @@ Plano em 11 etapas pra substituir 100% o RD Station Marketing.
 | **0** — Campos Personalizados | ✅ | Migration 001 + aba `/settings` → Campos Personalizados (CRUD dos 49 cf_*) |
 | **1** — Lead Scoring 2D | ✅ | Migration 005 + tab `/scoring → Perfil (A-D)` + matriz 2D Perfil×Interesse + thresholds configuráveis |
 | **2** — Lead Tracking | ✅ | Migration 003 + Edge Function `/track` + `public/tracker.js` + UI em /settings + timeline no perfil + filtro em /segments |
-| **3** — Meta Lead Ads | ⏭️ pulada | Requer Meta Developer App. Pendente |
+| **3** — Meta Lead Ads | ✅ | Sync real via Graph API (`sync-meta-leads`, ago/2026) — resolve pessoa via `core.resolve_person`, grava `core.events`. Pendente só do lado do usuário: criar o Meta App e cadastrar um Lead Ads Form real em `/settings → Integrações` |
 | **4** — Atrair (Social/SEO/Link Bio) | ⏳ | |
 | **5** — Conversão (Forms/Pop-ups/Web Push) | 🟡 parcial | Forms standalone ✅ (migration 006 + tab `/landing → Formulários` + rota pública `/f/:slug` + snippet `forms-embed.js`). Pop-ups e Web Push ⏳ |
 | **6** — Leads ampliado | ✅ | Migration 004 + 4 abas (Leads / Empresas / Importações / Exportações) + 8 categorias de Atividades no perfil |
-| **7** — Analisar (Canais/UTM/Atribuição) | ⏳ | |
+| **7** — Analisar (Canais/UTM/Atribuição) | ✅ | UTM first-touch em `core.persons` + `core.channel_of` + RPC `core.get_channel_funnel` (migration 31/07) + aba `/dashboard → Canais` (`ChannelSection`) já ligada e com dado real. Custo/ROI por canal ainda dependem de conectar Google Ads/Meta Ads (Etapa 8) |
 | **8** — GA4 + Google Ads | ⏳ | |
-| **9** — Relacionar (WhatsApp/SMS/Chatbot) | ⏳ | WhatsApp via Meta Cloud API (oficial) |
+| **9** — Relacionar (WhatsApp/SMS/Chatbot) | 🟡 parcial | WhatsApp ✅ — coberto pela **Nina** (sistema federado próprio, WhatsApp Business API em produção, banco próprio numa VPS separada). Decisão consciente: **não duplicar** WhatsApp aqui em `/integrations`. SMS/Chatbot fora da Nina ⏳ |
 | **10** — Validador Email + Lista Inteligente | ⏳ | |
 | **11** — Polimento + cutover | 🟡 parcial | Importador de leads RD turbinado (preset + bulk upsert) ✅. Importador de templates (HTML + BeeFree JSON) ✅. **Biblioteca de 5 templates de email** ✅ (EMAIL_BODIES + iframe preview + aba "Biblioteca Vantari"). **Biblioteca de 3 LPs Vantari** ✅ (LP_PREVIEW_BODIES + browser-frame + LibraryView + 16 MODULAR_BLOCKS). Importador de segmentos: usuário recriará manualmente. Importador de campanhas históricas ⏳. Cutover ⏳ |
 
@@ -303,6 +303,26 @@ Senhas gerenciadas via Supabase Auth. Para redefinir: `UPDATE auth.users SET enc
 - Perfil D: 0–19 pts
 
 **MQL = Perfil A ou B com Interesse Hot ou SQL** (matriz 2D em `/scoring → Perfil`)
+
+## Scoring "Vantari Crédito" — Etapa 1 (motor novo, coexiste com o modelo RD 2D acima)
+
+Migration `20260623000007_scoring_vantari_etapa1.sql` — score cumulativo ponderado
+sobre `core.person_attributes` (chave/valor), configurável em `mkt.score_rules` +
+`mkt.score_bands`, resultado em `mkt.lead_scores.score_inicial`/`segment_inicial`.
+
+- **Bandas (produção, ago/2026)**: Prioritário ≥ 35 · Interessado ≥ 25 · Educativo ≥ 15 · Descartado < 15
+- Alimentado por 3 fontes, todas ligadas: **Nina** (WhatsApp, envia `attributes` via `/ingest`
+  — cobre `conhece_processo`/`momento` quase sempre, o resto só se o cliente falar
+  espontaneamente; por decisão de negócio da Nina, ela **nunca pergunta ativamente**
+  `valor_estimado`/`nivel_urgencia` pra não gerar expectativa antes da análise do time),
+  **formulário público** (`/f/:slug` → campos com `fields[].scoring_key` em `mkt.forms`),
+  e **tracking de site** (`page_visits` → `engajamento`).
+- ⚠️ Corrigido em 17/08/2026 (`20260817000001`/`20260817000002`): a migration original
+  tinha sido aplicada só pela metade em produção (`core.set_person_attributes` e o
+  trigger de recompute nunca existiram; `mkt.on_form_submission` nunca roteava
+  `payload.attributes`; `engajamento` nunca era calculado) — motor ficou com
+  `mkt.lead_scores` zerado desde que foi configurado, sem nenhum erro visível.
+  Confirmado corrigido e funcionando ponta a ponta nessa data.
 
 ## Estágios do funil
 

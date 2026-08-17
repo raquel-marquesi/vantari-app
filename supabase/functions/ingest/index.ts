@@ -165,6 +165,7 @@ serve(async (req) => {
   });
   if (evErr) {
     // pessoa já resolvida; falha só no log → reporta mas não perde o lead
+    console.error("ingest: evento não registrado", { personId, source, eventType, detail: evErr.message });
     return jsonResp({ person_id: personId, warning: "evento não registrado", detail: evErr.message }, 207);
   }
 
@@ -178,6 +179,7 @@ serve(async (req) => {
     });
     if (attrErr) {
       // não-fatal: pessoa e evento já gravados
+      console.error("ingest: atributos não gravados", { personId, source, attributes: body.attributes, detail: attrErr.message });
       return jsonResp({ person_id: personId, source, event_type: eventType,
         warning: "atributos não gravados", detail: attrErr.message }, 207);
     }
@@ -198,6 +200,7 @@ serve(async (req) => {
     });
     if (dealErr) {
       // não-fatal: pessoa e evento já gravados, só o negócio que falhou
+      console.error("ingest: negócio não criado", { personId, source, processo: body.processo, detail: dealErr.message });
       return jsonResp({ person_id: personId, source, event_type: eventType,
         warning: "negócio não criado", detail: dealErr.message }, 207);
     }

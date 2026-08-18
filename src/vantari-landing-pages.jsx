@@ -1170,10 +1170,14 @@ const PageCard = ({ page, onEdit, onClone, onDelete }) => {
    direto pelo Vercel. As métricas vêm de tracked_pages + page_visits + forms.
 ════════════════════════════════════════════════════════════════════════ */
 const REAL_LPS = [
-  { id:"lp-01", name:"Escritórios Jurídicos (B2B)",   path:"/landing-pages/01-escritorios-juridicos.html",       formSlug:"escritorios-juridicos" },
-  { id:"lp-02", name:"Antecipar Agora",                path:"/landing-pages/02-antecipar-agora.html",             formSlug:"antecipar-agora" },
-  { id:"lp-03", name:"Antecipar Ação Trabalhista",     path:"/landing-pages/03-antecipar-acao-trabalhista.html",  formSlug:"antecipar-acao" },
+  { id:"lp-01", name:"Escritórios Jurídicos (B2B)",   path:"/landing-pages/01-escritorios-juridicos.html",       liveUrl:"https://credito.vantari.com.br/escritorios-juridicos", formSlug:"escritorios-juridicos" },
+  { id:"lp-02", name:"Antecipar Agora",                path:"/landing-pages/02-antecipar-agora.html",             liveUrl:"https://credito.vantari.com.br/antecipar-agora",       formSlug:"antecipar-agora" },
+  { id:"lp-03", name:"Antecipar Ação Trabalhista",     path:"/landing-pages/03-antecipar-acao-trabalhista.html",  liveUrl:"https://credito.vantari.com.br/antecipar-acao",        formSlug:"antecipar-acao" },
 ];
+// tracked_pages guarda tanto a URL antiga (next.vantari.com.br/landing-pages/0X-...html)
+// quanto a nova (credito.vantari.com.br/<slug>) desde a troca de domínio (ago/2026) —
+// uma LP pode ter métricas espalhadas nas duas linhas, então soma as duas.
+const lpMatchesTrackedUrl = (lp, url) => !!url && (url.endsWith(lp.path) || url.endsWith(`/${lp.formSlug}`));
 
 const StaticLPCard = ({ lp }) => {
   const [hov,setHov] = useState(false);
@@ -1185,7 +1189,7 @@ const StaticLPCard = ({ lp }) => {
         <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:8,marginBottom:6}}>
           <div>
             <div style={{fontSize:14,fontWeight:700,color:T.text,fontFamily:T.font,marginBottom:3}}>{lp.name}</div>
-            <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font}}>{lp.path}</div>
+            <div style={{fontSize:11,fontWeight:600,color:T.muted,fontFamily:T.font}}>{lp.liveUrl.replace("https://","")}</div>
           </div>
           <Badge label={lp.active?"Publicada · rastreada":"Sem tracking"} color={sc.text} bg={sc.bg}/>
         </div>
@@ -1204,7 +1208,7 @@ const StaticLPCard = ({ lp }) => {
         </div>
 
         <div style={{display:"flex",gap:6,borderTop:`0.5px solid ${T.border}`,paddingTop:10}}>
-          <Btn variant="secondary" size="sm" icon={IC.eye} onClick={()=>window.open(lp.path,"_blank")} style={{flex:1,justifyContent:"center"}}>Ver ao vivo</Btn>
+          <Btn variant="secondary" size="sm" icon={IC.eye} onClick={()=>window.open(lp.liveUrl,"_blank")} style={{flex:1,justifyContent:"center"}}>Ver ao vivo</Btn>
           {lp.formId && <Btn variant="secondary" size="sm" icon={IC.form} onClick={()=>window.open(`/f/${lp.formSlug}`,"_blank")} title="Ver formulário"/>}
         </div>
       </div>
@@ -2054,7 +2058,7 @@ export default function VantariLandingPages() {
       supabase.from("tracked_pages").select("id,url,active"),
       supabase.from("forms").select("id,slug,submission_count"),
     ]);
-    const trackedForLPs = (tracked || []).filter(t => REAL_LPS.some(lp => t.url && t.url.endsWith(lp.path)));
+    const trackedForLPs = (tracked || []).filter(t => REAL_LPS.some(lp => lpMatchesTrackedUrl(lp, t.url)));
     const trackedIds = trackedForLPs.map(t => t.id);
     let visits = [];
     if (trackedIds.length) {
@@ -2062,13 +2066,14 @@ export default function VantariLandingPages() {
       visits = data || [];
     }
     const result = REAL_LPS.map(lp => {
-      const tp = trackedForLPs.find(t => t.url && t.url.endsWith(lp.path));
+      const tps = trackedForLPs.filter(t => lpMatchesTrackedUrl(lp, t.url));
+      const tpIds = tps.map(t => t.id);
       const form = (forms || []).find(f => f.slug === lp.formSlug);
-      const tpVisits = tp ? visits.filter(v => v.tracked_page_id === tp.id) : [];
+      const tpVisits = visits.filter(v => tpIds.includes(v.tracked_page_id));
       const visitors = new Set(tpVisits.map(v => v.visitor_id)).size;
       const leads = form?.submission_count || 0;
       const convRate = visitors > 0 ? Math.round((leads / visitors) * 1000) / 10 : 0;
-      return { ...lp, active: tp?.active ?? false, formId: form?.id || null, metrics: { visitors, leads, convRate } };
+      return { ...lp, active: tps.some(t => t.active), formId: form?.id || null, metrics: { visitors, leads, convRate } };
     });
     setRealLPs(result);
     setLoadingReal(false);

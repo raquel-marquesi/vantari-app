@@ -31,6 +31,15 @@ const LOST_REASONS = [
   { v: "proposta_recusada", l: "Cliente recusou a proposta" },
   { v: "documentacao_incompleta", l: "Documentação incompleta" },
   { v: "sem_contato", l: "Perda de contato com o cliente" },
+  // sinais de "Quando NÃO avançar" do Playbook de captação ativa — mesmos
+  // valores gravados pelo seletor de "Perdido" em vantari-crm.jsx/vantari-crm-deal.jsx
+  { v: "idoso_sem_terceiro_confianca", l: "Idoso(a)/dificuldade de compreensão, sem terceiro de confiança" },
+  { v: "necessidade_urgente_saude_despejo_divida", l: "Precisa do dinheiro p/ saúde, despejo ou dívida em cobrança" },
+  { v: "nao_compreende_a_operacao", l: "Não conseguiu explicar a operação com as próprias palavras" },
+  { v: "recusa_advogado", l: "Recusa a participação do advogado" },
+  { v: "aceita_qualquer_valor", l: "Diz que aceita qualquer valor" },
+  { v: "acredita_valor_integral_avista", l: "Acredita que vai receber o valor integral à vista" },
+  { v: "sem_numero_processo", l: "Não tem/não consegue o número do processo" },
   { v: "outro", l: "Outro" },
 ];
 const reasonLabel = (v) => v ? (LOST_REASONS.find((r) => r.v === v)?.l || v) : "Sem motivo registrado";

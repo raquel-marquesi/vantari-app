@@ -48,8 +48,20 @@ const LOST_REASONS = [
   { v: "cliente_desistiu",            l: "Cliente desistiu da antecipação" },
   { v: "cliente_fechou_concorrente",  l: "Cliente fechou com concorrente" },
   { v: "sem_retorno",                 l: "Sem retorno do cliente" },
+  // sinais de "Quando NÃO avançar" do Playbook de captação ativa — risco de
+  // anulação judicial (estado de perigo/lesão, arts. 156/157 CC) ou de
+  // reclamação, não motivo comercial.
+  { v: "idoso_sem_terceiro_confianca",        l: "Idoso(a)/dificuldade de compreensão, sem terceiro de confiança", g: "risco" },
+  { v: "necessidade_urgente_saude_despejo_divida", l: "Precisa do dinheiro p/ saúde, despejo ou dívida em cobrança", g: "risco" },
+  { v: "nao_compreende_a_operacao",           l: "Não conseguiu explicar a operação com as próprias palavras", g: "risco" },
+  { v: "recusa_advogado",                     l: "Recusa a participação do advogado", g: "risco" },
+  { v: "aceita_qualquer_valor",               l: "Diz que aceita qualquer valor", g: "risco" },
+  { v: "acredita_valor_integral_avista",      l: "Acredita que vai receber o valor integral à vista", g: "risco" },
+  { v: "sem_numero_processo",                 l: "Não tem/não consegue o número do processo", g: "risco" },
   { v: "outro",                       l: "Outro" },
 ];
+const LOST_REASONS_COMERCIAL = LOST_REASONS.filter((r) => r.g !== "risco");
+const LOST_REASONS_RISCO = LOST_REASONS.filter((r) => r.g === "risco");
 
 // Cores de coluna por posição/tipo (won=verde, lost=coral, demais por ordem)
 const STAGE_ACCENTS = [T.blue, T.violet, T.amber, T.coral, T.green, T.faint3];
@@ -154,11 +166,13 @@ const parseCnj = (raw) => {
 };
 
 // espelha crm.avaliar_elegibilidade — só para feedback de UI
+// reclamada_em_rj NÃO entra aqui: desde a Lei 14.112/2020 (art. 83 §5º) a cessão
+// mantém prioridade mesmo com a reclamada em RJ — passou a exigir revisão manual
+// em vez de reprovação automática (ver needsManualReview, calculado à parte).
 const elegibilidadeMotivos = (f) => {
   const m = [];
   if (f.teses && f.teses.trim()) m.push("tem tese restritiva");
   if (!["negativa", "positiva_efeito_negativa"].includes(f.rda_cndt)) m.push("CNDT positiva");
-  if (f.rda_rj) m.push("reclamada em recuperação judicial");
   if (["MEI", "ME"].includes(f.rda_porte)) m.push("reclamada MEI/ME");
   if (f.rda_precatorio) m.push("paga por precatório");
   if (!f.rda_solvente) m.push("reclamada insolvente");
@@ -483,6 +497,8 @@ const EMPTY_PROC = {
   rda_rj: false, rda_precatorio: false, rda_solvente: true,
   numero_cnj: "", tribunal: "", vara: "", uf: "", fase: "Acórdão de RO",
   valor_causa: "", valor_liquido: "", teses: "",
+  execucao_suspensa: false, saida_vs_pedido_rj: "desconhecido", preocupacao_principal: "",
+  tem_proposta_concorrente: false,
   credit_type: "reclamante", modalidade: "tradicional", valor_face: "", desagio: "", captador: "",
   _autoTribunal: "", _autoVara: "", _autoUf: "",
 };
@@ -519,7 +535,8 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
   };
 
   const motivos = elegibilidadeMotivos(f);
-  const elegivelPreview = motivos.length === 0;
+  const needsManualReview = f.rda_rj && motivos.length === 0;
+  const elegivelPreview = motivos.length === 0 && !f.rda_rj;
   const faceC = reaisToCents(f.valor_face);
   const desagioN = f.desagio === "" ? null : parseFloat(String(f.desagio).replace(",", "."));
   const ofertadoC = desagioN != null ? Math.round(faceC * (1 - desagioN / 100)) : null;
@@ -594,6 +611,10 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
         reclamada_paga_precatorio: f.rda_precatorio,
         reclamada_solvente: f.rda_solvente,
         teses_restritivas: teses,
+        execucao_suspensa: f.execucao_suspensa,
+        saida_vs_pedido_rj: f.saida_vs_pedido_rj || null,
+        preocupacao_principal: f.preocupacao_principal || null,
+        tem_proposta_concorrente: f.tem_proposta_concorrente,
       }).select("id,elegivel,status").single();
       if (epr) throw epr;
 
@@ -614,7 +635,7 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
       });
       if (ed) throw ed;
 
-      onCreated({ elegivel: proc.elegivel });
+      onCreated({ elegivel: proc.elegivel, status: proc.status });
     } catch (err) {
       setError(err.message || String(err));
       setSaving(false);
@@ -681,18 +702,21 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
           </div>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "2px 0 4px" }}>
             {[
-              { k: "rda_rj", l: "Em recuperação judicial", x: "rda_solvente" },
+              { k: "rda_rj", l: "Em recuperação judicial" },
               { k: "rda_precatorio", l: "Paga por precatório" },
-              { k: "rda_solvente", l: "Solvente", x: "rda_rj" },
+              { k: "rda_solvente", l: "Solvente" },
             ].map((c) => (
               <label key={c.k} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.text, fontFamily: T.font, cursor: "pointer" }}>
-                <input type="checkbox" checked={f[c.k]} onChange={(e) => {
-                  const v = e.target.checked;
-                  setF((s) => { const n = { ...s, [c.k]: v }; if (v && c.x) n[c.x] = false; return n; });
-                }} /> {c.l}
+                <input type="checkbox" checked={f[c.k]} onChange={(e) => set(c.k, e.target.checked)} /> {c.l}
               </label>
             ))}
           </div>
+          {f.rda_rj && (
+            <div style={{ fontSize: 11, color: T.amber, margin: "-2px 0 4px", fontFamily: T.font }}>
+              Reclamada em RJ não é mais reprovação automática (Lei 14.112/2020) — entra em revisão manual.
+              "Solvente" pode ser marcado independente disso.
+            </div>
+          )}
 
           {sectionTitle(Scale, "Processo")}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -711,6 +735,35 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
             {moneyField("Valor da causa (R$)", "valor_causa")}
             {moneyField("Valor estimado líquido (R$)", "valor_liquido")}
             {field("Teses restritivas (separadas por vírgula)", "teses", "text", "ex: vínculo, grupo econômico", true)}
+          </div>
+
+          {sectionTitle(Scale, "Diagnóstico (Playbook de captação ativa)")}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Saída do reclamante x pedido de RJ</label>
+              <select value={f.saida_vs_pedido_rj} onChange={(e) => set("saida_vs_pedido_rj", e.target.value)} style={inputStyle}>
+                <option value="desconhecido">Não sei / não se aplica</option>
+                <option value="antes">Antes do pedido (concursal)</option>
+                <option value="depois">Depois do pedido (extraconcursal)</option>
+              </select>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>O que mais preocupa o cliente</label>
+              <select value={f.preocupacao_principal} onChange={(e) => set("preocupacao_principal", e.target.value)} style={inputStyle}>
+                <option value="">— não perguntado —</option>
+                <option value="valor">Valor</option>
+                <option value="prazo">Prazo</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "2px 0 4px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.text, fontFamily: T.font, cursor: "pointer" }}>
+              <input type="checkbox" checked={f.execucao_suspensa} onChange={(e) => set("execucao_suspensa", e.target.checked)} /> Execução suspensa (comunicada ao cliente)
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: T.text, fontFamily: T.font, cursor: "pointer" }}>
+              <input type="checkbox" checked={f.tem_proposta_concorrente} onChange={(e) => set("tem_proposta_concorrente", e.target.checked)} /> Já recebeu proposta de outra empresa
+            </label>
           </div>
 
           {sectionTitle(Briefcase, "Negócio inicial")}
@@ -752,10 +805,15 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
 
           {/* Prévia de elegibilidade */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, padding: "10px 12px", borderRadius: 10,
-            background: elegivelPreview ? "#F0FDF7" : "#FFF1F0", border: `1px solid ${elegivelPreview ? "#6EE7B7" : T.coral}` }}>
-            {elegivelPreview ? <CheckCircle2 size={16} color={T.green} /> : <XCircle size={16} color={T.coral} />}
-            <span style={{ fontSize: 12.5, color: elegivelPreview ? "#0F6E4E" : "#9B2C2C", fontFamily: T.font }}>
-              {elegivelPreview ? "Prévia: elegível pelos critérios informados." : `Prévia: inelegível — ${motivos.join(", ")}.`}
+            background: elegivelPreview ? "#F0FDF7" : needsManualReview ? "#FFFBEB" : "#FFF1F0",
+            border: `1px solid ${elegivelPreview ? "#6EE7B7" : needsManualReview ? T.amber : T.coral}` }}>
+            {elegivelPreview ? <CheckCircle2 size={16} color={T.green} />
+              : needsManualReview ? <AlertTriangle size={16} color={T.amber} />
+              : <XCircle size={16} color={T.coral} />}
+            <span style={{ fontSize: 12.5, color: elegivelPreview ? "#0F6E4E" : needsManualReview ? "#92650B" : "#9B2C2C", fontFamily: T.font }}>
+              {elegivelPreview ? "Prévia: elegível pelos critérios informados."
+                : needsManualReview ? "Prévia: em análise — reclamada em RJ exige revisão manual do time."
+                : `Prévia: inelegível — ${motivos.join(", ")}.`}
             </span>
           </div>
 
@@ -1096,9 +1154,9 @@ export default function CRM() {
           pipeline={pipeline}
           stages={stages}
           onClose={() => setShowNovo(false)}
-          onCreated={({ elegivel }) => {
+          onCreated={({ elegivel, status }) => {
             setShowNovo(false);
-            setToast({ elegivel });
+            setToast({ elegivel, status });
             load();
             setTimeout(() => setToast(null), 6000);
           }}
@@ -1108,11 +1166,12 @@ export default function CRM() {
       {/* Toast de veredito */}
       {toast && (
         <div style={{ position: "fixed", bottom: 24, right: 24, zIndex: 200, display: "flex", alignItems: "center", gap: 10,
-          background: T.surface, border: `1px solid ${toast.elegivel ? "#6EE7B7" : T.coral}`, borderRadius: 12,
+          background: T.surface, border: `1px solid ${toast.status === "em_analise" ? T.amber : toast.elegivel ? "#6EE7B7" : T.coral}`, borderRadius: 12,
           padding: "12px 16px", boxShadow: "0 12px 32px -12px rgba(14,26,36,.25)", fontFamily: T.font, fontSize: 13 }}>
-          {toast.elegivel ? <CheckCircle2 size={18} color={T.green} /> : <XCircle size={18} color={T.coral} />}
+          {toast.status === "em_analise" ? <AlertTriangle size={18} color={T.amber} />
+            : toast.elegivel ? <CheckCircle2 size={18} color={T.green} /> : <XCircle size={18} color={T.coral} />}
           <span style={{ color: T.ink, fontWeight: 600 }}>
-            Negócio criado — processo {toast.elegivel ? "ELEGÍVEL" : "INELEGÍVEL"}.
+            Negócio criado — processo {toast.status === "em_analise" ? "EM ANÁLISE (revisão manual)" : toast.elegivel ? "ELEGÍVEL" : "INELEGÍVEL"}.
           </span>
         </div>
       )}
@@ -1149,7 +1208,12 @@ function LostReasonModal({ onCancel, onConfirm }) {
           <label style={lSt}>Motivo</label>
           <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...iSt, marginBottom: 12 }}>
             <option value="">— selecionar —</option>
-            {LOST_REASONS.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            <optgroup label="Comercial">
+              {LOST_REASONS_COMERCIAL.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            </optgroup>
+            <optgroup label="Sinal de risco (não avançar) — Playbook">
+              {LOST_REASONS_RISCO.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            </optgroup>
           </select>
           <label style={lSt}>Detalhe {needsDetail ? "" : "(opcional)"}</label>
           <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3}

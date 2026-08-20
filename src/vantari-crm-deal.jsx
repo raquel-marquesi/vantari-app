@@ -54,8 +54,20 @@ const LOST_REASONS = [
   { v: "cliente_desistiu",            l: "Cliente desistiu da antecipação" },
   { v: "cliente_fechou_concorrente",  l: "Cliente fechou com concorrente" },
   { v: "sem_retorno",                 l: "Sem retorno do cliente" },
+  // sinais de "Quando NÃO avançar" do Playbook de captação ativa — risco de
+  // anulação judicial (estado de perigo/lesão, arts. 156/157 CC) ou de
+  // reclamação, não motivo comercial.
+  { v: "idoso_sem_terceiro_confianca",        l: "Idoso(a)/dificuldade de compreensão, sem terceiro de confiança", g: "risco" },
+  { v: "necessidade_urgente_saude_despejo_divida", l: "Precisa do dinheiro p/ saúde, despejo ou dívida em cobrança", g: "risco" },
+  { v: "nao_compreende_a_operacao",           l: "Não conseguiu explicar a operação com as próprias palavras", g: "risco" },
+  { v: "recusa_advogado",                     l: "Recusa a participação do advogado", g: "risco" },
+  { v: "aceita_qualquer_valor",               l: "Diz que aceita qualquer valor", g: "risco" },
+  { v: "acredita_valor_integral_avista",      l: "Acredita que vai receber o valor integral à vista", g: "risco" },
+  { v: "sem_numero_processo",                 l: "Não tem/não consegue o número do processo", g: "risco" },
   { v: "outro",                       l: "Outro" },
 ];
+const LOST_REASONS_COMERCIAL = LOST_REASONS.filter((r) => r.g !== "risco");
+const LOST_REASONS_RISCO = LOST_REASONS.filter((r) => r.g === "risco");
 
 /* ─── helpers (duplicados do form, padrão self-contained) ─── */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
@@ -79,6 +91,26 @@ const maskMoney = (raw) => { let s = String(raw).replace(/[^\d,]/g, ""); const c
 const fmtBRL = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const creditTypeLabel = (t) => t === "advogado_honorario" ? "Honorário (adv.)" : t === "reclamante" ? "Reclamante" : t || "—";
 const fmtDateTime = (s) => s ? new Date(s).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+const toDatetimeLocal = (iso) => {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+const fromDatetimeLocal = (v) => v ? new Date(v).toISOString() : null;
+const hoursBetween = (a, b) => (a && b) ? (new Date(b) - new Date(a)) / 36e5 : null;
+
+const CHECKLIST_ITEMS = [
+  { k: "proposta_enviada_em", l: "Proposta enviada por escrito", type: "datetime" },
+  { k: "assinatura_em", l: "Data da assinatura", type: "datetime" },
+  { k: "advogado_contatado", l: "Advogado do processo contatado e ciente", type: "bool" },
+  { k: "honorarios_tratados", l: "Honorários contratuais tratados na operação", type: "bool" },
+  { k: "termo_ciencia_gravado", l: "Termo de ciência assinado, com gravação em vídeo", type: "bool" },
+  { k: "cliente_explicou_proprias_palavras", l: "Cliente explicou com as próprias palavras (na gravação)", type: "bool" },
+  { k: "contrato_entregue_copia", l: "Contrato entregue em cópia ao cliente", type: "bool" },
+  { k: "registro_conversa_completo", l: "Registro completo da conversa no CRM", type: "bool" },
+];
+const checklistDoneCount = (cl) => CHECKLIST_ITEMS.filter((i) => !!(cl || {})[i.k]).length;
 
 const ACT_TYPES = [
   { v: "note", l: "Nota", icon: StickyNote },
@@ -286,8 +318,9 @@ export default function DealDetail() {
   const [posting, setPosting] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const [editing, setEditing] = useState(null); // 'deal' | 'processo' | 'person' | 'company'
+  const [editing, setEditing] = useState(null); // 'deal' | 'processo' | 'person' | 'company' | 'advogado' | 'checklist'
   const [form, setForm] = useState({});
+  const [advogado, setAdvogado] = useState(null); // crm.processo_advogados + core.persons (advogado do reclamante)
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
@@ -312,6 +345,12 @@ export default function DealDetail() {
           const { data: co } = await supabase.schema("core").from("companies").select("*").eq("id", p.reclamada_company_id).single();
           setCompany(co || null);
         } else setCompany(null);
+        const { data: pa } = await crm.from("processo_advogados").select("*")
+          .eq("processo_id", p.id).eq("papel", "reclamante").order("created_at").limit(1).maybeSingle();
+        if (pa) {
+          const { data: adPerson } = await supabase.schema("core").from("persons").select("*").eq("id", pa.person_id).single();
+          setAdvogado({ ...pa, person: adPerson || null });
+        } else setAdvogado(null);
       }
       if (d.person_id) {
         const { data: pe } = await supabase.schema("core").from("persons").select("*").eq("id", d.person_id).single();
@@ -373,7 +412,19 @@ export default function DealDetail() {
     setLostModalStage(null);
     load();
   };
-  const setOutcome = async (kind) => { const t = stages.find((s) => s.kind === kind); if (t) moveStage(t.id); };
+  const setOutcome = async (kind) => {
+    const t = stages.find((s) => s.kind === kind);
+    if (!t) return;
+    if (kind === "won") {
+      const done = checklistDoneCount(deal.checklist_formalizacao);
+      if (done < CHECKLIST_ITEMS.length) {
+        const missing = CHECKLIST_ITEMS.filter((i) => !(deal.checklist_formalizacao || {})[i.k]).map((i) => `- ${i.l}`).join("\n");
+        const ok = window.confirm(`Checklist de formalização incompleto (${done}/${CHECKLIST_ITEMS.length}).\n\nFaltam:\n${missing}\n\nMarcar como Ganho mesmo assim?`);
+        if (!ok) return;
+      }
+    }
+    moveStage(t.id);
+  };
   const confirmLostReason = async (reason, detail) => {
     await moveStage(lostModalStage, { lost_reason: reason, lost_reason_detail: detail || null });
   };
@@ -420,11 +471,28 @@ export default function DealDetail() {
       reclamada_porte: processo.reclamada_porte || "Grande", reclamada_em_rj: !!processo.reclamada_em_rj,
       reclamada_paga_precatorio: !!processo.reclamada_paga_precatorio, reclamada_solvente: !!processo.reclamada_solvente,
       teses: (processo.teses_restritivas || []).join(", "),
+      execucao_suspensa: !!processo.execucao_suspensa, saida_vs_pedido_rj: processo.saida_vs_pedido_rj || "desconhecido",
+      preocupacao_principal: processo.preocupacao_principal || "", tem_proposta_concorrente: !!processo.tem_proposta_concorrente,
     });
     if (card === "person") setForm({
       full_name: person.full_name || "", cpf: onlyDigits(person.cpf), primary_phone: onlyDigits(person.primary_phone), primary_email: person.primary_email || "",
     });
     if (card === "company") setForm({ name: company?.name || "", cnpj: onlyDigits(company?.cnpj) });
+    if (card === "advogado") setForm({
+      full_name: advogado?.person?.full_name || "", primary_phone: onlyDigits(advogado?.person?.primary_phone || ""),
+      primary_email: advogado?.person?.primary_email || "", oab: advogado?.oab || "",
+      percentual_honorarios: advogado?.percentual_honorarios != null ? String(advogado.percentual_honorarios) : "",
+      contato_confirmado: !!advogado?.contato_confirmado,
+    });
+    if (card === "checklist") {
+      const cl = deal.checklist_formalizacao || {};
+      setForm({
+        proposta_enviada_em: toDatetimeLocal(cl.proposta_enviada_em), assinatura_em: toDatetimeLocal(cl.assinatura_em),
+        advogado_contatado: !!cl.advogado_contatado, honorarios_tratados: !!cl.honorarios_tratados,
+        termo_ciencia_gravado: !!cl.termo_ciencia_gravado, cliente_explicou_proprias_palavras: !!cl.cliente_explicou_proprias_palavras,
+        contrato_entregue_copia: !!cl.contrato_entregue_copia, registro_conversa_completo: !!cl.registro_conversa_completo,
+      });
+    }
     setEditing(card);
   };
   const cancelEdit = () => { setEditing(null); setForm({}); };
@@ -449,7 +517,45 @@ export default function DealDetail() {
       reclamada_cndt: form.reclamada_cndt, reclamada_porte: form.reclamada_porte,
       reclamada_em_rj: form.reclamada_em_rj, reclamada_paga_precatorio: form.reclamada_paga_precatorio, reclamada_solvente: form.reclamada_solvente,
       teses_restritivas: form.teses.split(",").map((t) => t.trim()).filter(Boolean),
+      execucao_suspensa: form.execucao_suspensa, saida_vs_pedido_rj: form.saida_vs_pedido_rj || null,
+      preocupacao_principal: form.preocupacao_principal || null, tem_proposta_concorrente: form.tem_proposta_concorrente,
     }).eq("id", processo.id);
+    setSaving(false);
+    if (e) { setError(e.message); return; }
+    cancelEdit(); load();
+  };
+  const saveAdvogado = async () => {
+    setSaving(true); setError(null);
+    try {
+      const { data: personId, error: ep } = await supabase.schema("core").rpc("resolve_person", {
+        p_workspace: WORKSPACE_VANTARI, p_cpf: null, p_phone: form.primary_phone || null,
+        p_email: form.primary_email || null, p_name: form.full_name || null, p_source: "crm",
+      });
+      if (ep) throw ep;
+      const { error: ea } = await supabase.schema("crm").from("processo_advogados").upsert({
+        workspace_id: WORKSPACE_VANTARI, processo_id: processo.id, person_id: personId,
+        papel: "reclamante", oab: form.oab || null,
+        percentual_honorarios: form.percentual_honorarios === "" ? null : parseFloat(String(form.percentual_honorarios).replace(",", ".")),
+        contato_confirmado: form.contato_confirmado,
+      }, { onConflict: "processo_id,person_id" });
+      if (ea) throw ea;
+      cancelEdit(); load();
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const saveChecklist = async () => {
+    setSaving(true); setError(null);
+    const { error: e } = await supabase.schema("crm").from("deals").update({
+      checklist_formalizacao: {
+        proposta_enviada_em: fromDatetimeLocal(form.proposta_enviada_em), assinatura_em: fromDatetimeLocal(form.assinatura_em),
+        advogado_contatado: form.advogado_contatado, honorarios_tratados: form.honorarios_tratados,
+        termo_ciencia_gravado: form.termo_ciencia_gravado, cliente_explicou_proprias_palavras: form.cliente_explicou_proprias_palavras,
+        contrato_entregue_copia: form.contrato_entregue_copia, registro_conversa_completo: form.registro_conversa_completo,
+      },
+    }).eq("id", deal.id);
     setSaving(false);
     if (e) { setError(e.message); return; }
     cancelEdit(); load();
@@ -505,7 +611,7 @@ export default function DealDetail() {
   );
 
   const valor = deal ? (deal.valor_ofertado_cents ?? deal.valor_face_cents) : 0;
-  const eb = processo ? { ok: processo.elegivel } : null;
+  const eb = processo ? { ok: processo.elegivel, manual: processo.status === "em_analise" && processo.reclamada_em_rj } : null;
 
   return (
     <div style={{ minHeight: "100vh", background: T.bg, fontFamily: T.font }}>
@@ -680,17 +786,34 @@ export default function DealDetail() {
                           {eselect("Porte", "reclamada_porte", PORTE_OPTS)}
                         </div>
                         <div style={{ marginTop: 4 }}>
-                          {echeck("Em recuperação judicial", "reclamada_em_rj", "reclamada_solvente")}
+                          {echeck("Em recuperação judicial", "reclamada_em_rj")}
                           {echeck("Paga por precatório", "reclamada_paga_precatorio")}
-                          {echeck("Solvente", "reclamada_solvente", "reclamada_em_rj")}
+                          {echeck("Solvente", "reclamada_solvente")}
                         </div>
                         {efield("Teses restritivas (vírgula)", "teses", { full: true })}
-                        <div style={{ fontSize: 11, color: T.faint3, marginTop: 2 }}>A elegibilidade recalcula ao salvar.</div>
+                        <div style={{ fontSize: 11, color: T.faint3, marginTop: 2 }}>A elegibilidade recalcula ao salvar. Reclamada em RJ não reprova mais sozinha — entra em revisão manual.</div>
+                        <div style={{ marginTop: 10, fontWeight: 700, fontSize: 12, color: T.ink, fontFamily: T.head }}>Diagnóstico (Playbook de captação ativa)</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 6 }}>
+                          {eselect("Saída x pedido de RJ", "saida_vs_pedido_rj", [
+                            { v: "desconhecido", l: "Não sei / não se aplica" }, { v: "antes", l: "Antes (concursal)" }, { v: "depois", l: "Depois (extraconcursal)" },
+                          ])}
+                          {eselect("O que mais preocupa", "preocupacao_principal", [
+                            { v: "", l: "— não perguntado —" }, { v: "valor", l: "Valor" }, { v: "prazo", l: "Prazo" }, { v: "outro", l: "Outro" },
+                          ])}
+                        </div>
+                        <div style={{ marginTop: 4 }}>
+                          {echeck("Execução suspensa (comunicada ao cliente)", "execucao_suspensa")}
+                          {echeck("Já recebeu proposta de outra empresa", "tem_proposta_concorrente")}
+                        </div>
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 10, background: eb.ok ? "#F0FDF7" : "#FFF1F0", border: `1px solid ${eb.ok ? "#6EE7B7" : T.coral}`, color: eb.ok ? T.green : T.coral, fontSize: 12, fontWeight: 700 }}>
-                          {eb.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />} {eb.ok ? "Elegível" : "Inelegível"}
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 99, marginBottom: 10,
+                          background: eb.manual ? "#FFFBEB" : eb.ok ? "#F0FDF7" : "#FFF1F0",
+                          border: `1px solid ${eb.manual ? T.amber : eb.ok ? "#6EE7B7" : T.coral}`,
+                          color: eb.manual ? "#92650B" : eb.ok ? T.green : T.coral, fontSize: 12, fontWeight: 700 }}>
+                          {eb.manual ? <AlertTriangle size={13} /> : eb.ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
+                          {" "}{eb.manual ? "Em análise — revisão manual (RJ)" : eb.ok ? "Elegível" : "Inelegível"}
                         </div>
                         <Row label="CNJ" value={processo.numero_cnj} />
                         <Row label="Tribunal" value={processo.tribunal} />
@@ -702,8 +825,65 @@ export default function DealDetail() {
                         <Row label="CNDT" value={processo.reclamada_cndt} />
                         <Row label="Porte reclamada" value={processo.reclamada_porte} />
                         <Row label="Teses restritivas" value={(processo.teses_restritivas || []).join(", ") || "nenhuma"} />
+                        <Row label="Saída x pedido de RJ" value={{ antes: "Antes (concursal)", depois: "Depois (extraconcursal)", desconhecido: "Não sei / não se aplica" }[processo.saida_vs_pedido_rj] || "—"} />
+                        <Row label="O que mais preocupa" value={{ valor: "Valor", prazo: "Prazo", outro: "Outro" }[processo.preocupacao_principal] || "—"} />
+                        <Row label="Execução suspensa" value={processo.execucao_suspensa ? "Sim" : "Não"} />
+                        <Row label="Proposta concorrente" value={processo.tem_proposta_concorrente ? "Sim" : "Não"} />
                       </>
                     )}
+                </EditCard>
+
+                <EditCard title="Advogado do processo" icon={Scale} canEdit={!!processo} editing={editing === "advogado"} saving={saving}
+                  onEdit={() => startEdit("advogado")} onCancel={cancelEdit} onSave={saveAdvogado}>
+                  {!processo ? <div style={{ color: T.muted, fontSize: 13 }}>Sem processo vinculado.</div>
+                    : editing === "advogado" ? (
+                      <div>
+                        {efield("Nome", "full_name", { full: true })}
+                        {efield("Telefone", "primary_phone", { mask: maskPhone })}
+                        {efield("E-mail", "primary_email", { type: "email" })}
+                        {efield("OAB", "oab")}
+                        {efield("% Honorários combinados", "percentual_honorarios")}
+                        <div style={{ marginTop: 4 }}>{echeck("Contato confirmado", "contato_confirmado")}</div>
+                      </div>
+                    ) : !advogado ? (
+                      <div style={{ color: T.muted, fontSize: 13 }}>Nenhum advogado registrado ainda — dado do diagnóstico (playbook, seção 2).</div>
+                    ) : (
+                      <>
+                        <Row label="Nome" value={advogado.person?.full_name} />
+                        <Row label="Telefone" value={advogado.person?.primary_phone ? maskPhone(advogado.person.primary_phone) : "—"} />
+                        <Row label="E-mail" value={advogado.person?.primary_email} />
+                        <Row label="OAB" value={advogado.oab} />
+                        <Row label="% Honorários" value={advogado.percentual_honorarios != null ? `${Number(advogado.percentual_honorarios).toFixed(1)}%` : "—"} />
+                        <Row label="Contato confirmado" value={advogado.contato_confirmado ? "Sim" : "Não"} />
+                      </>
+                    )}
+                </EditCard>
+
+                <EditCard title={`Checklist de formalização (${checklistDoneCount(deal.checklist_formalizacao)}/${CHECKLIST_ITEMS.length})`} icon={ListChecks}
+                  editing={editing === "checklist"} saving={saving} onEdit={() => startEdit("checklist")} onCancel={cancelEdit} onSave={saveChecklist}>
+                  {editing === "checklist" ? (
+                    <div>
+                      {efield("Proposta enviada em", "proposta_enviada_em", { type: "datetime-local" })}
+                      {efield("Assinatura em", "assinatura_em", { type: "datetime-local" })}
+                      {form.proposta_enviada_em && form.assinatura_em && (
+                        <div style={{ fontSize: 11, color: hoursBetween(fromDatetimeLocal(form.proposta_enviada_em), fromDatetimeLocal(form.assinatura_em)) < 48 ? T.coral : T.faint3, marginBottom: 8 }}>
+                          {Math.round(hoursBetween(fromDatetimeLocal(form.proposta_enviada_em), fromDatetimeLocal(form.assinatura_em)))}h entre proposta e assinatura
+                          {hoursBetween(fromDatetimeLocal(form.proposta_enviada_em), fromDatetimeLocal(form.assinatura_em)) < 48 ? " — abaixo de 48h, alerta do playbook" : ""}
+                        </div>
+                      )}
+                      {CHECKLIST_ITEMS.filter((i) => i.type === "bool").map((i) => (
+                        <div key={i.k} style={{ marginTop: 2 }}>{echeck(i.l, i.k)}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      {CHECKLIST_ITEMS.map((i) => (
+                        <Row key={i.k} label={i.l}
+                          value={i.type === "datetime" ? fmtDateTime((deal.checklist_formalizacao || {})[i.k]) || "—"
+                            : (deal.checklist_formalizacao || {})[i.k] ? "Sim" : "Não"} />
+                      ))}
+                    </>
+                  )}
                 </EditCard>
 
                 <EditCard title="Reclamada" icon={Building2} canEdit={!!company} editing={editing === "company"} saving={saving}
@@ -810,7 +990,12 @@ function LostReasonModal({ busy, onCancel, onConfirm }) {
           <label style={labelSt}>Motivo</label>
           <select value={reason} onChange={(e) => setReason(e.target.value)} style={{ ...inputSt, marginBottom: 12 }}>
             <option value="">— selecionar —</option>
-            {LOST_REASONS.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            <optgroup label="Comercial">
+              {LOST_REASONS_COMERCIAL.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            </optgroup>
+            <optgroup label="Sinal de risco (não avançar) — Playbook">
+              {LOST_REASONS_RISCO.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+            </optgroup>
           </select>
           <label style={labelSt}>Detalhe {needsDetail ? "" : "(opcional)"}</label>
           <textarea value={detail} onChange={(e) => setDetail(e.target.value)} rows={3}

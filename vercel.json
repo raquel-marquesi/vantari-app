@@ -4,6 +4,7 @@
     { "source": "/antecipar-agora", "destination": "/landing-pages/02-antecipar-agora.html" },
     { "source": "/antecipar-acao", "destination": "/landing-pages/03-antecipar-acao-trabalhista.html" },
     { "source": "/recuperacao-judicial", "destination": "/landing-pages/04-recuperacao-judicial.html" },
+    { "source": "/advogados-recuperacao-judicial", "destination": "/landing-pages/05-advogados-recuperacao-judicial.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -1174,6 +1174,7 @@ const REAL_LPS = [
   { id:"lp-02", name:"Antecipar Agora",                path:"/landing-pages/02-antecipar-agora.html",             liveUrl:"https://credito.vantari.com.br/antecipar-agora",       formSlug:"antecipar-agora" },
   { id:"lp-03", name:"Antecipar Ação Trabalhista",     path:"/landing-pages/03-antecipar-acao-trabalhista.html",  liveUrl:"https://credito.vantari.com.br/antecipar-acao",        formSlug:"antecipar-acao" },
   { id:"lp-04", name:"Recuperação Judicial",           path:"/landing-pages/04-recuperacao-judicial.html",        liveUrl:"https://credito.vantari.com.br/recuperacao-judicial",  formSlug:"recuperacao-judicial" },
+  { id:"lp-05", name:"Advogados · Recuperação Judicial", path:"/landing-pages/05-advogados-recuperacao-judicial.html", liveUrl:"https://credito.vantari.com.br/advogados-recuperacao-judicial", formSlug:"advogados-recuperacao-judicial" },
 ];
 // tracked_pages guarda tanto a URL antiga (next.vantari.com.br/landing-pages/0X-...html)
 // quanto a nova (credito.vantari.com.br/<slug>) desde a troca de domínio (ago/2026) —

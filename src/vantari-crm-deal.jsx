@@ -312,6 +312,7 @@ export default function DealDetail() {
   const [person, setPerson] = useState(null);
   const [company, setCompany] = useState(null);
   const [stages, setStages] = useState([]);
+  const [pipelines, setPipelines] = useState([]);
   const [acts, setActs] = useState([]);
   const [actType, setActType] = useState("note");
   const [actContent, setActContent] = useState("");
@@ -333,11 +334,12 @@ export default function DealDetail() {
       const { data: d, error: e1 } = await crm.from("deals").select("*").eq("id", dealId).single();
       if (e1) throw e1;
       setDeal(d);
-      const [{ data: st }, { data: ac }] = await Promise.all([
+      const [{ data: st }, { data: ac }, { data: pls }] = await Promise.all([
         crm.from("stages").select("id,name,position,kind").eq("pipeline_id", d.pipeline_id).order("position"),
         crm.from("activities").select("*").eq("deal_id", dealId).order("created_at", { ascending: false }),
+        crm.from("pipelines").select("id,name").order("is_default", { ascending: false }),
       ]);
-      setStages(st || []); setActs(ac || []);
+      setStages(st || []); setActs(ac || []); setPipelines(pls || []);
       if (d.processo_id) {
         const { data: p } = await crm.from("processos").select("*").eq("id", d.processo_id).single();
         setProcesso(p || null);
@@ -410,6 +412,18 @@ export default function DealDetail() {
     setBusy(false);
     if (e) { setError(e.message); return; }
     setLostModalStage(null);
+    load();
+  };
+  const movePipeline = async (newPipelineId) => {
+    if (!deal || newPipelineId === deal.pipeline_id) return;
+    setBusy(true);
+    const crm = supabase.schema("crm");
+    const { data: st } = await crm.from("stages").select("id,position").eq("pipeline_id", newPipelineId).order("position").limit(1);
+    const firstStage = st?.[0];
+    if (!firstStage) { setBusy(false); setError("Pipeline de destino sem estágios configurados."); return; }
+    const { error: e } = await crm.from("deals").update({ pipeline_id: newPipelineId, stage_id: firstStage.id }).eq("id", deal.id);
+    setBusy(false);
+    if (e) { setError(e.message); return; }
     load();
   };
   const setOutcome = async (kind) => {
@@ -646,6 +660,13 @@ export default function DealDetail() {
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {pipelines.length > 1 && (
+                  <select value={deal.pipeline_id} disabled={busy} onChange={(e) => movePipeline(e.target.value)}
+                    title="Mover negócio para outro pipeline (entra no 1º estágio de lá)"
+                    style={{ padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, fontWeight: 600, color: T.ink, background: T.surface, fontFamily: T.font, cursor: "pointer" }}>
+                    {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                )}
                 <select value={deal.stage_id} disabled={busy} onChange={(e) => moveStage(e.target.value)}
                   style={{ padding: "8px 12px", border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, fontWeight: 600, color: T.ink, background: T.surface, fontFamily: T.font, cursor: "pointer" }}>
                   {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}

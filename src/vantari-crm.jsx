@@ -1080,7 +1080,8 @@ export default function CRM() {
               </select>
             )}
             <div style={{ fontSize: 13, color: T.muted, fontFamily: T.font, marginTop: 4 }}>
-              {pipeline ? pipeline.name : "Pipeline"} · {fmtBRL(totalGeral)} em {filteredDeals.length} {filteredDeals.length === 1 ? "negócio" : "negócios"}
+              {pipelines.length <= 1 && <>{pipeline ? pipeline.name : "Pipeline"} · </>}
+              {fmtBRL(totalGeral)} em {filteredDeals.length} {filteredDeals.length === 1 ? "negócio" : "negócios"}
               {activeFilterCount > 0 && filteredDeals.length !== deals.length && (
                 <span style={{ color: T.faint3 }}> (de {deals.length} no total)</span>
               )}

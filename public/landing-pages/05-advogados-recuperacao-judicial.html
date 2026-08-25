@@ -1482,7 +1482,7 @@
   (function () {
     var cfg = window.VANTARI_NEXT || {};
     var base = (cfg.base || '').replace(/\/+$/, '');
-    var formUrl = base + '/f/' + (cfg.formSlug || '');
+    var formUrl = base + '/f/' + (cfg.formSlug || '') + (window.location.search || '');
     var configured = !!base;
     document.querySelectorAll('[data-next-form-slot]').forEach(function (slot) {
       if (!configured) return;

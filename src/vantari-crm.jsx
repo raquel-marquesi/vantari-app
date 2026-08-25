@@ -444,9 +444,17 @@ function PrevisaoView({ stages, deals }) {
 }
 
 /* ─── Coluna do estágio ─── */
-function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, setDraggingId }) {
+function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, setDraggingId, onRenameStage }) {
   const [dragOver, setDragOver] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(stage.name);
   const total = deals.reduce((s, d) => s + (d.valor_ofertado_cents ?? d.valor_face_cents ?? 0), 0);
+  const commitName = () => {
+    const next = nameDraft.trim();
+    setEditingName(false);
+    if (next && next !== stage.name) onRenameStage?.(stage.id, next);
+    else setNameDraft(stage.name);
+  };
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; if (!dragOver) setDragOver(true); }}
@@ -461,9 +469,20 @@ function StageColumn({ stage, accent, deals, personMap, onDropDeal, draggingId, 
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, overflow: "hidden", flexShrink: 0 }}>
         <div style={{ height: 3, background: accent }} />
         <div style={{ padding: "10px 12px" }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.04em", color: T.ink, fontFamily: T.head, textTransform: "uppercase" }}>
-            {stage.name}
-          </div>
+          {editingName ? (
+            <input autoFocus value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => { if (e.key === "Enter") commitName(); if (e.key === "Escape") { setNameDraft(stage.name); setEditingName(false); } }}
+              style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.04em", color: T.ink, fontFamily: T.head, textTransform: "uppercase",
+                width: "100%", border: `1px solid ${T.teal}`, borderRadius: 6, padding: "2px 5px", outline: "none", boxSizing: "border-box" }} />
+          ) : (
+            <div onDoubleClick={() => { setNameDraft(stage.name); setEditingName(true); }}
+              title="Duplo clique para renomear"
+              style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: "0.04em", color: T.ink, fontFamily: T.head, textTransform: "uppercase", cursor: "text" }}>
+              {stage.name}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: T.muted, fontFamily: T.mono, marginTop: 2 }}>
             {fmtBRL(total)} · {deals.length} {deals.length === 1 ? "negócio" : "negócios"}
           </div>
@@ -923,6 +942,10 @@ export default function CRM() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [pipeline, setPipeline] = useState(null);
+  const [pipelines, setPipelines] = useState([]);
+  const [pipelineId, setPipelineId] = useState(() => {
+    try { return localStorage.getItem("vantari_crm_pipeline_id") || null; } catch { return null; }
+  });
   const [stages, setStages] = useState([]);
   const [deals, setDeals] = useState([]);
   const [personMap, setPersonMap] = useState({});
@@ -941,9 +964,12 @@ export default function CRM() {
     try {
       const crm = supabase.schema("crm");
       const { data: pipes, error: e1 } = await crm
-        .from("pipelines").select("id,name").eq("is_default", true).limit(1);
+        .from("pipelines").select("id,name,is_default").order("is_default", { ascending: false });
       if (e1) throw e1;
-      const pipe = pipes?.[0];
+      setPipelines(pipes || []);
+      const pipe = (pipes || []).find((p) => p.id === pipelineId)
+        || (pipes || []).find((p) => p.is_default)
+        || pipes?.[0];
       if (!pipe) { setPipeline(null); setStages([]); setDeals([]); setLoading(false); return; }
       setPipeline(pipe);
 
@@ -976,9 +1002,21 @@ export default function CRM() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [pipelineId]);
 
   useEffect(() => { load(); }, [load]);
+
+  const switchPipeline = (id) => {
+    setPipelineId(id);
+    try { localStorage.setItem("vantari_crm_pipeline_id", id); } catch { /* ignore */ }
+  };
+
+  const renameStage = async (stageId, newName) => {
+    const prevStages = stages;
+    setStages((ss) => ss.map((s) => (s.id === stageId ? { ...s, name: newName } : s)));
+    const { error: e } = await supabase.schema("crm").from("stages").update({ name: newName }).eq("id", stageId);
+    if (e) { setStages(prevStages); setError(e.message); }
+  };
 
   const filteredDeals = useMemo(() => {
     const min = filters.valorMin ? parseInt(filters.valorMin, 10) * 100 : null;
@@ -1034,6 +1072,13 @@ export default function CRM() {
             <h1 style={{ fontSize: 26, fontWeight: 800, color: T.ink, fontFamily: T.head, letterSpacing: "-0.03em", margin: 0 }}>
               Negócios
             </h1>
+            {pipelines.length > 1 && (
+              <select value={pipeline?.id || ""} onChange={(e) => switchPipeline(e.target.value)}
+                style={{ marginTop: 8, padding: "5px 9px", border: `1px solid ${T.border}`, borderRadius: 8,
+                  fontSize: 12.5, fontWeight: 600, color: T.text, fontFamily: T.font, background: T.surface, cursor: "pointer" }}>
+                {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            )}
             <div style={{ fontSize: 13, color: T.muted, fontFamily: T.font, marginTop: 4 }}>
               {pipeline ? pipeline.name : "Pipeline"} · {fmtBRL(totalGeral)} em {filteredDeals.length} {filteredDeals.length === 1 ? "negócio" : "negócios"}
               {activeFilterCount > 0 && filteredDeals.length !== deals.length && (
@@ -1131,7 +1176,7 @@ export default function CRM() {
           <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 16, alignItems: "flex-start" }}>
             {stages.map((s, i) => (
               <StageColumn key={s.id} stage={s} accent={stageAccent(s, i)} deals={dealsByStage(s.id)} personMap={personMap}
-                onDropDeal={moveDealStage} draggingId={draggingId} setDraggingId={setDraggingId} />
+                onDropDeal={moveDealStage} draggingId={draggingId} setDraggingId={setDraggingId} onRenameStage={renameStage} />
             ))}
           </div>
         )}

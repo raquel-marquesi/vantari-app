@@ -337,7 +337,7 @@ export default function DealDetail() {
       const [{ data: st }, { data: ac }, { data: pls }] = await Promise.all([
         crm.from("stages").select("id,name,position,kind").eq("pipeline_id", d.pipeline_id).order("position"),
         crm.from("activities").select("*").eq("deal_id", dealId).order("created_at", { ascending: false }),
-        crm.from("pipelines").select("id,name").order("is_default", { ascending: false }),
+        crm.from("pipelines").select("id,name").eq("workspace_id", WORKSPACE_VANTARI).order("is_default", { ascending: false }),
       ]);
       setStages(st || []); setActs(ac || []); setPipelines(pls || []);
       if (d.processo_id) {

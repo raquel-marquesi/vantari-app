@@ -964,7 +964,7 @@ export default function CRM() {
     try {
       const crm = supabase.schema("crm");
       const { data: pipes, error: e1 } = await crm
-        .from("pipelines").select("id,name,is_default").order("is_default", { ascending: false });
+        .from("pipelines").select("id,name,is_default").eq("workspace_id", WORKSPACE_VANTARI).order("is_default", { ascending: false });
       if (e1) throw e1;
       setPipelines(pipes || []);
       const pipe = (pipes || []).find((p) => p.id === pipelineId)

@@ -52,6 +52,16 @@ const validCpf = (v) => {
   return d2 === parseInt(c[10]);
 };
 
+/* ─── Conversão (Google Ads + Meta Pixel) — só pra campanha de recuperação
+   judicial. Disparado no sucesso confirmado do envio (não no clique do
+   botão), pra não inflar as conversões com submissões que falharam. ─── */
+const CONVERSION_SLUGS = new Set(["recuperacao-judicial", "advogados-recuperacao-judicial"]);
+function fireConversion(slug) {
+  if (!CONVERSION_SLUGS.has(slug)) return;
+  try { window.gtag && window.gtag('event', 'conversion', { send_to: 'AW-17395265084/6gsqCLr_g48bELzc2uZA' }); } catch { /* noop */ }
+  try { window.fbq && window.fbq('track', 'Lead'); } catch { /* noop */ }
+}
+
 const formatPhone = (v) => {
   const c = (v || "").replace(/\D/g, "").slice(0, 11);
   if (c.length <= 2)  return c;
@@ -218,6 +228,7 @@ export default function VantariPublicForm() {
 
     setSubmitting(false);
     if (error) { setError(error.message); return; }
+    fireConversion(slug);
     if (form.redirect_url) { window.location.href = form.redirect_url; return; }
     setDone(true);
   };

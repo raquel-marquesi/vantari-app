@@ -458,6 +458,7 @@ const CredentialsCard = ({ provider }) => {
   const [clientId,     setClientId]     = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [accountId,    setAccountId]    = useState("");
+  const [loginCustomerId, setLoginCustomerId] = useState("");
   const [saving,       setSaving]       = useState(false);
   const [savedMsg,     setSavedMsg]     = useState("");
 
@@ -468,6 +469,7 @@ const CredentialsCard = ({ provider }) => {
       // branco (com um placeholder indicando que já existe um valor salvo).
       setClientSecret("");
       setAccountId(row.account_id || "");
+      setLoginCustomerId(row.config?.login_customer_id || "");
     }
   }, [row]);
 
@@ -477,6 +479,7 @@ const CredentialsCard = ({ provider }) => {
     // significa "manter o que já está salvo", não "apagar".
     const patch = { client_id: clientId.trim() || null, account_id: accountId.trim() || null };
     if (clientSecret.trim()) patch.client_secret = clientSecret.trim();
+    if (provider === "google") patch.login_customer_id = loginCustomerId.trim() || null;
     const ok = await save(patch);
     setSaving(false);
     if (ok) { setClientSecret(""); setSavedMsg("Credenciais salvas."); setTimeout(()=>setSavedMsg(""), 2500); }
@@ -527,11 +530,20 @@ const CredentialsCard = ({ provider }) => {
         placeholder={row?.has_client_secret ? "•••••••• (já salvo — digite só se quiser trocar)" : ""}
         hint="Nunca é reexibido depois de salvo — só um servidor interno consegue lê-lo."/>
       <Input label="Account ID / Customer ID" value={accountId} onChange={setAccountId} mono hint={provider==="meta"?"ID da conta de anúncios (act_xxxxxxxxx)":"Customer ID do Google Ads (xxx-xxx-xxxx)"}/>
+      {provider === "google" && (
+        <Input label="Login Customer ID (MCC) — opcional" value={loginCustomerId} onChange={setLoginCustomerId} mono
+          hint="Só preencher se essa conta é gerenciada por uma conta MCC (gerenciadora). Deixe em branco se não usa MCC."/>
+      )}
 
       <div style={{marginTop:12,padding:"10px 12px",background:T.faint,borderRadius:8,border:`0.5px solid ${T.border}`,fontSize:11,fontFamily:T.mono,color:T.muted,wordBreak:"break-all"}}>
         <span style={{fontWeight:700}}>Redirect URI:</span> {(import.meta.env.VITE_SUPABASE_URL||"")}/functions/v1/oauth-callback?provider={provider}
         <div style={{marginTop:4,fontFamily:T.font,fontSize:11,fontWeight:600}}>Cole essa URL nos &quot;Valid OAuth Redirect URIs&quot; do app no provedor.</div>
       </div>
+      {provider === "google" && (
+        <div style={{marginTop:8,padding:"10px 12px",background:T.blueL,borderRadius:8,border:`0.5px solid ${T.border}`,fontSize:11.5,fontFamily:T.font,color:T.muted}}>
+          <span style={{fontWeight:700,color:T.text}}>Developer Token:</span> não é configurado aqui — é um segredo do projeto (não por conexão). Peça pra alguém com acesso ao Supabase rodar <code style={{fontFamily:T.mono}}>supabase secrets set GOOGLE_ADS_DEVELOPER_TOKEN=...</code> uma única vez.
+        </div>
+      )}
 
       <div style={{display:"flex",gap:8,marginTop:16,alignItems:"center"}}>
         <Btn onClick={onSave} disabled={saving}>{saving?"Salvando…":"Salvar credenciais"}</Btn>
@@ -758,9 +770,48 @@ const MetaView = ({ integration, onBack }) => {
    VIEW: GOOGLE ADS
 ═══════════════════════════════════════════════════════════ */
 const GoogleView = ({ integration, onBack }) => {
-  const [tab,setTab] = useState("conversions");
+  const [tab,setTab] = useState("leads");
   const leads = DB.external_leads.filter(l=>l.source==="google_ads");
-  const tabs  = [{id:"conversions",label:"Conversões"},{id:"audiences",label:"Audiências"},{id:"keywords",label:"Keywords"},{id:"config",label:"Configuração"}];
+  const tabs  = [{id:"leads",label:"Leads de Formulário"},{id:"conversions",label:"Conversões"},{id:"audiences",label:"Audiências"},{id:"keywords",label:"Keywords"},{id:"config",label:"Configuração"}];
+  const [syncing,setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState("");
+
+  // Leads sincronizados de verdade — vivem em core.events (source=google,
+  // type=lead_created), a mesma pessoa canônica que /leads e /crm usam.
+  const [googleLeads, setGoogleLeads] = useState([]);
+  const [loadingLeads, setLoadingLeads] = useState(true);
+  const loadGoogleLeads = useCallback(async () => {
+    setLoadingLeads(true);
+    const { data: events } = await supabase.schema("core").from("events")
+      .select("id, occurred_at, payload, person_id")
+      .eq("source", "google").eq("type", "lead_created")
+      .order("occurred_at", { ascending: false }).limit(50);
+    const personIds = [...new Set((events || []).map(e => e.person_id).filter(Boolean))];
+    let personsById = {};
+    if (personIds.length) {
+      const { data: persons } = await supabase.schema("core").from("persons")
+        .select("id, full_name, primary_email, primary_phone").in("id", personIds);
+      personsById = Object.fromEntries((persons || []).map(p => [p.id, p]));
+    }
+    setGoogleLeads((events || []).map(e => ({ ...e, person: personsById[e.person_id] })));
+    setLoadingLeads(false);
+  }, []);
+  useEffect(() => { loadGoogleLeads(); }, [loadGoogleLeads]);
+
+  const handleSync = async () => {
+    if (integration.status !== "connected") { setSyncMsg("Conecte a integração antes de sincronizar."); setTimeout(()=>setSyncMsg(""),3000); return; }
+    setSyncing(true); setSyncMsg("");
+    const { data, error } = await supabase.functions.invoke("sync-google-ads-leads", { body: { provider: "google" } });
+    setSyncing(false);
+    if (error || data?.error) {
+      setSyncMsg(data?.error || error.message || "Falha ao sincronizar.");
+    } else {
+      setSyncMsg(`${data.synced} lead(s) novo(s) · ${data.skipped} já existiam.`);
+      loadGoogleLeads();
+    }
+    setTimeout(()=>setSyncMsg(""),6000);
+  };
+
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
@@ -770,7 +821,7 @@ const GoogleView = ({ integration, onBack }) => {
           <h2 style={{margin:0,fontSize:17,fontWeight:700,color:T.text,fontFamily:T.head}}>Google Ads</h2>
           <div style={{display:"flex",gap:8,alignItems:"center",marginTop:2}}>
             <StatusBadge status={integration.status}/>
-            <span style={{fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Customer ID: {integration.config.customer_id}</span>
+            <span style={{fontSize:12,fontWeight:600,color:T.muted,fontFamily:T.font}}>Customer ID: {integration.config.account_id || "—"}</span>
           </div>
         </div>
       </div>
@@ -781,6 +832,34 @@ const GoogleView = ({ integration, onBack }) => {
           </button>
         ))}
       </div>
+
+      {tab==="leads"&&(
+        <div>
+          <SectionHeader title="Leads de Formulário (Lead Form nativo)" subtitle={`${googleLeads.length} lead(s) sincronizado(s)`} action={
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              {syncMsg && <span style={{fontSize:11.5,fontWeight:600,color:T.green,fontFamily:T.font}}>{syncMsg}</span>}
+              <Btn size="sm" icon="↻" onClick={handleSync} disabled={syncing}>{syncing?"Sincronizando…":"Sincronizar Agora"}</Btn>
+            </div>
+          }/>
+          <div style={{display:"flex",flexDirection:"column",gap:0,border:`0.5px solid ${T.border}`,borderRadius:10,overflow:"hidden"}}>
+            <div style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr",padding:"10px 16px",background:T.faint,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.05em",fontFamily:T.font}}>
+              <span>Nome</span><span>Email / Telefone</span><span>Campanha</span><span>Data</span>
+            </div>
+            {loadingLeads ? (
+              <div style={{padding:24,textAlign:"center",color:T.muted,fontSize:13,fontFamily:T.font}}>Carregando…</div>
+            ) : googleLeads.length===0 ? (
+              <div style={{padding:24,textAlign:"center",color:T.muted,fontSize:13,fontFamily:T.font}}>Nenhum lead sincronizado ainda — clique em "Sincronizar Agora" depois de conectar em Configuração.</div>
+            ) : googleLeads.map((l,i)=>(
+              <div key={l.id} style={{display:"grid",gridTemplateColumns:"2fr 2fr 1.5fr 1.5fr",padding:"12px 16px",borderTop:`0.5px solid ${T.border}`,background:i%2===0?T.surface:T.faint,fontSize:13,fontFamily:T.font}}>
+                <span style={{fontWeight:700,color:T.text}}>{l.person?.full_name || "—"}</span>
+                <span style={{fontWeight:600,color:T.muted}}>{l.person?.primary_email || l.person?.primary_phone || "—"}</span>
+                <span style={{fontWeight:600,color:T.text}}>{l.payload?.campaign_name || "—"}</span>
+                <span style={{fontWeight:600,color:T.muted}}>{fmtDate(l.occurred_at)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {tab==="conversions"&&(
         <div>

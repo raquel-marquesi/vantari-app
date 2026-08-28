@@ -19,7 +19,7 @@
 // Auth: JWT do usuário logado no Next (verify_jwt = true, padrão).
 //
 // Body: { "action": "status" | "save" | "disconnect", "provider": "meta" | "google",
-//          "client_id"?, "client_secret"?, "account_id"? }   // usados só em "save"
+//          "client_id"?, "client_secret"?, "account_id"?, "login_customer_id"? }   // usados só em "save"
 // Resposta ("status"/"save"): { provider, status, account_id, has_client_id,
 //   has_client_secret, scope, last_sync, expires_at, error_message }
 // ════════════════════════════════════════════════════════════════
@@ -123,6 +123,12 @@ serve(async (req) => {
     // outras chaves que possam existir ali no futuro.
     if (Array.isArray(body.form_ids)) {
       patch.config = { ...(existing?.config || {}), form_ids: body.form_ids };
+    }
+
+    // login_customer_id (config.login_customer_id): só necessário quando a
+    // conta do Google Ads é gerenciada por uma MCC — usado por sync-google-ads-leads.
+    if (typeof body.login_customer_id === "string") {
+      patch.config = { ...(existing?.config || patch.config || {}), login_customer_id: body.login_customer_id.trim() || null };
     }
 
     const hasId     = patch.client_id     !== undefined ? !!patch.client_id     : !!existing?.client_id;

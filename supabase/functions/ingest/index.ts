@@ -22,6 +22,9 @@
 //   "payload": { ...qualquer coisa... },             // opcional → vai pro evento
 //   "attributes": {                                  // opcional → scoring Etapa 1
 //     "cidade_estado":"sao_paulo", "nivel_urgencia":"alta_dividas", ...
+//     "campanha":"recuperacao_judicial_varejo",       // opcional → roteia pro pipeline dedicado (ver PIPELINE_BY_CAMPANHA)
+//     "contato_e_titular":"sim"|"nao",                // opcional → ver bloco "titular != contato" abaixo
+//     "titular_nome":"..."                            // obrigatório quando contato_e_titular = "nao"
 //   }                                                // chaves/valores canônicos: ver 0007
 //   "utm": {                                          // opcional → canal de aquisição (primeiro toque)
 //     "source":"google", "medium":"cpc", "campaign":"...", "content":"...", "term":"..."
@@ -33,7 +36,19 @@
 //   // Alternativa Meta Lead Ads: enviar "field_data":[{name,values[]}] em vez de person
 // }
 //
-// Resposta: { "person_id": "<uuid>", "source": "...", "event_type": "...", "deal_id"?: "<uuid>" }
+// ── titular != contato (2026-08-27) ──
+// É comum a pessoa no WhatsApp não ser o titular do crédito (esposa,
+// filho etc. perguntando por outra pessoa). Quando
+// attributes.contato_e_titular = "nao", NUNCA resolvemos uma pessoa só
+// com o cpf/processo do titular colado no telefone de quem está
+// conversando — isso fundiria duas pessoas reais diferentes. Em vez
+// disso resolvemos DUAS pessoas separadas: o contato (só phone/name) e
+// o titular (só cpf/titular_nome). O negócio, os atributos e o
+// numero_cnj vão pro titular; uma nota em crm.activities registra
+// quem entrou em contato em nome dele.
+//
+// Resposta: { "person_id": "<uuid>", "contact_person_id"?: "<uuid>",
+//             "source": "...", "event_type": "...", "deal_id"?: "<uuid>" }
 //
 // Deploy:  supabase functions deploy ingest
 // Secret:  supabase secrets set INGEST_SECRET=<aleatório forte>
@@ -62,6 +77,20 @@ const DEFAULT_EVENT_TYPE: Record<string, string> = {
   form:   "form_submit",
   manual: "lead_created",
 };
+
+// Prioridade 4 do plano de unificação de leads (2026-08-27): mapeia a
+// tag de campanha (attributes.campanha, ou payload.campanha como
+// fallback pra fontes que não usam o envelope attributes) pro nome do
+// pipeline dedicado em crm.pipelines. Só daqui pra frente — sem
+// backfill de negócios antigos.
+const CAMPAIGN_PIPELINE_MAP: Record<string, string> = {
+  recuperacao_judicial_varejo: "Recuperação Judicial — Varejo",
+};
+function pipelineNameFor(body: any): string | null {
+  const campanha = body?.attributes?.campanha ?? body?.payload?.campanha ?? null;
+  if (!campanha) return null;
+  return CAMPAIGN_PIPELINE_MAP[String(campanha)] ?? null;
+}
 
 // Mapeia o field_data nativo do Meta Lead Ads para identificadores
 function fromMetaFieldData(fd: Array<{ name: string; values: string[] }>) {
@@ -133,59 +162,114 @@ serve(async (req) => {
   // —— UTM (opcional) — canal de aquisição, gravado como primeiro toque ——
   const utm = body.utm && typeof body.utm === "object" ? body.utm : {};
 
-  // —— resolver/criar a pessoa canônica ——
-  const { data: personId, error: rpcErr } = await core.rpc("resolve_person", {
-    p_workspace: workspaceId,
-    p_cpf:   cpf,
-    p_phone: phone,
-    p_email: email,
-    p_name:  name,
-    p_source: source,
-    p_utm_source:   utm.source   ?? null,
-    p_utm_medium:   utm.medium   ?? null,
-    p_utm_campaign: utm.campaign ?? null,
-    p_utm_content:  utm.content  ?? null,
-    p_utm_term:     utm.term     ?? null,
-  });
-  if (rpcErr) {
-    // CPF inválido cai aqui (raise exception no banco) → 422
-    const invalid = /CPF inválido/i.test(rpcErr.message);
-    return jsonResp({ error: "falha ao resolver pessoa", detail: rpcErr.message },
-      invalid ? 422 : 500);
+  // —— titular != contato: quem manda a mensagem pode não ser o titular
+  // do crédito (ex: esposa/filho perguntando). Resolve DUAS pessoas
+  // separadas em vez de colar cpf/processo do titular na identidade de
+  // quem está no telefone. ——
+  const contatoNaoTitular = String(body?.attributes?.contato_e_titular ?? "").toLowerCase() === "nao";
+  const titularNome = body?.attributes?.titular_nome ?? null;
+
+  let personId: string;
+  let contactPersonId: string | null = null;
+  let subjectAttrs = body.attributes; // atributos vão pro "dono" do caso (titular, quando existir)
+
+  if (contatoNaoTitular) {
+    if (!cpf) {
+      return jsonResp({ error: "attributes.contato_e_titular='nao' exige person.cpf (do titular)" }, 400);
+    }
+    // pessoa 1: o contato — só telefone/nome, NUNCA o cpf do titular
+    const { data: contactId, error: contactErr } = await core.rpc("resolve_person", {
+      p_workspace: workspaceId,
+      p_phone: phone,
+      p_name:  name,
+      p_source: source,
+    });
+    if (contactErr) {
+      return jsonResp({ error: "falha ao resolver contato", detail: contactErr.message }, 500);
+    }
+    contactPersonId = contactId;
+
+    // pessoa 2: o titular do crédito — só cpf/titular_nome, NUNCA o
+    // telefone de quem está mandando a mensagem
+    const { data: titularId, error: titularErr } = await core.rpc("resolve_person", {
+      p_workspace: workspaceId,
+      p_cpf:   cpf,
+      p_name:  titularNome,
+      p_source: source,
+      p_utm_source:   utm.source   ?? null,
+      p_utm_medium:   utm.medium   ?? null,
+      p_utm_campaign: utm.campaign ?? null,
+      p_utm_content:  utm.content  ?? null,
+      p_utm_term:     utm.term     ?? null,
+    });
+    if (titularErr) {
+      const invalid = /CPF inválido/i.test(titularErr.message);
+      return jsonResp({ error: "falha ao resolver titular", detail: titularErr.message },
+        invalid ? 422 : 500);
+    }
+    personId = titularId;
+  } else {
+    // caso normal: quem manda a mensagem é o próprio titular
+    const { data: resolvedId, error: rpcErr } = await core.rpc("resolve_person", {
+      p_workspace: workspaceId,
+      p_cpf:   cpf,
+      p_phone: phone,
+      p_email: email,
+      p_name:  name,
+      p_source: source,
+      p_utm_source:   utm.source   ?? null,
+      p_utm_medium:   utm.medium   ?? null,
+      p_utm_campaign: utm.campaign ?? null,
+      p_utm_content:  utm.content  ?? null,
+      p_utm_term:     utm.term     ?? null,
+    });
+    if (rpcErr) {
+      // CPF inválido cai aqui (raise exception no banco) → 422
+      const invalid = /CPF inválido/i.test(rpcErr.message);
+      return jsonResp({ error: "falha ao resolver pessoa", detail: rpcErr.message },
+        invalid ? 422 : 500);
+    }
+    personId = resolvedId;
   }
 
-  // —— registrar o evento ——
+  // —— registrar o evento (sempre no titular/pessoa principal; o payload
+  // preserva quem de fato mandou a mensagem quando são pessoas diferentes) ——
   const eventType = String(body.event_type ?? DEFAULT_EVENT_TYPE[source] ?? "lead_created");
+  const eventPayload = contatoNaoTitular
+    ? { ...(body.payload ?? {}), contato_phone: phone, contato_nome: name, contato_person_id: contactPersonId }
+    : (body.payload ?? {});
   const { error: evErr } = await core.from("events").insert({
     workspace_id: workspaceId,
     person_id:    personId,
     source,
     type:         eventType,
-    payload:      body.payload ?? {},
+    payload:      eventPayload,
   });
   if (evErr) {
     // pessoa já resolvida; falha só no log → reporta mas não perde o lead
     console.error("ingest: evento não registrado", { personId, source, eventType, detail: evErr.message });
-    return jsonResp({ person_id: personId, warning: "evento não registrado", detail: evErr.message }, 207);
+    return jsonResp({ person_id: personId, contact_person_id: contactPersonId,
+      warning: "evento não registrado", detail: evErr.message }, 207);
   }
 
   // —— atributos de scoring (Etapa 1) — envelope canônico body.attributes ——
   // grava via core.set_person_attributes; o trigger trg_attr_score recalcula o score.
-  if (body.attributes && typeof body.attributes === "object" && !Array.isArray(body.attributes)) {
+  if (subjectAttrs && typeof subjectAttrs === "object" && !Array.isArray(subjectAttrs)) {
     const { error: attrErr } = await core.rpc("set_person_attributes", {
       p_person: personId,
-      p_attrs:  body.attributes,
+      p_attrs:  subjectAttrs,
       p_source: source,
     });
     if (attrErr) {
       // não-fatal: pessoa e evento já gravados
-      console.error("ingest: atributos não gravados", { personId, source, attributes: body.attributes, detail: attrErr.message });
-      return jsonResp({ person_id: personId, source, event_type: eventType,
+      console.error("ingest: atributos não gravados", { personId, source, attributes: subjectAttrs, detail: attrErr.message });
+      return jsonResp({ person_id: personId, contact_person_id: contactPersonId, source, event_type: eventType,
         warning: "atributos não gravados", detail: attrErr.message }, 207);
     }
   }
 
-  // —— processo → negócio no CRM (Esteira de Aquisição · Novos Leads) ——
+  // —— processo → negócio no CRM (Esteira de Aquisição · Novos Leads, ou o
+  // pipeline dedicado quando attributes.campanha bater com um mapeado) ——
   // se vier numero_cnj, cria/reaproveita o processo e o negócio (idempotente:
   // não duplica se a Nina mandar o mesmo processo de novo numa mensagem futura).
   let dealId: string | null = null;
@@ -197,15 +281,29 @@ serve(async (req) => {
       p_numero_cnj: String(body.processo.numero_cnj),
       p_honorarios_pct: body.processo.honorarios_pct ?? null,
       p_source: source,
+      p_pipeline_name: pipelineNameFor(body),
     });
     if (dealErr) {
       // não-fatal: pessoa e evento já gravados, só o negócio que falhou
       console.error("ingest: negócio não criado", { personId, source, processo: body.processo, detail: dealErr.message });
-      return jsonResp({ person_id: personId, source, event_type: eventType,
+      return jsonResp({ person_id: personId, contact_person_id: contactPersonId, source, event_type: eventType,
         warning: "negócio não criado", detail: dealErr.message }, 207);
     }
     dealId = deal;
+
+    // titular != contato: deixa registrado no negócio quem de fato mandou a
+    // mensagem em nome do titular (nota simples — caso de borda, baixo
+    // volume; formaliza como relacionamento próprio se isso crescer).
+    if (contatoNaoTitular && dealId) {
+      await crm.from("activities").insert({
+        workspace_id: workspaceId,
+        deal_id: dealId,
+        person_id: personId,
+        type: "whatsapp",
+        content: `Contato via WhatsApp em nome do titular: ${name ?? "(nome não informado)"} - ${phone ?? "(telefone não informado)"}.`,
+      });
+    }
   }
 
-  return jsonResp({ person_id: personId, source, event_type: eventType, deal_id: dealId });
+  return jsonResp({ person_id: personId, contact_person_id: contactPersonId, source, event_type: eventType, deal_id: dealId });
 });

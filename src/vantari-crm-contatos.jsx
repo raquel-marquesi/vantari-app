@@ -24,6 +24,10 @@ const T = {
   font: "'Inter', system-ui, sans-serif", head: "'Sora', system-ui, sans-serif", mono: "'JetBrains Mono', monospace",
 };
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
+// Pipeline "Recuperação Judicial — Varejo" / etapa "Lead capturado" — destino fixo dos
+// negócios criados pela importação de CSV. Por ID, não por nome (ver comentário no runImport).
+const PIPELINE_RJ_VAREJO = "21469437-597b-4e84-a0c6-ac1873fc4684";
+const STAGE_LEAD_CAPTURADO = "c4dddd34-48d4-44b7-bcbe-29585298e667";
 
 /* helpers (self-contained) */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
@@ -65,10 +69,11 @@ const FIELD_ALIASES = {
   cpf: ["cpf", "documento", "cpf/cnpj", "cpfcnpj"],
   email: ["email", "e-mail", "mail", "e mail"],
   telefone: ["telefone", "phone", "celular", "whatsapp", "fone", "tel"],
+  processo: ["processo", "numero_processo", "numero do processo", "número do processo", "cnj", "numero_cnj"],
 };
 const normHeader = (s) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 function guessMapping(headers) {
-  const map = { nome: null, cpf: null, email: null, telefone: null };
+  const map = { nome: null, cpf: null, email: null, telefone: null, processo: null };
   headers.forEach((h, idx) => {
     const n = normHeader(h);
     for (const field of Object.keys(FIELD_ALIASES)) {
@@ -592,7 +597,7 @@ function ImportLeadsModal({ onClose, onDone }) {
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState([]);
   const [dataRows, setDataRows] = useState([]);
-  const [mapping, setMapping] = useState({ nome: null, cpf: null, email: null, telefone: null });
+  const [mapping, setMapping] = useState({ nome: null, cpf: null, email: null, telefone: null, processo: null });
   const [createSegment, setCreateSegment] = useState(true);
   const [segmentName, setSegmentName] = useState("");
   const [error, setError] = useState(null);
@@ -626,8 +631,13 @@ function ImportLeadsModal({ onClose, onDone }) {
   const runImport = async () => {
     setError(null);
     setStep("processing");
-    let processed = 0, failed = 0;
+    let processed = 0, failed = 0, dealsCreated = 0;
     const personIds = [];
+    // identificador do lote: alimenta utm_campaign de quem for novo (resolve_person
+    // nunca sobrescreve UTM de quem já veio de campanha paga — só preenche em branco)
+    const batchDate = new Date().toISOString().slice(0, 10);
+    const fileSlug = fileName.replace(/\.csv$/i, "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    const utmCampaign = `import_${fileSlug || "lote"}_${batchDate}`;
     setProgress({ done: 0, total: dataRows.length });
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -635,17 +645,43 @@ function ImportLeadsModal({ onClose, onDone }) {
       const cpfRaw = mapping.cpf != null ? (row[mapping.cpf] || "").trim() : "";
       const emailRaw = mapping.email != null ? (row[mapping.email] || "").trim() : "";
       const phoneRaw = mapping.telefone != null ? (row[mapping.telefone] || "").trim() : "";
+      const processoRaw = mapping.processo != null ? (row[mapping.processo] || "").trim() : "";
       const cpfClean = cpfRaw ? cleanCpf(cpfRaw) : null;
       const phoneClean = phoneRaw ? onlyDigits(phoneRaw) : "";
       if (!cpfClean && !emailRaw && !phoneClean) {
         failed++;
       } else {
         try {
-          const { data, error: e } = await supabase.schema("core").rpc("resolve_person", {
+          const { data: personId, error: e } = await supabase.schema("core").rpc("resolve_person", {
             p_workspace: WORKSPACE_VANTARI, p_cpf: cpfClean, p_phone: phoneClean || null,
             p_email: emailRaw || null, p_name: nome || null, p_source: "import",
+            p_utm_source: "lista_importada", p_utm_campaign: utmCampaign,
           });
-          if (e) { failed++; } else { processed++; if (data) personIds.push(data); }
+          if (e) {
+            failed++;
+          } else {
+            processed++;
+            if (personId) {
+              personIds.push(personId);
+              // cria/reaproveita o negócio no CRM — não-fatal (pessoa já foi resolvida acima).
+              // Pipeline/etapa fixos por ID (não por nome: existe mais de uma pipeline
+              // "Esteira de Aquisição" no banco e busca por nome é frágil ali) — todo lead
+              // importado por essa tela vai pra "Recuperação Judicial — Varejo" / "Lead capturado".
+              try {
+                const { error: dealErr } = processoRaw
+                  ? await supabase.schema("crm").rpc("ingest_processo_lead", {
+                      p_workspace: WORKSPACE_VANTARI, p_person: personId, p_numero_cnj: processoRaw,
+                      p_honorarios_pct: null, p_source: "import",
+                      p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
+                    })
+                  : await supabase.schema("crm").rpc("create_draft_deal", {
+                      p_workspace: WORKSPACE_VANTARI, p_person: personId, p_source: "import",
+                      p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
+                    });
+                if (!dealErr) dealsCreated++;
+              } catch { /* não-fatal: só o negócio falhou, a pessoa já foi importada */ }
+            }
+          }
         } catch { failed++; }
       }
       setProgress({ done: i + 1, total: dataRows.length });
@@ -673,7 +709,7 @@ function ImportLeadsModal({ onClose, onDone }) {
       created_by: userData?.user?.email || null,
     });
 
-    setSummary({ processed, failed, segmentId, segmentName });
+    setSummary({ processed, failed, dealsCreated, segmentId, segmentName });
     setStep("done");
   };
 
@@ -722,6 +758,7 @@ function ImportLeadsModal({ onClose, onDone }) {
                 {mapField("cpf", "CPF")}
                 {mapField("telefone", "Telefone")}
                 {mapField("email", "E-mail")}
+                <div style={{ gridColumn: "1 / -1" }}>{mapField("processo", "Número do processo (CNJ, opcional)")}</div>
               </div>
 
               <div style={{ marginTop: 6, marginBottom: 14, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "auto", maxHeight: 140 }}>
@@ -763,6 +800,9 @@ function ImportLeadsModal({ onClose, onDone }) {
               <div style={{ marginTop: 10, fontSize: 15, fontWeight: 700, color: T.ink, fontFamily: T.head }}>Importação concluída</div>
               <div style={{ marginTop: 6, fontSize: 13, color: T.muted }}>
                 {summary.processed} processado{summary.processed === 1 ? "" : "s"} · {summary.failed} ignorado{summary.failed === 1 ? "" : "s"} (sem CPF, telefone ou e-mail)
+              </div>
+              <div style={{ marginTop: 6, fontSize: 12.5, color: T.teal }}>
+                🤝 {summary.dealsCreated} negócio{summary.dealsCreated === 1 ? "" : "s"} criado{summary.dealsCreated === 1 ? "" : "s"}/reaproveitado{summary.dealsCreated === 1 ? "" : "s"} em "Recuperação Judicial — Varejo" (etapa "Lead capturado").
               </div>
               {summary.segmentId && (
                 <div style={{ marginTop: 10, fontSize: 12.5, color: T.teal }}>📥 Segmentação "{summary.segmentName}" criada com {summary.processed} pessoa(s).</div>

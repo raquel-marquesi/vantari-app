@@ -2057,12 +2057,12 @@ function TemplatesView({ onUseTemplate }) {
 
   const useDbTemplate = async (tpl) => {
     await supabase.from("email_templates").update({ use_count: (tpl.use_count || 0) + 1 }).eq("id", tpl.id);
-    // Templates importados do RD Station nunca tiveram `blocks` (só html/bee_json) —
-    // sem isso, o editor abria em branco. Cai aqui pra qualquer template antigo
-    // que não tenha blocks: carrega o HTML como um bloco único "HTML bruto".
+    // Templates importados do RD Station nunca tiveram `blocks` — sem isso, o
+    // editor abria em branco. templateDisplayHtml() cai pro bee_json quando
+    // html/content_html vêm vazios (caso de todos os 10 templates do RD hoje).
     const blocks = tpl.blocks && tpl.blocks.length
       ? tpl.blocks
-      : [{ id:`b${Date.now()}_${Math.random()}`, type:"html", content:{ html: tpl.html || "" } }];
+      : [{ id:`b${Date.now()}_${Math.random()}`, type:"html", content:{ html: templateDisplayHtml(tpl) } }];
     onUseTemplate(blocks);
   };
 
@@ -2187,7 +2187,7 @@ const migrateExternalImages = async (tpl) => {
                   <div style={{ fontFamily:T.font, fontSize:11.5, fontWeight:500, color:T.muted, marginBottom:11, minHeight:28 }}>{tpl.description || "Sem descrição"}</div>
                   <div style={{ display:"flex", gap:6, marginBottom:6 }}>
         <Btn onClick={() => useDbTemplate(tpl)} variant="primary" size="xs" style={{ flex:1, justifyContent:"center" }}>Usar</Btn>
-        <Btn onClick={() => setPreviewTpl(tpl)} variant="ghost" size="xs" style={{ flex:1, justifyContent:"center" }}>Preview</Btn>
+        <Btn onClick={() => setPreviewTpl({ ...tpl, html: templateDisplayHtml(tpl) })} variant="ghost" size="xs" style={{ flex:1, justifyContent:"center" }}>Preview</Btn>
         <button onClick={() => deleteTpl(tpl.id)} title="Excluir" style={{ padding:"4px 7px", border:`1px solid ${T.coral}40`, borderRadius:6, background:"transparent", color:T.coral, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:T.font }}>×</button>
       </div>
       {tpl.source === "rd_station" && (
@@ -2296,6 +2296,63 @@ const beeJsonToBlocks = (json) => {
   } catch (e) { return []; }
 };
 
+// Extrai HTML plano de um BeeFree JSON (formato nativo do editor Bee do RD
+// Station — text/paragraph/image/button/divider/html modules). Usado tanto
+// pra importar um template novo (RdImportModal) quanto pra "usar" um dos 10
+// templates antigos migrados do RD, que nunca tiveram `blocks`/`html` de
+// verdade preenchidos — só o `bee_json` bruto (ver useDbTemplate).
+const extractHtmlFromBee = (json) => {
+  try {
+    const rows = json?.page?.rows || [];
+    let html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">';
+    const walk = (modules) => {
+      (modules || []).forEach(m => {
+        const d = m.descriptor || {};
+        let frag = null;
+        if (m.type?.includes("paragraph") && d.paragraph?.html) frag = d.paragraph.html;
+        else if (m.type?.includes("text") && d.text?.html) frag = d.text.html;
+        else if (m.type?.includes("image") && d.image?.src) frag = `<img src="${d.image.src}" style="max-width:100%;height:auto" alt="${d.image.alt||""}"/>`;
+        else if (m.type?.includes("button") && d.button) {
+          const b = d.button;
+          frag = `<div style="text-align:center;padding:12px 0"><a href="${b.href||"#"}" style="display:inline-block;padding:10px 24px;background:${b.style?.["background-color"]||"#0D7491"};color:#fff;text-decoration:none;border-radius:6px;font-weight:700">${b.label||"Clique aqui"}</a></div>`;
+        }
+        else if (m.type?.includes("divider")) frag = '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0"/>';
+        else if (m.type?.includes("html") && d.html?.html) frag = d.html.html;
+        if (!frag) return;
+        html += frag;
+      });
+    };
+    rows.forEach(row => (row.columns || []).forEach(col => walk(col.modules)));
+    html += "</div>";
+    return html
+      // sintaxe de variável do RD Station -> formato do Vantari (send-campaign
+      // já substitui {{lead.name}}/{{lead.email}} na hora do envio)
+      .replace(/<code[^>]*data-bee-type="mergetag"[^>]*>[\s\S]*?<\/code>/gi, "{{lead.name}}")
+      .replace(/\*\|PRIMEIRO_NOME\|\*/g, "{{lead.name}}")
+      // frase de descadastro do RD Station (o send-campaign já injeta o link de
+      // descadastro dele mesmo — manter este duplicaria) — remove só a frase, não
+      // o módulo inteiro, porque ela divide o parágrafo com o endereço da empresa
+      .replace(/Se deseja n[ãa]o receber mensagens como esta,?\s*por favor[\s\S]*?clique aqui<\/a>\.?/gi, "")
+      // rede de segurança: qualquer link de descadastro do RD que tenha sobrado
+      .replace(/<a[^>]*rdstation\.email\/descadastrar[^>]*>[\s\S]*?<\/a>/gi, "");
+  } catch (e) {
+    return null;
+  }
+};
+
+// HTML pra exibir de um template salvo em public.email_templates — usado tanto
+// pelo "Usar template" (abre no editor) quanto pelo "Preview" (iframe na
+// listagem), pra não duplicar a lógica de fallback pro bee_json nos dois
+// lugares (era esse o motivo dos dois abrirem em branco: cada um lia um
+// campo diferente, e nenhum caía pro bee_json quando html/content_html
+// vinham vazios).
+const templateDisplayHtml = (tpl) => {
+  const raw = tpl?.html || tpl?.content_html || "";
+  const isBlank = raw.replace(/<[^>]*>/g, "").trim() === "";
+  if (isBlank && tpl?.bee_json) return extractHtmlFromBee(tpl.bee_json) || raw;
+  return raw;
+};
+
 function RdImportModal({ onClose, onDone }) {
   const [mode, setMode] = useState("file"); // "paste" | "file"
   const [name, setName] = useState("");
@@ -2305,37 +2362,6 @@ function RdImportModal({ onClose, onDone }) {
   const [beeJson, setBeeJson] = useState(null);   // BeeFree JSON (estrutura do RD)
   const [format, setFormat] = useState(null);     // "html" | "bee_json"
   const [saving, setSaving] = useState(false);
-
-  // Extrai HTML básico de um BeeFree JSON (text modules + image)
-  const extractHtmlFromBee = (json) => {
-    try {
-      const rows = json?.page?.rows || [];
-      let html = '<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">';
-      const walk = (modules) => {
-        (modules || []).forEach(m => {
-          if (m.type?.includes("text") && m.descriptor?.text?.html) {
-            html += m.descriptor.text.html;
-          } else if (m.type?.includes("image") && m.descriptor?.image?.src) {
-            html += `<img src="${m.descriptor.image.src}" style="max-width:100%;height:auto" alt="${m.descriptor.image.alt||""}"/>`;
-          } else if (m.type?.includes("button") && m.descriptor?.button) {
-            const b = m.descriptor.button;
-            html += `<div style="text-align:center;padding:12px 0"><a href="${b.href||"#"}" style="display:inline-block;padding:10px 24px;background:${b.style?.["background-color"]||"#0D7491"};color:#fff;text-decoration:none;border-radius:6px;font-weight:700">${b.label||"Clique aqui"}</a></div>`;
-          } else if (m.type?.includes("divider")) {
-            html += '<hr style="border:none;border-top:1px solid #ddd;margin:16px 0"/>';
-          } else if (m.type?.includes("html") && m.descriptor?.html?.html) {
-            html += m.descriptor.html.html;
-          }
-        });
-      };
-      rows.forEach(row => {
-        (row.columns || []).forEach(col => walk(col.modules));
-      });
-      html += '</div>';
-      return html;
-    } catch (e) {
-      return null;
-    }
-  };
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];

@@ -601,6 +601,7 @@ const MetaView = ({ integration, onBack }) => {
   const [formIds, setFormIds] = useState(integration.config?.form_ids || []);
   const [newFormId, setNewFormId] = useState("");
   const [newFormLabel, setNewFormLabel] = useState("");
+  const [newFormCampanha, setNewFormCampanha] = useState("");
   const [savingForms, setSavingForms] = useState(false);
   useEffect(() => { setFormIds(integration.config?.form_ids || []); }, [integration.config?.form_ids]);
 
@@ -614,8 +615,8 @@ const MetaView = ({ integration, onBack }) => {
   };
   const addFormId = () => {
     if (!newFormId.trim()) return;
-    const next = [...formIds, { id: newFormId.trim(), label: newFormLabel.trim() || null }];
-    setNewFormId(""); setNewFormLabel("");
+    const next = [...formIds, { id: newFormId.trim(), label: newFormLabel.trim() || null, campanha: newFormCampanha.trim() || null }];
+    setNewFormId(""); setNewFormLabel(""); setNewFormCampanha("");
     saveFormIds(next);
   };
   const removeFormId = (id) => saveFormIds(formIds.filter(f => f.id !== id));
@@ -666,12 +667,14 @@ const MetaView = ({ integration, onBack }) => {
               <div key={f.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0"}}>
                 <span style={{fontFamily:T.mono,fontSize:12,fontWeight:700,color:T.text}}>{f.id}</span>
                 {f.label && <span style={{fontSize:12,color:T.muted,fontFamily:T.font}}>— {f.label}</span>}
+                {f.campanha && <span style={{fontSize:11,fontWeight:700,color:T.teal,fontFamily:T.mono,background:T.blueL,borderRadius:6,padding:"2px 6px"}}>{f.campanha}</span>}
                 <Btn size="xs" variant="ghost" onClick={()=>removeFormId(f.id)} style={{marginLeft:"auto"}}>Remover</Btn>
               </div>
             ))}
             <div style={{display:"flex",gap:8,marginTop:10}}>
               <Input value={newFormId} onChange={setNewFormId} placeholder="ID do formulário (ex: 123456789012345)" mono/>
               <Input value={newFormLabel} onChange={setNewFormLabel} placeholder="Rótulo (opcional)"/>
+              <Input value={newFormCampanha} onChange={setNewFormCampanha} placeholder="Campanha (opcional, ex: recuperacao_judicial_varejo)" mono/>
               <Btn size="sm" onClick={addFormId} disabled={savingForms || !newFormId.trim()}>Adicionar</Btn>
             </div>
           </Card>

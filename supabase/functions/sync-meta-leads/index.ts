@@ -31,6 +31,13 @@ const WORKSPACE_ID = "53092199-7b75-4342-a897-f589d6f34922";
 const GRAPH_VERSION = "v19.0";
 const MAX_PAGES_PER_FORM = 10; // trava de segurança (até 1000 leads/formulário por sync)
 
+// mesmo mapeamento campanha → pipeline que o /ingest já usa (fonte da verdade),
+// duplicado aqui de propósito — mesmo padrão que o resto do arquivo já segue
+// (reaproveita RPCs direto, sem round-trip HTTP pro /ingest)
+const CAMPAIGN_PIPELINE_MAP: Record<string, string> = {
+  recuperacao_judicial_varejo: "Recuperação Judicial — Varejo",
+};
+
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -117,7 +124,7 @@ serve(async (req) => {
     return jsonResp({ error: "Meta não está conectado. Salve as credenciais e clique em \"Conectar via OAuth\" primeiro." }, 400);
   }
 
-  const formIds: Array<{ id: string; label?: string; last_sync_ts?: number }> = creds.config?.form_ids || [];
+  const formIds: Array<{ id: string; label?: string; campanha?: string; last_sync_ts?: number }> = creds.config?.form_ids || [];
   if (!formIds.length) {
     return jsonResp({ error: "Nenhum formulário configurado. Adicione o ID de um Lead Ads Form em Configuração." }, 400);
   }
@@ -178,17 +185,22 @@ serve(async (req) => {
         });
 
         // marca a campanha pra scoring/segmentação, mesmo sem processo informado
-        // (não-fatal: pessoa e evento já foram gravados acima)
-        const { error: attrErr } = await core.rpc("set_person_attributes", {
-          p_person: personId,
-          p_attrs: { campanha: "recuperacao_judicial_varejo" },
-          p_source: "meta",
-        });
-        if (attrErr) {
-          console.error("sync-meta-leads: atributos não gravados", { personId, detail: attrErr.message });
+        // (não-fatal: pessoa e evento já foram gravados acima) — só roda se o
+        // formulário tiver campanha configurada em config.form_ids[i].campanha
+        if (form.campanha) {
+          const { error: attrErr } = await core.rpc("set_person_attributes", {
+            p_person: personId,
+            p_attrs: { campanha: form.campanha },
+            p_source: "meta",
+          });
+          if (attrErr) {
+            console.error("sync-meta-leads: atributos não gravados", { personId, detail: attrErr.message });
+          }
         }
 
-        // se a pessoa informou o número do processo, cria o negócio na pipeline certa
+        // se a pessoa informou o número do processo, cria o negócio — na pipeline
+        // dedicada quando a campanha do formulário bater com o mapeamento, senão
+        // cai no fallback padrão (Esteira de Aquisição)
         if (p.processo) {
           const { error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
             p_workspace: WORKSPACE_ID,
@@ -196,7 +208,7 @@ serve(async (req) => {
             p_numero_cnj: p.processo,
             p_honorarios_pct: null,
             p_source: "meta",
-            p_pipeline_name: "Recuperação Judicial — Varejo",
+            p_pipeline_name: form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null,
           });
           if (dealErr) {
             console.error("sync-meta-leads: negócio não criado", { personId, processo: p.processo, detail: dealErr.message });

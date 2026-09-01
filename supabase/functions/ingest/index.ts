@@ -275,13 +275,19 @@ serve(async (req) => {
   let dealId: string | null = null;
   if (body.processo && typeof body.processo === "object" && body.processo.numero_cnj) {
     const crm = supabase.schema("crm");
+    const pipelineName = pipelineNameFor(body);
     const { data: deal, error: dealErr } = await crm.rpc("ingest_processo_lead", {
       p_workspace: workspaceId,
       p_person: personId,
       p_numero_cnj: String(body.processo.numero_cnj),
       p_honorarios_pct: body.processo.honorarios_pct ?? null,
       p_source: source,
-      p_pipeline_name: pipelineNameFor(body),
+      p_pipeline_name: pipelineName,
+      // recuperação judicial: nunca reprovar sozinho (crm.set_elegibilidade
+      // já tem essa exceção) — cada campanha mapeada em CAMPAIGN_PIPELINE_MAP
+      // hoje é, de fato, de RJ; revisitar se um dia entrar uma campanha
+      // dedicada que não seja de RJ.
+      p_reclamada_em_rj: pipelineName !== null,
     });
     if (dealErr) {
       // não-fatal: pessoa e evento já gravados, só o negócio que falhou

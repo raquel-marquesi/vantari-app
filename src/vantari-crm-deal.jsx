@@ -417,11 +417,13 @@ export default function DealDetail() {
   const movePipeline = async (newPipelineId) => {
     if (!deal || newPipelineId === deal.pipeline_id) return;
     setBusy(true);
-    const crm = supabase.schema("crm");
-    const { data: st } = await crm.from("stages").select("id,position").eq("pipeline_id", newPipelineId).order("position").limit(1);
-    const firstStage = st?.[0];
-    if (!firstStage) { setBusy(false); setError("Pipeline de destino sem estágios configurados."); return; }
-    const { error: e } = await crm.from("deals").update({ pipeline_id: newPipelineId, stage_id: firstStage.id }).eq("id", deal.id);
+    // RPC única e atômica: valida que a pipeline é do workspace certo, escolhe
+    // a 1ª etapa (por position) do destino e já grava pipeline_id+stage_id
+    // juntos — evita a corrida de duas queries separadas (buscar etapa, depois
+    // gravar) que o front fazia antes.
+    const { error: e } = await supabase.schema("crm").rpc("transfer_deal_pipeline", {
+      p_deal_id: deal.id, p_target_pipeline_id: newPipelineId, p_target_stage_id: null,
+    });
     setBusy(false);
     if (e) { setError(e.message); return; }
     load();

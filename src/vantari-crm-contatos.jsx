@@ -673,10 +673,12 @@ function ImportLeadsModal({ onClose, onDone }) {
                       p_workspace: WORKSPACE_VANTARI, p_person: personId, p_numero_cnj: processoRaw,
                       p_honorarios_pct: null, p_source: "import",
                       p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
+                      p_reclamada_em_rj: true,
                     })
                   : await supabase.schema("crm").rpc("create_draft_deal", {
                       p_workspace: WORKSPACE_VANTARI, p_person: personId, p_source: "import",
                       p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
+                      p_reclamada_em_rj: true,
                     });
                 if (!dealErr) dealsCreated++;
               } catch { /* não-fatal: só o negócio falhou, a pessoa já foi importada */ }

@@ -202,13 +202,17 @@ serve(async (req) => {
         // dedicada quando a campanha do formulário bater com o mapeamento, senão
         // cai no fallback padrão (Esteira de Aquisição)
         if (p.processo) {
+          const pipelineName = form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null;
           const { error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
             p_workspace: WORKSPACE_ID,
             p_person: personId,
             p_numero_cnj: p.processo,
             p_honorarios_pct: null,
             p_source: "meta",
-            p_pipeline_name: form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null,
+            p_pipeline_name: pipelineName,
+            // recuperação judicial: nunca reprovar sozinho (crm.set_elegibilidade
+            // já tem essa exceção) — hoje toda campanha mapeada é de RJ.
+            p_reclamada_em_rj: pipelineName !== null,
           });
           if (dealErr) {
             console.error("sync-meta-leads: negócio não criado", { personId, processo: p.processo, detail: dealErr.message });

@@ -59,6 +59,7 @@ function fromMetaFieldData(fd: Array<{ name: string; values: string[] }>) {
     phone: get("phone", "telefone", "whatsapp"),
     name:  get("full_name", "name", "nome"),
     cpf:   get("cpf"),
+    processo: get("processo", "cnj"),
   };
 }
 
@@ -175,6 +176,33 @@ serve(async (req) => {
             platform: lead.platform, created_time: lead.created_time,
           },
         });
+
+        // marca a campanha pra scoring/segmentação, mesmo sem processo informado
+        // (não-fatal: pessoa e evento já foram gravados acima)
+        const { error: attrErr } = await core.rpc("set_person_attributes", {
+          p_person: personId,
+          p_attrs: { campanha: "recuperacao_judicial_varejo" },
+          p_source: "meta",
+        });
+        if (attrErr) {
+          console.error("sync-meta-leads: atributos não gravados", { personId, detail: attrErr.message });
+        }
+
+        // se a pessoa informou o número do processo, cria o negócio na pipeline certa
+        if (p.processo) {
+          const { error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
+            p_workspace: WORKSPACE_ID,
+            p_person: personId,
+            p_numero_cnj: p.processo,
+            p_honorarios_pct: null,
+            p_source: "meta",
+            p_pipeline_name: "Recuperação Judicial — Varejo",
+          });
+          if (dealErr) {
+            console.error("sync-meta-leads: negócio não criado", { personId, processo: p.processo, detail: dealErr.message });
+          }
+        }
+
         stat.synced++; totalSynced++;
       }
 

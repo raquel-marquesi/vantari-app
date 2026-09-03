@@ -33,6 +33,20 @@ const STAGE_LEAD_CAPTURADO = "c4dddd34-48d4-44b7-bcbe-29585298e667";
 // crm.pick_captador_for_person, não aqui — ela olha o banco (por pessoa, não
 // por linha) pra nunca dar dois "donos" diferentes pro mesmo CPF.
 
+// Domínios da própria reclamada — nunca usar como primary_email quando houver
+// alternativa pessoal na mesma célula (achado real: 6 pessoas do Lote 1
+// ficaram com e-mail corporativo @viavarejo.com.br, 03/09/2026, corrigido
+// manualmente). O arquivo de hoje já manda 1 e-mail só (já escolhido certo) —
+// isso é só trava de segurança pro caso de uma planilha futura vir com mais
+// de uma opção na mesma célula (separadas por vírgula/ponto-e-vírgula/barra).
+const DOMINIOS_RECLAMADA = ["viavarejo.com.br", "casasbahia.com.br", "cnova.com.br"];
+const pickPersonalEmail = (raw) => {
+  const candidates = (raw || "").split(/[;,/|]+/).map((s) => s.trim()).filter(Boolean);
+  if (candidates.length === 0) return "";
+  const personal = candidates.find((e) => !DOMINIOS_RECLAMADA.some((d) => e.toLowerCase().endsWith("@" + d)));
+  return personal || candidates[0];
+};
+
 /* helpers (self-contained) */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
 const cleanCpf = (raw) => {
@@ -682,7 +696,7 @@ function ImportLeadsModal({ onClose, onDone }) {
       const get = (k) => (mapping[k] != null ? (row[mapping[k]] || "").trim() : "");
       const nome = get("nome");
       const cpfRaw = get("cpf");
-      const emailRaw = get("email");
+      const emailRaw = pickPersonalEmail(get("email"));
       const phoneRaw = get("telefone");
       const phone2Raw = get("telefone2");
       const processoRaw = get("processo");

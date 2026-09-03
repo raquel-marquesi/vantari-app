@@ -25,7 +25,8 @@ const T = {
   font: "'Inter', system-ui, sans-serif", head: "'Sora', system-ui, sans-serif", mono: "'JetBrains Mono', monospace",
 };
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
-const CAPTADORES = ["Alexandra", "Vanessa", "Camila"];
+// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026).
+const CAPTADORES = ["Alexandra", "Vanessa"];
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },
   { v: "positiva_efeito_negativa", l: "Positiva c/ efeito negativo (ok)" },
@@ -310,6 +311,7 @@ export default function DealDetail() {
   const [deal, setDeal] = useState(null);
   const [processo, setProcesso] = useState(null);
   const [person, setPerson] = useState(null);
+  const [phones, setPhones] = useState([]);
   const [company, setCompany] = useState(null);
   const [stages, setStages] = useState([]);
   const [pipelines, setPipelines] = useState([]);
@@ -357,6 +359,11 @@ export default function DealDetail() {
       if (d.person_id) {
         const { data: pe } = await supabase.schema("core").from("persons").select("*").eq("id", d.person_id).single();
         setPerson(pe || null);
+        const { data: ph } = await supabase.schema("core").from("person_identifiers")
+          .select("*").eq("person_id", d.person_id).eq("kind", "phone").order("created_at", { ascending: true });
+        setPhones(ph || []);
+      } else {
+        setPhones([]);
       }
     } catch (err) {
       setError(err.message || String(err));
@@ -483,7 +490,8 @@ export default function DealDetail() {
     if (card === "processo") setForm({
       numero_cnj: onlyDigits(processo.numero_cnj), tribunal: processo.tribunal || "", vara: processo.vara || "",
       uf: processo.uf || "", fase: processo.fase || "", valor_causa: centsToInput(processo.valor_causa_cents),
-      valor_liquido: centsToInput(processo.valor_estimado_liquido_cents), reclamada_cndt: processo.reclamada_cndt || "negativa",
+      valor_liquido: centsToInput(processo.valor_estimado_liquido_cents), advogado_reclamante: processo.advogado_reclamante || "",
+      reclamada_cndt: processo.reclamada_cndt || "negativa",
       reclamada_porte: processo.reclamada_porte || "Grande", reclamada_em_rj: !!processo.reclamada_em_rj,
       reclamada_paga_precatorio: !!processo.reclamada_paga_precatorio, reclamada_solvente: !!processo.reclamada_solvente,
       teses: (processo.teses_restritivas || []).join(", "),
@@ -530,6 +538,7 @@ export default function DealDetail() {
       numero_cnj: maskCnj(form.numero_cnj), tribunal: form.tribunal || null, vara: form.vara || null,
       uf: form.uf ? form.uf.toUpperCase().slice(0, 2) : null, fase: form.fase || null,
       valor_causa_cents: reaisToCents(form.valor_causa), valor_estimado_liquido_cents: reaisToCents(form.valor_liquido),
+      advogado_reclamante: form.advogado_reclamante || null,
       reclamada_cndt: form.reclamada_cndt, reclamada_porte: form.reclamada_porte,
       reclamada_em_rj: form.reclamada_em_rj, reclamada_paga_precatorio: form.reclamada_paga_precatorio, reclamada_solvente: form.reclamada_solvente,
       teses_restritivas: form.teses.split(",").map((t) => t.trim()).filter(Boolean),
@@ -808,6 +817,7 @@ export default function DealDetail() {
                           {eselect("CNDT", "reclamada_cndt", CNDT_OPTS)}
                           {eselect("Porte", "reclamada_porte", PORTE_OPTS)}
                         </div>
+                        {efield("Advogado do reclamante", "advogado_reclamante", { full: true })}
                         <div style={{ marginTop: 4 }}>
                           {echeck("Em recuperação judicial", "reclamada_em_rj")}
                           {echeck("Paga por precatório", "reclamada_paga_precatorio")}
@@ -845,6 +855,7 @@ export default function DealDetail() {
                         <Row label="Fase" value={processo.fase} />
                         <Row label="Valor da causa" value={processo.valor_causa_cents ? fmtBRL(processo.valor_causa_cents) : "—"} />
                         <Row label="Estimado líquido" value={processo.valor_estimado_liquido_cents ? fmtBRL(processo.valor_estimado_liquido_cents) : "—"} />
+                        <Row label="Advogado do reclamante" value={processo.advogado_reclamante || "—"} />
                         <Row label="CNDT" value={processo.reclamada_cndt} />
                         <Row label="Porte reclamada" value={processo.reclamada_porte} />
                         <Row label="Teses restritivas" value={(processo.teses_restritivas || []).join(", ") || "nenhuma"} />
@@ -939,7 +950,27 @@ export default function DealDetail() {
                       <>
                         <Row label="Nome" value={person.full_name} />
                         <Row label="CPF" value={person.cpf ? maskCpf(person.cpf) : "—"} />
-                        <Row label="Telefone" value={person.primary_phone ? maskPhone(person.primary_phone) : "—"} />
+                        {phones.length > 0 ? (
+                          phones
+                            .slice()
+                            .sort((a, b) => (b.metadata?.principal ? 1 : 0) - (a.metadata?.principal ? 1 : 0))
+                            .map((ph, idx) => (
+                              <Row key={ph.id} label={idx === 0 ? "Telefone" : "Telefone 2"}
+                                value={
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                                    {maskPhone(ph.value)}
+                                    {ph.metadata?.whatsapp && (
+                                      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10, fontWeight: 700,
+                                        color: "#0F6E4E", background: "#F0FDF7", border: "1px solid #6EE7B7", borderRadius: 99, padding: "1px 7px" }}>
+                                        <MessageCircle size={10} /> WhatsApp
+                                      </span>
+                                    )}
+                                  </span>
+                                } />
+                            ))
+                        ) : (
+                          <Row label="Telefone" value={person.primary_phone ? maskPhone(person.primary_phone) : "—"} />
+                        )}
                         <Row label="E-mail" value={person.primary_email} />
                         <Row label="Status" value={person.status} />
                       </>

@@ -28,6 +28,9 @@ const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 // negócios criados pela importação de CSV. Por ID, não por nome (ver comentário no runImport).
 const PIPELINE_RJ_VAREJO = "21469437-597b-4e84-a0c6-ac1873fc4684";
 const STAGE_LEAD_CAPTURADO = "c4dddd34-48d4-44b7-bcbe-29585298e667";
+// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026) —
+// distribuição round-robin da importação usa só quem está ativo.
+const CAPTADORES_ROTATION = ["Alexandra", "Vanessa"];
 
 /* helpers (self-contained) */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
@@ -39,6 +42,22 @@ const cleanCpf = (raw) => {
 const maskCpf = (raw) => { const d = onlyDigits(raw).slice(0, 11); if (d.length > 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`; if (d.length > 6) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`; if (d.length > 3) return `${d.slice(0, 3)}.${d.slice(3)}`; return d; };
 const maskPhone = (raw) => { const d = onlyDigits(raw).slice(0, 11); if (!d) return ""; if (d.length <= 2) return `(${d}`; const ddd = d.slice(0, 2), rest = d.slice(2); if (rest.length <= 4) return `(${ddd}) ${rest}`; if (d.length <= 10) return `(${ddd}) ${rest.slice(0, 4)}-${rest.slice(4)}`; return `(${ddd}) ${rest.slice(0, 5)}-${rest.slice(5)}`; };
 const fmtDate = (s) => s ? new Date(s).toLocaleDateString("pt-BR") : "—";
+
+/* ─── parsers da base enriquecida de RJ (Direct Data + dados do processo) ─── */
+const parseBoolFlag = (raw) => ["sim", "s", "true", "1", "yes", "y", "verdadeiro"].includes((raw || "").toString().trim().toLowerCase());
+const parseValorCausaCents = (raw) => {
+  let s = (raw == null ? "" : String(raw)).trim();
+  if (!s) return null;
+  s = s.replace(/[^\d.,-]/g, "");
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? Math.round(n * 100) : null;
+};
+const parseDataDistribuicao = (raw) => {
+  const m = (raw || "").toString().trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : null;
+};
 
 /* ─── CSV: parser + helpers nativos (sem dependência externa) ─── */
 function parseCsv(text) {
@@ -68,12 +87,24 @@ const FIELD_ALIASES = {
   nome: ["nome", "name", "nome completo", "cliente", "full_name", "fullname"],
   cpf: ["cpf", "documento", "cpf/cnpj", "cpfcnpj"],
   email: ["email", "e-mail", "mail", "e mail"],
-  telefone: ["telefone", "phone", "celular", "whatsapp", "fone", "tel"],
+  telefone: ["telefone", "phone", "celular", "whatsapp", "fone", "tel", "telefone_1", "telefone 1"],
+  telefone2: ["telefone_2", "telefone 2", "segundo telefone", "tel2", "tel_2"],
+  telefone_whatsapp: ["telefone_1_whatsapp", "telefone 1 whatsapp", "whatsapp_1", "tel1_whatsapp"],
+  telefone2_whatsapp: ["telefone_2_whatsapp", "telefone 2 whatsapp", "whatsapp_2", "tel2_whatsapp"],
   processo: ["processo", "numero_processo", "numero do processo", "número do processo", "cnj", "numero_cnj"],
+  tribunal: ["tribunal", "trt"],
+  vara: ["vara", "orgao_julgador", "órgão julgador", "orgao julgador"],
+  valor_causa: ["valor_causa", "valor da causa", "valorcausa"],
+  advogado_reclamante: ["adv_reclamante", "advogado_reclamante", "advogado do reclamante"],
+  data_distribuicao: ["distribuicao", "distribuição", "data_distribuicao", "data de distribuicao"],
+  adv_reclamada: ["adv_reclamada", "advogado_reclamada", "advogado da reclamada"],
+  outros_interessados: ["outros_interessados", "outros interessados"],
+  instancia: ["instancia", "instância"],
+  reclamadas: ["reclamadas"],
 };
 const normHeader = (s) => (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
 function guessMapping(headers) {
-  const map = { nome: null, cpf: null, email: null, telefone: null, processo: null };
+  const map = Object.fromEntries(Object.keys(FIELD_ALIASES).map((k) => [k, null]));
   headers.forEach((h, idx) => {
     const n = normHeader(h);
     for (const field of Object.keys(FIELD_ALIASES)) {
@@ -597,7 +628,13 @@ function ImportLeadsModal({ onClose, onDone }) {
   const [fileName, setFileName] = useState("");
   const [headers, setHeaders] = useState([]);
   const [dataRows, setDataRows] = useState([]);
-  const [mapping, setMapping] = useState({ nome: null, cpf: null, email: null, telefone: null, processo: null });
+  const [mapping, setMapping] = useState({
+    nome: null, cpf: null, email: null, telefone: null, telefone2: null,
+    telefone_whatsapp: null, telefone2_whatsapp: null, processo: null,
+    tribunal: null, vara: null, valor_causa: null, advogado_reclamante: null,
+    data_distribuicao: null, adv_reclamada: null, outros_interessados: null,
+    instancia: null, reclamadas: null,
+  });
   const [createSegment, setCreateSegment] = useState(true);
   const [segmentName, setSegmentName] = useState("");
   const [error, setError] = useState(null);
@@ -631,7 +668,7 @@ function ImportLeadsModal({ onClose, onDone }) {
   const runImport = async () => {
     setError(null);
     setStep("processing");
-    let processed = 0, failed = 0, dealsCreated = 0;
+    let processed = 0, failed = 0, dealsCreated = 0, rrIndex = 0;
     const personIds = [];
     // identificador do lote: alimenta utm_campaign de quem for novo (resolve_person
     // nunca sobrescreve UTM de quem já veio de campanha paga — só preenche em branco)
@@ -641,13 +678,31 @@ function ImportLeadsModal({ onClose, onDone }) {
     setProgress({ done: 0, total: dataRows.length });
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      const nome = mapping.nome != null ? (row[mapping.nome] || "").trim() : "";
-      const cpfRaw = mapping.cpf != null ? (row[mapping.cpf] || "").trim() : "";
-      const emailRaw = mapping.email != null ? (row[mapping.email] || "").trim() : "";
-      const phoneRaw = mapping.telefone != null ? (row[mapping.telefone] || "").trim() : "";
-      const processoRaw = mapping.processo != null ? (row[mapping.processo] || "").trim() : "";
+      const get = (k) => (mapping[k] != null ? (row[mapping[k]] || "").trim() : "");
+      const nome = get("nome");
+      const cpfRaw = get("cpf");
+      const emailRaw = get("email");
+      const phoneRaw = get("telefone");
+      const phone2Raw = get("telefone2");
+      const processoRaw = get("processo");
       const cpfClean = cpfRaw ? cleanCpf(cpfRaw) : null;
       const phoneClean = phoneRaw ? onlyDigits(phoneRaw) : "";
+      const phone2Clean = phone2Raw ? onlyDigits(phone2Raw) : "";
+
+      // campos enriquecidos do processo (base RJ/Casas Bahia) — todos opcionais,
+      // ficam null quando a coluna não foi mapeada
+      const tribunal = get("tribunal") || null;
+      const vara = get("vara") || null;
+      const valorCausaCents = mapping.valor_causa != null ? parseValorCausaCents(row[mapping.valor_causa]) : null;
+      const advogadoReclamante = get("advogado_reclamante") || null;
+      const dataDistribuicao = mapping.data_distribuicao != null ? parseDataDistribuicao(row[mapping.data_distribuicao]) : null;
+      const dadosImportados = Object.fromEntries(
+        [["adv_reclamada", "adv_reclamada"], ["outros_interessados", "outros_interessados"],
+         ["instancia", "instancia"], ["reclamadas", "reclamadas"]]
+          .map(([key, mapKey]) => [key, get(mapKey)])
+          .filter(([, v]) => v)
+      );
+
       if (!cpfClean && !emailRaw && !phoneClean) {
         failed++;
       } else {
@@ -663,24 +718,56 @@ function ImportLeadsModal({ onClose, onDone }) {
             processed++;
             if (personId) {
               personIds.push(personId);
+
+              // telefones com metadata (WhatsApp + qual é o principal) — não-fatal,
+              // a pessoa já foi resolvida acima independente disso
+              try {
+                if (phoneClean) {
+                  await supabase.schema("core").rpc("set_phone_identifier", {
+                    p_workspace: WORKSPACE_VANTARI, p_person: personId, p_phone: phoneClean,
+                    p_metadata: { whatsapp: parseBoolFlag(row[mapping.telefone_whatsapp]), principal: true },
+                  });
+                }
+                if (phone2Clean) {
+                  await supabase.schema("core").rpc("set_phone_identifier", {
+                    p_workspace: WORKSPACE_VANTARI, p_person: personId, p_phone: phone2Clean,
+                    p_metadata: { whatsapp: parseBoolFlag(row[mapping.telefone2_whatsapp]), principal: false },
+                  });
+                }
+              } catch { /* não-fatal */ }
+
               // cria/reaproveita o negócio no CRM — não-fatal (pessoa já foi resolvida acima).
               // Pipeline/etapa fixos por ID (não por nome: existe mais de uma pipeline
               // "Esteira de Aquisição" no banco e busca por nome é frágil ali) — todo lead
               // importado por essa tela vai pra "Recuperação Judicial — Varejo" / "Lead capturado".
               try {
-                const { error: dealErr } = processoRaw
+                const dealExtra = {
+                  p_tribunal: tribunal, p_vara: vara, p_valor_causa_cents: valorCausaCents,
+                  p_advogado_reclamante: advogadoReclamante, p_data_distribuicao: dataDistribuicao,
+                  p_dados_importados: dadosImportados,
+                };
+                const { data: dealId, error: dealErr } = processoRaw
                   ? await supabase.schema("crm").rpc("ingest_processo_lead", {
                       p_workspace: WORKSPACE_VANTARI, p_person: personId, p_numero_cnj: processoRaw,
                       p_honorarios_pct: null, p_source: "import",
                       p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
-                      p_reclamada_em_rj: true,
+                      p_reclamada_em_rj: true, ...dealExtra,
                     })
                   : await supabase.schema("crm").rpc("create_draft_deal", {
                       p_workspace: WORKSPACE_VANTARI, p_person: personId, p_source: "import",
                       p_pipeline_id: PIPELINE_RJ_VAREJO, p_stage_id: STAGE_LEAD_CAPTURADO,
-                      p_reclamada_em_rj: true,
+                      p_reclamada_em_rj: true, ...dealExtra,
                     });
-                if (!dealErr) dealsCreated++;
+                if (!dealErr) {
+                  dealsCreated++;
+                  // distribuição round-robin entre captadoras ativas — só preenche
+                  // quando ainda não tem captador (não reatribui negócio já trabalhado)
+                  const captador = CAPTADORES_ROTATION[rrIndex % CAPTADORES_ROTATION.length];
+                  rrIndex++;
+                  if (dealId) {
+                    await supabase.schema("crm").from("deals").update({ captador }).eq("id", dealId).is("captador", null);
+                  }
+                }
               } catch { /* não-fatal: só o negócio falhou, a pessoa já foi importada */ }
             }
           }
@@ -758,9 +845,27 @@ function ImportLeadsModal({ onClose, onDone }) {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 {mapField("nome", "Nome")}
                 {mapField("cpf", "CPF")}
-                {mapField("telefone", "Telefone")}
+                {mapField("telefone", "Telefone 1")}
+                {mapField("telefone_whatsapp", "Telefone 1 é WhatsApp? (opcional)")}
+                {mapField("telefone2", "Telefone 2 (opcional)")}
+                {mapField("telefone2_whatsapp", "Telefone 2 é WhatsApp? (opcional)")}
                 {mapField("email", "E-mail")}
                 <div style={{ gridColumn: "1 / -1" }}>{mapField("processo", "Número do processo (CNJ, opcional)")}</div>
+              </div>
+
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", margin: "4px 0 8px" }}>
+                Dados do processo (opcional)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {mapField("tribunal", "Tribunal (TRT)")}
+                {mapField("vara", "Vara / Órgão julgador")}
+                {mapField("valor_causa", "Valor da causa")}
+                {mapField("data_distribuicao", "Data de distribuição (dd/mm/aaaa)")}
+                <div style={{ gridColumn: "1 / -1" }}>{mapField("advogado_reclamante", "Advogado do reclamante")}</div>
+                {mapField("adv_reclamada", "Advogado da reclamada")}
+                {mapField("instancia", "Instância")}
+                {mapField("outros_interessados", "Outros interessados")}
+                {mapField("reclamadas", "Reclamadas")}
               </div>
 
               <div style={{ marginTop: 6, marginBottom: 14, border: `1px solid ${T.border}`, borderRadius: 10, overflow: "auto", maxHeight: 140 }}>

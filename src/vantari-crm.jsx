@@ -523,7 +523,8 @@ const EMPTY_PROC = {
 };
 
 // Lista fixa de captadores (provisória — vira cadastro/roles depois).
-const CAPTADORES = ["Alexandra", "Vanessa", "Camila"];
+// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026).
+const CAPTADORES = ["Alexandra", "Vanessa"];
 
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },

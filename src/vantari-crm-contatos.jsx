@@ -28,9 +28,10 @@ const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 // negócios criados pela importação de CSV. Por ID, não por nome (ver comentário no runImport).
 const PIPELINE_RJ_VAREJO = "21469437-597b-4e84-a0c6-ac1873fc4684";
 const STAGE_LEAD_CAPTURADO = "c4dddd34-48d4-44b7-bcbe-29585298e667";
-// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026) —
-// distribuição round-robin da importação usa só quem está ativo.
-const CAPTADORES_ROTATION = ["Alexandra", "Vanessa"];
+// Distribuição de captador (Alexandra/Vanessa — Camila não faz mais parte do
+// time, confirmado pela Catarina em 01/09/2026) é decidida pela RPC
+// crm.pick_captador_for_person, não aqui — ela olha o banco (por pessoa, não
+// por linha) pra nunca dar dois "donos" diferentes pro mesmo CPF.
 
 /* helpers (self-contained) */
 const onlyDigits = (s) => (s || "").replace(/\D/g, "");
@@ -668,7 +669,7 @@ function ImportLeadsModal({ onClose, onDone }) {
   const runImport = async () => {
     setError(null);
     setStep("processing");
-    let processed = 0, failed = 0, dealsCreated = 0, rrIndex = 0;
+    let processed = 0, failed = 0, dealsCreated = 0;
     const personIds = [];
     // identificador do lote: alimenta utm_campaign de quem for novo (resolve_person
     // nunca sobrescreve UTM de quem já veio de campanha paga — só preenche em branco)
@@ -760,12 +761,20 @@ function ImportLeadsModal({ onClose, onDone }) {
                     });
                 if (!dealErr) {
                   dealsCreated++;
-                  // distribuição round-robin entre captadoras ativas — só preenche
-                  // quando ainda não tem captador (não reatribui negócio já trabalhado)
-                  const captador = CAPTADORES_ROTATION[rrIndex % CAPTADORES_ROTATION.length];
-                  rrIndex++;
+                  // captador é por PESSOA, não por processo/linha: se essa pessoa já
+                  // tem negócio com captador (desse lote ou de antes), a RPC reaproveita
+                  // o mesmo; o rodízio só avança de verdade pra gente nova (decidido
+                  // olhando o banco, não um contador local que reiniciaria a cada
+                  // importação)
                   if (dealId) {
-                    await supabase.schema("crm").from("deals").update({ captador }).eq("id", dealId).is("captador", null);
+                    try {
+                      const { data: captador } = await supabase.schema("crm").rpc("pick_captador_for_person", {
+                        p_workspace: WORKSPACE_VANTARI, p_person: personId,
+                      });
+                      if (captador) {
+                        await supabase.schema("crm").from("deals").update({ captador }).eq("id", dealId).is("captador", null);
+                      }
+                    } catch { /* não-fatal */ }
                   }
                 }
               } catch { /* não-fatal: só o negócio falhou, a pessoa já foi importada */ }

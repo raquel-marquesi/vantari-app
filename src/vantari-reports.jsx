@@ -158,6 +158,7 @@ function AccountMenu({ collapsed }) {
   );
 }
 function Sidebar({ collapsed, onToggle }) {
+  const role = useWorkspaceRole();
   return (
     <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
       flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
@@ -232,7 +233,6 @@ export default function Reports() {
   const [personMap, setPersonMap] = useState({});
   const [month, setMonth] = useState(monthKey(new Date()));
   const [collapsed, setCollapsed] = useSidebarCollapsed();
-  const role = useWorkspaceRole();
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);

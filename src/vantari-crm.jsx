@@ -277,6 +277,7 @@ function AccountMenu({ collapsed }) {
 }
 
 function Sidebar({ collapsed, onToggle }) {
+  const role = useWorkspaceRole();
   return (
     <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
       flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
@@ -962,7 +963,6 @@ export default function CRM() {
   const [showNovo, setShowNovo] = useState(false);
   const [toast, setToast] = useState(null);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
-  const role = useWorkspaceRole();
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [showFilter, setShowFilter] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");

@@ -139,6 +139,7 @@ function AccountMenu({ collapsed }) {
   );
 }
 function Sidebar({ collapsed, onToggle }) {
+  const role = useWorkspaceRole();
   return (
     <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
       flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
@@ -301,7 +302,6 @@ export default function InboxAtendimento() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useSidebarCollapsed();
-  const role = useWorkspaceRole();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [conversations, setConversations] = useState([]);

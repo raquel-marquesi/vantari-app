@@ -241,6 +241,7 @@ function AccountMenu({ collapsed }) {
   );
 }
 function Sidebar({ collapsed, onToggle }) {
+  const role = useWorkspaceRole();
   return (
     <div style={{ width: collapsed ? 64 : 240, background: T.sidebarBg, display: "flex", flexDirection: "column",
       flexShrink: 0, position: "fixed", top: 0, left: 0, height: "100vh", zIndex: 10, overflow: "visible", transition: "width 0.15s" }}>
@@ -1001,7 +1002,6 @@ export default function Contatos() {
   const [showImport, setShowImport] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
-  const role = useWorkspaceRole();
 
   // busca ou filtro de status muda → sempre volta pra página 1 (senão o
   // usuário pode ficar "preso" numa página que não existe mais pro novo filtro)

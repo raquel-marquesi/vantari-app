@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSidebarCollapsed } from "./sidebar-collapsed";
+import { useWorkspaceRole } from "./useWorkspaceRole";
+import { getCaptadorUserIdMap } from "./captadores";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -245,15 +247,19 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
         <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
         <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
-        <NavSection label="Ferramentas" collapsed={collapsed} />
-        <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
-        <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
-        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
-        <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
-        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
-        <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
-        <NavSection label="Sistema" collapsed={collapsed} />
-        <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
+        {role !== "captador" && (
+          <>
+            <NavSection label="Ferramentas" collapsed={collapsed} />
+            <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
+            <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
+            <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
+            <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
+            <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+            <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+            <NavSection label="Sistema" collapsed={collapsed} />
+            <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
+          </>
+        )}
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
         <AccountMenu collapsed={collapsed} />
@@ -327,6 +333,7 @@ export default function DealDetail() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
+  const role = useWorkspaceRole();
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
 
   const load = useCallback(async () => {
@@ -523,10 +530,12 @@ export default function DealDetail() {
 
   const saveDeal = async () => {
     setSaving(true); setError(null);
+    const captadorMap = form.captador ? await getCaptadorUserIdMap() : {};
     const { error: e } = await supabase.schema("crm").from("deals").update({
       credit_type: form.credit_type, modalidade: form.modalidade || null,
       valor_face_cents: reaisToCents(form.valor_face), valor_ofertado_cents: form.valor_ofertado === "" ? null : reaisToCents(form.valor_ofertado),
       desagio_pct: form.desagio === "" ? null : parseFloat(String(form.desagio).replace(",", ".")), captador: form.captador || null,
+      captador_user_id: form.captador ? (captadorMap[form.captador] || null) : null,
     }).eq("id", deal.id);
     setSaving(false);
     if (e) { setError(e.message); return; }

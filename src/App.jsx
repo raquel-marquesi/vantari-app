@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState, useEffect, Component } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./supabase";
+import { useWorkspaceRole } from "./useWorkspaceRole";
 
 // ────────────────────────────────────────────────────────────────
 // Depois de cada deploy no Vercel, os arquivos JS de cada página ganham um
@@ -131,6 +132,7 @@ const InboxAtendimento = lazyWithReload(() => import("./vantari-inbox"));
 const Reports          = lazyWithReload(() => import("./vantari-reports"));
 const PublicForm       = lazyWithReload(() => import("./vantari-public-form"));
 const Unsubscribe      = lazyWithReload(() => import("./vantari-unsubscribe"));
+const MeuPerfil        = lazyWithReload(() => import("./vantari-meu-perfil"));
 
 function PageLoader() {
   return (
@@ -179,11 +181,28 @@ function useSession() {
   return session;
 }
 
-function ProtectedRoute({ children }) {
+function ProtectedRoute({ children, blockCaptador = false }) {
   const session = useSession();
+  // Papel "captador" (Alexandra/Vanessa): visão restrita à própria carteira, ver CLAUDE.md.
+  // Chamado sempre (não só quando blockCaptador) porque hooks não podem ser condicionais.
+  const role = useWorkspaceRole();
   if (session === undefined) return <PageLoader />;
   if (!session) return <Navigate to="/login" replace />;
+  if (blockCaptador) {
+    if (role === undefined) return <PageLoader />;
+    if (role === "captador") return <Navigate to="/dashboard" replace />;
+  }
   return children;
+}
+
+// /settings: capadora só acessa a tela restrita "Meu Perfil", nunca as abas de
+// admin (import de leads, templates, pipeline, webhooks, equipe etc.)
+function SettingsRoute() {
+  const session = useSession();
+  const role = useWorkspaceRole();
+  if (session === undefined || role === undefined) return <PageLoader />;
+  if (!session) return <Navigate to="/login" replace />;
+  return role === "captador" ? <MeuPerfil /> : <Settings />;
 }
 
 export default function App() {
@@ -201,15 +220,15 @@ export default function App() {
           <Route path="/dashboard"      element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
           {/* /leads abre a tela do core (antes era public.leads, agora core.persons) */}
           <Route path="/leads"          element={<ProtectedRoute><Contatos /></ProtectedRoute>} />
-          <Route path="/scoring"        element={<ProtectedRoute><Scoring /></ProtectedRoute>} />
-          <Route path="/email"          element={<ProtectedRoute><EmailMarketing /></ProtectedRoute>} />
-          <Route path="/landing"        element={<ProtectedRoute><LandingPages /></ProtectedRoute>} />
-          <Route path="/ai-marketing"   element={<ProtectedRoute><AIMarketing /></ProtectedRoute>} />
-          <Route path="/integrations"   element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
-          <Route path="/settings"       element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/onboarding"     element={<ProtectedRoute><Onboarding /></ProtectedRoute>} />
-          <Route path="/workflow"       element={<ProtectedRoute><WorkflowBuilder /></ProtectedRoute>} />
-          <Route path="/segments"      element={<ProtectedRoute><Segments /></ProtectedRoute>} />
+          <Route path="/scoring"        element={<ProtectedRoute blockCaptador><Scoring /></ProtectedRoute>} />
+          <Route path="/email"          element={<ProtectedRoute blockCaptador><EmailMarketing /></ProtectedRoute>} />
+          <Route path="/landing"        element={<ProtectedRoute blockCaptador><LandingPages /></ProtectedRoute>} />
+          <Route path="/ai-marketing"   element={<ProtectedRoute blockCaptador><AIMarketing /></ProtectedRoute>} />
+          <Route path="/integrations"   element={<ProtectedRoute blockCaptador><Integrations /></ProtectedRoute>} />
+          <Route path="/settings"       element={<ProtectedRoute><SettingsRoute /></ProtectedRoute>} />
+          <Route path="/onboarding"     element={<ProtectedRoute blockCaptador><Onboarding /></ProtectedRoute>} />
+          <Route path="/workflow"       element={<ProtectedRoute blockCaptador><WorkflowBuilder /></ProtectedRoute>} />
+          <Route path="/segments"      element={<ProtectedRoute blockCaptador><Segments /></ProtectedRoute>} />
           <Route path="/crm"           element={<ProtectedRoute><CRM /></ProtectedRoute>} />
           <Route path="/crm/:dealId"   element={<ProtectedRoute><DealDetail /></ProtectedRoute>} />
           <Route path="/empresas"      element={<ProtectedRoute><Empresas /></ProtectedRoute>} />

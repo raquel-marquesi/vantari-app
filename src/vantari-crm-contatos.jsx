@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSidebarCollapsed } from "./sidebar-collapsed";
+import { useWorkspaceRole } from "./useWorkspaceRole";
+import { getCaptadorUserIdMap } from "./captadores";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -266,15 +268,19 @@ function Sidebar({ collapsed, onToggle }) {
         <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
         <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
         <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
-        <NavSection label="Ferramentas" collapsed={collapsed} />
-        <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
-        <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
-        <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
-        <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
-        <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
-        <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
-        <NavSection label="Sistema" collapsed={collapsed} />
-        <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
+        {role !== "captador" && (
+          <>
+            <NavSection label="Ferramentas" collapsed={collapsed} />
+            <NavItem icon={Mail} label="Email Marketing" path="/email" collapsed={collapsed} />
+            <NavItem icon={Star} label="Scoring" path="/scoring" collapsed={collapsed} />
+            <NavItem icon={LayoutTemplate} label="Landing Pages" path="/landing" collapsed={collapsed} />
+            <NavItem icon={Filter} label="Segmentações" path="/segments" collapsed={collapsed} />
+            <NavItem icon={Bot} label="IA & Automação" path="/ai-marketing" collapsed={collapsed} />
+            <NavItem icon={Zap} label="Automação de Marketing" path="/workflow" collapsed={collapsed} />
+            <NavSection label="Sistema" collapsed={collapsed} />
+            <NavItem icon={Plug} label="Integrações" path="/integrations" collapsed={collapsed} />
+          </>
+        )}
       </div>
       <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", padding: "8px 0", position: "relative" }}>
         <AccountMenu collapsed={collapsed} />
@@ -786,7 +792,10 @@ function ImportLeadsModal({ onClose, onDone }) {
                         p_workspace: WORKSPACE_VANTARI, p_person: personId,
                       });
                       if (captador) {
-                        await supabase.schema("crm").from("deals").update({ captador }).eq("id", dealId).is("captador", null);
+                        const captadorMap = await getCaptadorUserIdMap();
+                        await supabase.schema("crm").from("deals")
+                          .update({ captador, captador_user_id: captadorMap[captador] || null })
+                          .eq("id", dealId).is("captador", null);
                       }
                     } catch { /* não-fatal */ }
                   }
@@ -992,6 +1001,7 @@ export default function Contatos() {
   const [showImport, setShowImport] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
+  const role = useWorkspaceRole();
 
   // busca ou filtro de status muda → sempre volta pra página 1 (senão o
   // usuário pode ficar "preso" numa página que não existe mais pro novo filtro)

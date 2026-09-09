@@ -8,7 +8,7 @@ import {
   Loader2, AlertCircle, Building2, Zap, Filter, ChevronLeft, ChevronRight, LogOut,
   Activity, ListChecks, AlertTriangle, Inbox, Send, UserCheck, Search,
   Phone, IdCard, FileText, MessageCircle, Mic, Archive, ArchiveRestore, ExternalLink,
-  ChevronDown,
+  ChevronDown, Paperclip, X, Square, Download,
 } from "lucide-react";
 import { FileBarChart } from "lucide-react";
 
@@ -54,6 +54,13 @@ const firstName = (name) => (name ? name.trim().split(/\s+/)[0] : null);
 // placeholder que a Nina manda enquanto a transcrição do áudio não chega —
 // detecta pra desenhar como "transcrevendo" em vez de texto normal
 const isAudioProcessing = (body) => !!body && /\[?\s*áudio\s*-?\s*processando\s*transcri/i.test(body);
+const fmtBytes = (n) => {
+  if (!n && n !== 0) return "";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+};
+const fmtDuration = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 function mergeById(list, item) {
   const idx = list.findIndex((m) => m.id === item.id);
   if (idx === -1) return [...list, item];
@@ -196,6 +203,30 @@ function Sidebar({ collapsed, onToggle }) {
 }
 
 /* ─── bolha de mensagem ─── */
+function MessageMedia({ m }) {
+  const type = m.media_type || "";
+  if (type.startsWith("image/")) {
+    return (
+      <a href={m.media_url} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+        <img src={m.media_url} alt={m.media_filename || "imagem"}
+          style={{ maxWidth: 260, maxHeight: 260, borderRadius: 10, display: "block", objectFit: "cover" }} />
+      </a>
+    );
+  }
+  if (type.startsWith("audio/")) {
+    return <audio controls src={m.media_url} style={{ height: 36, maxWidth: 260 }} />;
+  }
+  return (
+    <a href={m.media_url} target="_blank" rel="noreferrer" download={m.media_filename || undefined}
+      style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 8, background: T.bg, display: "grid", placeItems: "center", flexShrink: 0 }}>
+        <FileText size={15} color={T.muted} />
+      </div>
+      <span style={{ fontSize: 12.5, color: T.teal, fontWeight: 600, wordBreak: "break-all" }}>{m.media_filename || "Arquivo anexado"}</span>
+      <Download size={13} color={T.faint3} style={{ flexShrink: 0 }} />
+    </a>
+  );
+}
 function MessageBubble({ m, grouped }) {
   const isCustomer = m.sender === "customer";
   const isNina = m.sender === "nina";
@@ -213,6 +244,18 @@ function MessageBubble({ m, grouped }) {
         }}>
           <Mic size={14} color={T.faint3} style={{ animation: "pulseAudio 1.4s ease-in-out infinite" }} />
           <span style={{ fontSize: 13, color: T.muted, fontStyle: "italic" }}>Transcrevendo áudio...</span>
+        </div>
+      ) : m.media_url ? (
+        <div style={{
+          maxWidth: "72%", background: bg, border: `1px solid ${isCustomer ? T.border : "transparent"}`,
+          borderRadius: 14, padding: "8px", fontFamily: T.font, display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <MessageMedia m={m} />
+          {m.body && (
+            <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.45, padding: "0 4px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {m.body}
+            </div>
+          )}
         </div>
       ) : (
         <div style={{
@@ -315,6 +358,15 @@ export default function InboxAtendimento() {
   const [archiveBusy, setArchiveBusy] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  // anexo (arquivo ou áudio gravado) pendente de envio — 09/09/2026
+  const [pendingAttachment, setPendingAttachment] = useState(null); // { kind: 'file'|'audio', file/blob, name, type, url, duration }
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const fileInputRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const recordedChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [banner, setBanner] = useState(null);
   // 10/08/2026 — seletor de atendente: lista de quem tem acesso real ao
@@ -591,15 +643,98 @@ export default function InboxAtendimento() {
     load();
   };
 
+  // limpa anexo pendente ao trocar de conversa — evita mandar arquivo da
+  // conversa errada se o atendente selecionar outra antes de enviar
+  useEffect(() => {
+    if (pendingAttachment?.url) URL.revokeObjectURL(pendingAttachment.url);
+    setPendingAttachment(null);
+    setRecording(false);
+    setRecordingSeconds(0);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current._cancelled = true;
+      mediaRecorderRef.current.stop();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  const pickFile = () => fileInputRef.current?.click();
+
+  const onFileSelected = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite selecionar o mesmo arquivo de novo depois
+    if (!file) return;
+    if (pendingAttachment?.url) URL.revokeObjectURL(pendingAttachment.url);
+    setPendingAttachment({ kind: "file", blob: file, name: file.name, type: file.type || "application/octet-stream" });
+  };
+
+  const removeAttachment = () => {
+    if (pendingAttachment?.url) URL.revokeObjectURL(pendingAttachment.url);
+    setPendingAttachment(null);
+  };
+
+  const startRecording = async () => {
+    setBanner(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/ogg";
+      const recorder = new MediaRecorder(stream, { mimeType });
+      recordedChunksRef.current = [];
+      recorder.ondataavailable = (ev) => { if (ev.data.size > 0) recordedChunksRef.current.push(ev.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        clearInterval(recordingTimerRef.current);
+        if (recorder._cancelled) { setRecording(false); setRecordingSeconds(0); return; }
+        const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+        setPendingAttachment({ kind: "audio", blob, name: `audio-${Date.now()}.${mimeType.includes("webm") ? "webm" : "ogg"}`, type: mimeType, url: URL.createObjectURL(blob) });
+        setRecording(false);
+        setRecordingSeconds(0);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordingSeconds(0);
+      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+    } catch (err) {
+      setBanner({ type: "error", text: "Não foi possível acessar o microfone — verifique a permissão do navegador." });
+    }
+  };
+
+  const stopRecording = () => mediaRecorderRef.current?.stop();
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current) {
+      mediaRecorderRef.current._cancelled = true;
+      mediaRecorderRef.current.stop();
+    }
+  };
+
   const send = async () => {
-    if (!draft.trim() || !selected) return;
+    if ((!draft.trim() && !pendingAttachment) || !selected) return;
     if (sendingRef.current) return; // já tem um envio em andamento — ignora a segunda chamada
     sendingRef.current = true;
     setSending(true); setBanner(null);
     try {
-      const { ok, json } = await callFn("conversation-send", { conversation_id: selected.id, body: draft.trim() });
+      let mediaFields = {};
+      if (pendingAttachment) {
+        setUploadingAttachment(true);
+        try {
+          const ext = (pendingAttachment.name.split(".").pop() || "bin").toLowerCase();
+          const path = `${selected.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+          const { error: upErr } = await supabase.storage.from("inbox-media").upload(path, pendingAttachment.blob, { contentType: pendingAttachment.type });
+          if (upErr) throw upErr;
+          const { data: signed, error: signErr } = await supabase.storage.from("inbox-media").createSignedUrl(path, 60 * 60 * 24);
+          if (signErr) throw signErr;
+          mediaFields = { media_url: signed.signedUrl, media_type: pendingAttachment.type, media_filename: pendingAttachment.name };
+        } catch (err) {
+          setBanner({ type: "error", text: "Falha ao subir o anexo: " + (err.message || String(err)) });
+          return;
+        } finally {
+          setUploadingAttachment(false);
+        }
+      }
+      const { ok, json } = await callFn("conversation-send", { conversation_id: selected.id, body: draft.trim(), ...mediaFields });
       if (!ok) { setBanner({ type: "error", text: json?.error || "Falha ao enviar mensagem." }); return; }
       setDraft("");
+      removeAttachment();
       loadMessages(selected.id);
     } finally {
       sendingRef.current = false;
@@ -823,16 +958,59 @@ export default function InboxAtendimento() {
                   <div style={{ fontSize: 12.5, color: T.muted, textAlign: "center", padding: "8px 0" }}>
                     Assuma a conversa pra poder responder ao cliente.
                   </div>
-                ) : (
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                      rows={1} placeholder="Digite sua mensagem..."
-                      style={{ flex: 1, resize: "none", padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 13.5, fontFamily: T.font, outline: "none" }} />
-                    <button onClick={send} disabled={sending || !draft.trim()}
-                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 18px", background: T.gradient, border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: (sending || !draft.trim()) ? "default" : "pointer", opacity: (sending || !draft.trim()) ? 0.6 : 1, fontFamily: T.font }}>
-                      {sending ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={15} />}
+                ) : recording ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 4px" }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: T.coral, animation: "pulseAudio 1.1s ease-in-out infinite", flexShrink: 0 }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: T.text, fontFamily: T.mono, flex: 1 }}>Gravando áudio... {fmtDuration(recordingSeconds)}</span>
+                    <button onClick={cancelRecording} title="Cancelar gravação"
+                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "8px 12px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.muted, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font }}>
+                      <X size={14} /> Cancelar
                     </button>
+                    <button onClick={stopRecording} title="Parar e revisar antes de enviar"
+                      style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", background: T.gradient, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font }}>
+                      <Square size={13} fill="#fff" /> Parar
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {pendingAttachment && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: T.bg, borderRadius: 9 }}>
+                        {pendingAttachment.kind === "audio" ? (
+                          <audio controls src={pendingAttachment.url} style={{ height: 32, flex: 1 }} />
+                        ) : (
+                          <>
+                            <Paperclip size={14} color={T.muted} style={{ flexShrink: 0 }} />
+                            <span style={{ fontSize: 12.5, color: T.text, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {pendingAttachment.name}
+                            </span>
+                            <span style={{ fontSize: 11, color: T.faint3, fontFamily: T.mono, flexShrink: 0 }}>{fmtBytes(pendingAttachment.blob.size)}</span>
+                          </>
+                        )}
+                        <button onClick={removeAttachment} title="Remover anexo"
+                          style={{ display: "flex", background: "none", border: "none", cursor: "pointer", color: T.faint3, padding: 2, flexShrink: 0 }}>
+                          <X size={15} />
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+                      <input ref={fileInputRef} type="file" onChange={onFileSelected} style={{ display: "none" }} />
+                      <button onClick={pickFile} disabled={sending || uploadingAttachment} title="Anexar arquivo"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, color: T.muted, cursor: "pointer" }}>
+                        <Paperclip size={16} />
+                      </button>
+                      <button onClick={startRecording} disabled={sending || uploadingAttachment || !!pendingAttachment} title="Gravar áudio"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, color: T.muted, cursor: (sending || uploadingAttachment || pendingAttachment) ? "default" : "pointer", opacity: pendingAttachment ? 0.5 : 1 }}>
+                        <Mic size={16} />
+                      </button>
+                      <textarea value={draft} onChange={(e) => setDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                        rows={1} placeholder={pendingAttachment ? "Adicione uma legenda (opcional)..." : "Digite sua mensagem..."}
+                        style={{ flex: 1, resize: "none", padding: "10px 12px", border: `1px solid ${T.border}`, borderRadius: 10, fontSize: 13.5, fontFamily: T.font, outline: "none" }} />
+                      <button onClick={send} disabled={sending || uploadingAttachment || (!draft.trim() && !pendingAttachment)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 18px", height: 40, background: T.gradient, border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: (sending || uploadingAttachment || (!draft.trim() && !pendingAttachment)) ? "default" : "pointer", opacity: (sending || uploadingAttachment || (!draft.trim() && !pendingAttachment)) ? 0.6 : 1, fontFamily: T.font }}>
+                        {sending || uploadingAttachment ? <Loader2 size={15} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={15} />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

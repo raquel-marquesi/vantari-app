@@ -20,7 +20,15 @@
 //
 // Auth: JWT do usuário logado no Next (verify_jwt = true, padrão).
 //
-// Body: { "conversation_id": "<uuid>", "body": "texto da mensagem" }
+// Body: {
+//   "conversation_id": "<uuid>",
+//   "body": "texto da mensagem",                 // opcional se vier media_url (legenda)
+//   "media_url": "https://...",                  // opcional (09/09/2026) — signed URL do bucket
+//                                                 //   "inbox-media" (Storage), pro anexo/áudio que o
+//                                                 //   atendente subiu no /inbox
+//   "media_type": "audio/webm" | "image/png" | ..., // obrigatório se media_url vier
+//   "media_filename": "comprovante.pdf"          // opcional, nome original do arquivo
+// }
 // Resposta: { message_id, conversation_id, created_at }
 // ════════════════════════════════════════════════════════════════
 
@@ -59,8 +67,12 @@ serve(async (req) => {
 
   const conversationId = body.conversation_id;
   const text = String(body.body ?? "").trim();
+  const mediaUrl = body.media_url ? String(body.media_url) : null;
+  const mediaType = mediaUrl ? String(body.media_type ?? "") : null;
+  const mediaFilename = body.media_filename ? String(body.media_filename) : null;
   if (!conversationId) return jsonResp({ error: "conversation_id obrigatório" }, 400);
-  if (!text)           return jsonResp({ error: "body (texto da mensagem) obrigatório" }, 400);
+  if (!text && !mediaUrl) return jsonResp({ error: "body (texto) ou media_url obrigatório" }, 400);
+  if (mediaUrl && !mediaType) return jsonResp({ error: "media_type obrigatório quando media_url é enviado" }, 400);
 
   const userClient = createClient(SUPABASE_URL, ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
@@ -100,6 +112,9 @@ serve(async (req) => {
       external_conversation_id: conv.external_conversation_id,
       body: text,
       sender: "human",
+      media_url: mediaUrl,
+      media_type: mediaType,
+      media_filename: mediaFilename,
     }, phoneOnFile);
     if (!result.ok) {
       await logNinaFailure(core, conv.workspace_id, conv.person_id, "send-message", result);
@@ -121,7 +136,10 @@ serve(async (req) => {
       person_id: conv.person_id,
       direction: "out",
       sender: "human",
-      body: text,
+      body: text || null,
+      media_url: mediaUrl,
+      media_type: mediaType,
+      media_filename: mediaFilename,
       created_at: nowIso,
     })
     .select("id, created_at")
@@ -131,9 +149,10 @@ serve(async (req) => {
     return jsonResp({ warning: "mensagem enviada mas não registrada no histórico do Next", detail: msgErr.message }, 207);
   }
 
+  const listPreview = text || (mediaType?.startsWith("audio/") ? "[Áudio]" : "[Arquivo]");
   await core
     .from("conversations")
-    .update({ last_message_at: nowIso, last_message_body: text, last_message_sender: "human", updated_at: nowIso })
+    .update({ last_message_at: nowIso, last_message_body: listPreview, last_message_sender: "human", updated_at: nowIso })
     .eq("id", conversationId);
 
   return jsonResp({ message_id: msg.id, conversation_id: conversationId, created_at: msg.created_at });

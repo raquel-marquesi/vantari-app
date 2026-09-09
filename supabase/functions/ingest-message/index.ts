@@ -20,7 +20,12 @@
 //   "sender": "customer" | "nina" | "human",                 // obrigatório
 //   "body": "texto da mensagem",                             // opcional (ex: mensagem só de mídia)
 //   "external_message_id": "<id único da mensagem na Nina>", // MUITO recomendado: evita duplicar se a Nina reenviar
-//   "occurred_at": "2026-07-29T18:40:00Z"                    // opcional, default = agora
+//   "occurred_at": "2026-07-29T18:40:00Z",                   // opcional, default = agora
+//   "media_url": "https://...",                              // opcional (09/09/2026) — arquivo/áudio recebido do
+//                                                             //   cliente no WhatsApp; a Nina hospeda e manda a URL,
+//                                                             //   o Next só guarda/exibe (não faz cópia)
+//   "media_type": "audio/ogg" | "image/jpeg" | "application/pdf" | ..., // mime type, obrigatório se media_url vier
+//   "media_filename": "comprovante.pdf"                      // opcional, nome original pra exibir/baixar
 // }
 //
 // Resposta: { "person_id", "conversation_id", "message_id", "is_new_conversation" }
@@ -113,6 +118,11 @@ serve(async (req) => {
       invalid ? 422 : 500);
   }
 
+  const mediaUrl = body.media_url ? String(body.media_url) : null;
+  if (mediaUrl && !body.media_type) {
+    return jsonResp({ error: "media_type obrigatório quando media_url é enviado" }, 400);
+  }
+
   const { data: msgResult, error: msgErr } = await core.rpc("ingest_message", {
     p_workspace: workspaceId,
     p_person: personId,
@@ -123,6 +133,9 @@ serve(async (req) => {
     p_external_message_id: body.external_message_id ?? null,
     p_occurred_at: body.occurred_at ?? new Date().toISOString(),
     p_source: "nina",
+    p_media_url: mediaUrl,
+    p_media_type: mediaUrl ? String(body.media_type) : null,
+    p_media_filename: body.media_filename ? String(body.media_filename) : null,
   });
   if (msgErr) {
     return jsonResp({ person_id: personId, error: "falha ao registrar mensagem", detail: msgErr.message }, 500);

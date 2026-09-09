@@ -237,25 +237,32 @@ function MessageBubble({ m, grouped }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: align, marginBottom: grouped ? 3 : 12 }}>
       {label && !grouped && <span style={{ fontSize: 10.5, fontWeight: 700, color: isNina ? T.teal : T.green, marginBottom: 2, fontFamily: T.font }}>{label}</span>}
-      {processing ? (
+      {m.media_url ? (
+        // mídia já disponível (ex: áudio ainda transcrevendo) — sempre toca/mostra
+        // na hora, nunca esconde atrás do spinner de transcrição
+        <div style={{
+          maxWidth: "72%", background: bg, border: `1px solid ${isCustomer ? T.border : "transparent"}`,
+          borderRadius: 14, padding: "8px", fontFamily: T.font, display: "flex", flexDirection: "column", gap: 6,
+        }}>
+          <MessageMedia m={m} />
+          {processing ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px" }}>
+              <Mic size={12} color={T.faint3} style={{ animation: "pulseAudio 1.4s ease-in-out infinite" }} />
+              <span style={{ fontSize: 12, color: T.muted, fontStyle: "italic" }}>Transcrevendo áudio...</span>
+            </div>
+          ) : m.body ? (
+            <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.45, padding: "0 4px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+              {m.body}
+            </div>
+          ) : null}
+        </div>
+      ) : processing ? (
         <div style={{
           maxWidth: "72%", display: "flex", alignItems: "center", gap: 8, background: T.surface,
           border: `1px dashed ${T.faint3}`, borderRadius: 14, padding: "9px 13px", fontFamily: T.font,
         }}>
           <Mic size={14} color={T.faint3} style={{ animation: "pulseAudio 1.4s ease-in-out infinite" }} />
           <span style={{ fontSize: 13, color: T.muted, fontStyle: "italic" }}>Transcrevendo áudio...</span>
-        </div>
-      ) : m.media_url ? (
-        <div style={{
-          maxWidth: "72%", background: bg, border: `1px solid ${isCustomer ? T.border : "transparent"}`,
-          borderRadius: 14, padding: "8px", fontFamily: T.font, display: "flex", flexDirection: "column", gap: 6,
-        }}>
-          <MessageMedia m={m} />
-          {m.body && (
-            <div style={{ fontSize: 13.5, color: T.text, lineHeight: 1.45, padding: "0 4px", whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-              {m.body}
-            </div>
-          )}
         </div>
       ) : (
         <div style={{

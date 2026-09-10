@@ -15,6 +15,7 @@ const T = {
   teal:    "#0D7491",
   green:   "#14A273",
   coral:   "#FF6B5E",
+  amber:   "#F59E0B",
   bg:      "#F5F8FB",
   surface: "#FFFFFF",
   border:  "#E8EEF3",
@@ -68,6 +69,21 @@ const formatPhone = (v) => {
   if (c.length <= 6)  return `(${c.slice(0,2)}) ${c.slice(2)}`;
   if (c.length <= 10) return `(${c.slice(0,2)}) ${c.slice(2,6)}-${c.slice(6)}`;
   return `(${c.slice(0,2)}) ${c.slice(2,7)}-${c.slice(7)}`;
+};
+
+/* ─── CNJ (número de processo) — máscara 0000000-00.0000.0.00.0000.
+   Validação é só um AVISO (amber), nunca bloqueia o envio: o campo é
+   opcional e o objetivo é ajudar quem sabe o número a digitar certo,
+   não travar quem não sabe ou digitou errado. Conferir com
+   core.normalize_numero_cnj (mesma regra: 7-2-4-1-2-4 = 20 dígitos). ─── */
+const formatCnj = (v) => {
+  const c = (v || "").replace(/\D/g, "").slice(0, 20);
+  if (c.length <= 7)  return c;
+  if (c.length <= 9)  return `${c.slice(0,7)}-${c.slice(7)}`;
+  if (c.length <= 13) return `${c.slice(0,7)}-${c.slice(7,9)}.${c.slice(9)}`;
+  if (c.length <= 14) return `${c.slice(0,7)}-${c.slice(7,9)}.${c.slice(9,13)}.${c.slice(13)}`;
+  if (c.length <= 16) return `${c.slice(0,7)}-${c.slice(7,9)}.${c.slice(9,13)}.${c.slice(13,14)}.${c.slice(14)}`;
+  return `${c.slice(0,7)}-${c.slice(7,9)}.${c.slice(9,13)}.${c.slice(13,14)}.${c.slice(14,16)}.${c.slice(16)}`;
 };
 
 export default function VantariPublicForm() {
@@ -340,9 +356,18 @@ function FieldRow({ field, value, error, onChange }) {
     input = <input type="text" value={formatCpf(value)} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || "000.000.000-00"} maxLength={14} style={baseStyle} inputMode="numeric" />;
   } else if (field.type === "phone") {
     input = <input type="tel" value={formatPhone(value)} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || "(11) 99999-9999"} maxLength={16} style={baseStyle} inputMode="numeric" />;
+  } else if (field.type === "cnj") {
+    input = <input type="text" value={formatCnj(value)} onChange={e => onChange(e.target.value)} placeholder={field.placeholder || "0000000-00.0000.0.00.0000"} maxLength={26} style={baseStyle} inputMode="numeric" />;
   } else {
     input = <input type={field.type || "text"} value={value} onChange={e => onChange(e.target.value)} placeholder={field.placeholder} style={baseStyle} />;
   }
+
+  // Aviso de CNJ incompleto — não bloqueia envio (campo opcional), só
+  // avisa quem começou a digitar e não terminou (20 dígitos no total).
+  const cnjDigits = field.type === "cnj" ? String(value || "").replace(/\D/g, "") : "";
+  const cnjWarning = field.type === "cnj" && cnjDigits.length > 0 && cnjDigits.length < 20
+    ? "Número incompleto — confira se digitou todos os dígitos do CNJ. Se não tiver certeza, pode deixar em branco."
+    : null;
 
   return (
     <div style={{ marginBottom: 14 }}>
@@ -353,6 +378,7 @@ function FieldRow({ field, value, error, onChange }) {
       )}
       {input}
       {error && <div style={{ fontSize: 11, color: T.coral, marginTop: 4, fontWeight: 600 }}>{error}</div>}
+      {!error && cnjWarning && <div style={{ fontSize: 11, color: T.amber, marginTop: 4, fontWeight: 600 }}>{cnjWarning}</div>}
     </div>
   );
 }

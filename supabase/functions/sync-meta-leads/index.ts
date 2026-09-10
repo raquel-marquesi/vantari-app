@@ -11,7 +11,11 @@
 // as mesmas RPCs que /ingest usa (core.resolve_person, core.events),
 // direto (sem round-trip HTTP), já que ambas rodam com service_role.
 //
-// Auth: JWT do usuário logado no Next (verify_jwt = true, padrão).
+// Auth: JWT do usuário logado no Next (verify_jwt = true, padrão) — chamada
+// manual do botão "Sincronizar Agora" — OU header X-Cron-Secret — chamada
+// automática do pg_cron a cada 10 min
+// (20260910000002_schedule_sync_meta_leads_cron.sql), pra não depender de
+// alguém lembrar de clicar no botão.
 //
 // Body: { "provider": "meta" }  (form_ids vêm de integration_credentials.config)
 // Resposta: { synced, skipped, forms: [{id,label,found,synced,error?}] }
@@ -23,6 +27,12 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY     = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+// segredo dedicado a chamadas internas do pg_cron (mesmo padrão do
+// X-Ingest-Secret que /ingest, /ingest-message e /lookup-person usam pra
+// chamadas externas) — permite o cron chamar esta function sem uma sessão
+// de usuário logado (só o clique manual em "Sincronizar Agora" tinha isso
+// até agora). Reutilizável por qualquer outra function agendada no futuro.
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
 // App single-tenant hoje (só a sala "Vantari") — mesmo uuid usado em
 // workspace_settings e nos seeds de tracked_pages/team_members.
@@ -41,7 +51,7 @@ const CAMPAIGN_PIPELINE_MAP: Record<string, string> = {
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
 };
 
 function jsonResp(body: unknown, status = 200) {
@@ -102,14 +112,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST")    return jsonResp({ error: "Method not allowed" }, 405);
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) return jsonResp({ error: "unauthorized" }, 401);
+  const isCronCall = !!CRON_SECRET && req.headers.get("X-Cron-Secret") === CRON_SECRET;
+  if (!isCronCall) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return jsonResp({ error: "unauthorized" }, 401);
 
-  const userClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const { data: userData, error: userErr } = await userClient.auth.getUser();
-  if (userErr || !userData?.user) return jsonResp({ error: "unauthorized" }, 401);
+    const userClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await userClient.auth.getUser();
+    if (userErr || !userData?.user) return jsonResp({ error: "unauthorized" }, 401);
+  }
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY);
   const core  = admin.schema("core");
@@ -201,8 +214,8 @@ serve(async (req) => {
         // se a pessoa informou o número do processo, cria o negócio — na pipeline
         // dedicada quando a campanha do formulário bater com o mapeamento, senão
         // cai no fallback padrão (Esteira de Aquisição)
+        const pipelineName = form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null;
         if (p.processo) {
-          const pipelineName = form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null;
           const { error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
             p_workspace: WORKSPACE_ID,
             p_person: personId,
@@ -216,6 +229,22 @@ serve(async (req) => {
           });
           if (dealErr) {
             console.error("sync-meta-leads: negócio não criado", { personId, processo: p.processo, detail: dealErr.message });
+          }
+        } else if (pipelineName) {
+          // Lead Ads do Instant Form não pediu (ou a pessoa não preencheu) o
+          // número do processo — mesmo fix do form da LP (20260910000001):
+          // cria o negócio como rascunho em vez de deixar a pessoa invisível
+          // no funil, pra ela já aparecer em "Lead capturado" e a Nina já
+          // reconhecer o contato quando ele mandar mensagem no WhatsApp.
+          const { error: draftErr } = await admin.schema("crm").rpc("create_draft_deal", {
+            p_workspace: WORKSPACE_ID,
+            p_person: personId,
+            p_source: "meta",
+            p_pipeline_name: pipelineName,
+            p_reclamada_em_rj: true,
+          });
+          if (draftErr) {
+            console.error("sync-meta-leads: negócio-rascunho não criado", { personId, detail: draftErr.message });
           }
         }
 

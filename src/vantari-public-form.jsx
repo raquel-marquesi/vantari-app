@@ -53,14 +53,34 @@ const validCpf = (v) => {
   return d2 === parseInt(c[10]);
 };
 
-/* ─── Conversão (Google Ads + Meta Pixel) — só pra campanha de recuperação
-   judicial. Disparado no sucesso confirmado do envio (não no clique do
-   botão), pra não inflar as conversões com submissões que falharam. ─── */
-const CONVERSION_SLUGS = new Set(["recuperacao-judicial", "advogados-recuperacao-judicial"]);
+/* ─── Campanha de recuperação judicial — usado em dois lugares:
+   1) conversão (Google Ads + Meta Pixel), disparada no sucesso confirmado
+      do envio (não no clique do botão), pra não inflar com submissões
+      que falharam;
+   2) handoff pro WhatsApp logo após o envio (ver buildWaMessage) — sem
+      telefone que a Nina alcance, o lead fica só esperando ela escrever
+      primeiro, e o WhatsApp Business API não deixa a empresa puxar
+      conversa do nada; quem manda a primeira mensagem precisa ser o
+      lead. Por isso a tela de sucesso já oferece o botão pronto, com a
+      mensagem pré-preenchida com o que ele acabou de digitar. ─── */
+const RJ_CAMPAIGN_SLUGS = new Set(["recuperacao-judicial", "advogados-recuperacao-judicial"]);
 function fireConversion(slug) {
-  if (!CONVERSION_SLUGS.has(slug)) return;
+  if (!RJ_CAMPAIGN_SLUGS.has(slug)) return;
   try { window.gtag && window.gtag('event', 'conversion', { send_to: 'AW-17395265084/6gsqCLr_g48bELzc2uZA' }); } catch { /* noop */ }
   try { window.fbq && window.fbq('track', 'Lead'); } catch { /* noop */ }
+}
+
+const WA_NUMBER_FALLBACK = "5511952135676"; // mesmo fallback hardcoded das LPs estáticas
+
+function buildWaMessage(values) {
+  const name = (values.name || values.nome || "").trim();
+  const cnjRaw = values.numero_processo || "";
+  const cnjDigits = String(cnjRaw).replace(/\D/g, "");
+  let msg = `Olá! Preenchi o formulário sobre crédito trabalhista${name ? ` — meu nome é ${name}` : ""}.`;
+  msg += cnjDigits.length === 20
+    ? ` Meu processo é ${cnjRaw}.`
+    : " Ainda não tenho certeza do número do processo.";
+  return msg;
 }
 
 const formatPhone = (v) => {
@@ -95,6 +115,7 @@ export default function VantariPublicForm() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [waUrl, setWaUrl] = useState(null); // handoff pro WhatsApp — ver RJ_CAMPAIGN_SLUGS
   const [error, setError] = useState(null);
 
   // honeypot: campo invisível pra humano, tentador pra bot que preenche tudo
@@ -245,12 +266,39 @@ export default function VantariPublicForm() {
     setSubmitting(false);
     if (error) { setError(error.message); return; }
     fireConversion(slug);
+
+    if (RJ_CAMPAIGN_SLUGS.has(slug)) {
+      let number = WA_NUMBER_FALLBACK;
+      try {
+        const { data } = await supabase.rpc("get_lp_whatsapp");
+        if (data) number = data;
+      } catch { /* segue com o fallback */ }
+      setWaUrl(`https://wa.me/${number}?text=${encodeURIComponent(buildWaMessage(values))}`);
+      setDone(true);
+      return;
+    }
+
     if (form.redirect_url) { window.location.href = form.redirect_url; return; }
     setDone(true);
   };
 
   if (loading) return <Centered>Carregando…</Centered>;
   if (error && !form) return <Centered tone="error">{error}</Centered>;
+  if (done && waUrl) return (
+    <Centered tone="success">
+      <div style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.green, marginBottom: 8 }}>✓ Recebemos seus dados!</div>
+      <div style={{ fontFamily: T.font, fontSize: 14, color: T.text, marginBottom: 20, lineHeight: 1.5 }}>
+        Agora é só continuar no WhatsApp — alguém da nossa equipe já vai te responder por lá.
+      </div>
+      <a href={waUrl} target="_blank" rel="noopener" style={{
+        display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 22px",
+        background: "#25D366", color: "#fff", fontFamily: T.font, fontSize: 14, fontWeight: 700,
+        borderRadius: 10, textDecoration: "none",
+      }}>
+        Continuar no WhatsApp →
+      </a>
+    </Centered>
+  );
   if (done) return (
     <Centered tone="success">
       <div style={{ fontFamily: T.head, fontSize: 22, fontWeight: 700, color: T.green, marginBottom: 8 }}>✓ Pronto!</div>

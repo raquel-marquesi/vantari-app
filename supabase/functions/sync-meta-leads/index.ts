@@ -148,7 +148,7 @@ async function resolvePageTokenForForm(pages: MetaPage[], formId: string): Promi
   }
   throw new Error(
     pages.length
-      ? `Nenhuma das ${pages.length} Página(s) administrada(s) pelo usuário conectado tem acesso ao formulário ${formId}. Confira se a Página dona do anúncio está entre as Páginas desse usuário no Meta Business Suite.`
+      ? `Nenhuma das ${pages.length} Página(s) administrada(s) pelo usuário conectado (${pages.map(p => `"${p.name}"`).join(", ")}) tem acesso ao formulário ${formId}. Confira se a Página dona do anúncio está entre elas no Meta Business Suite.`
       : `O usuário conectado não administra nenhuma Página no Meta (0 resultados em /me/accounts) — verifique o escopo "pages_show_list" na conexão OAuth.`
   );
 }

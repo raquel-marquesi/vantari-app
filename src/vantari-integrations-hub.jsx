@@ -84,7 +84,6 @@ const DB = {
     { id:"int_wa",     provider:"whatsapp",name:"WhatsApp Business API",  status:"disconnected", last_sync:null, config:{phone_id:"",waba_id:"",templates:[]}},
     { id:"int_wh",     provider:"webhook", name:"Webhooks Personalizados",status:"disconnected", last_sync:null, config:{endpoints:[]}},
   ],
-  integration_logs: [],
   external_leads:   [],
   wa_templates:     [],
   field_mappings:   { meta:[], google:[] },
@@ -216,6 +215,29 @@ const StatusIcon = ({ status }) => {
   if(status==="success") return <CheckCircle2 size={13} color={T.green} aria-hidden="true"/>;
   if(status==="error")   return <XCircle size={13} color={T.red} aria-hidden="true"/>;
   return <AlertTriangle size={13} color={T.amber} aria-hidden="true"/>;
+};
+
+/* ═══════════════════════════════════════════════════════════
+   LOGS DE SINCRONIZAÇÃO — dado real (integration_sync_logs)
+   Substitui o antigo DB.integration_logs, que era um mock sempre
+   vazio e nunca foi ligado a nada — por isso a tela nunca mostrava
+   nenhum log, mesmo com o pg_cron sincronizando a cada 10 min.
+═══════════════════════════════════════════════════════════ */
+const useSyncLogs = (limit = 100) => {
+  const [logs,    setLogs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("integration_sync_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    setLogs((data || []).map(l => ({ ...l, timestamp: l.created_at })));
+    setLoading(false);
+  }, [limit]);
+  useEffect(() => { load(); }, [load]);
+  return { logs, loading, reload: load };
 };
 
 const LogRow = ({ log }) => {
@@ -378,7 +400,8 @@ const IntegrationCard = ({ integration, onOpen, onViewLogs }) => {
 };
 
 const StatsBar = ({ provider }) => {
-  const logs = DB.integration_logs.filter(l=>l.provider===provider).slice(0,10);
+  const { logs: allLogs } = useSyncLogs(50);
+  const logs = allLogs.filter(l=>l.provider===provider).slice(0,10);
   const ok  = logs.filter(l=>l.status==="success").length;
   const err = logs.filter(l=>l.status==="error").length;
   return (
@@ -1254,8 +1277,9 @@ const FieldMappingView = ({ onBack }) => {
 const LogsView = ({ onBack }) => {
   const [filter,         setFilter]         = useState("all");
   const [providerFilter, setProviderFilter] = useState("all");
-  const logs   = DB.integration_logs.filter(l=>filter==="all"||l.status===filter).filter(l=>providerFilter==="all"||l.provider===providerFilter).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
-  const counts = {total:DB.integration_logs.length,success:DB.integration_logs.filter(l=>l.status==="success").length,error:DB.integration_logs.filter(l=>l.status==="error").length,warning:DB.integration_logs.filter(l=>l.status==="warning").length};
+  const { logs: allLogs, loading: loadingLogs, reload: reloadLogs } = useSyncLogs(200);
+  const logs   = allLogs.filter(l=>filter==="all"||l.status===filter).filter(l=>providerFilter==="all"||l.provider===providerFilter).sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));
+  const counts = {total:allLogs.length,success:allLogs.filter(l=>l.status==="success").length,error:allLogs.filter(l=>l.status==="error").length,warning:allLogs.filter(l=>l.status==="warning").length};
 
   return (
     <div>
@@ -1284,11 +1308,13 @@ const LogsView = ({ onBack }) => {
           <option value="google">Google</option>
           <option value="webhook">Webhook</option>
         </select>
-        <Btn size="sm" variant="secondary" icon="↻" disabled title="Em breve">Atualizar</Btn>
+        <Btn size="sm" variant="secondary" icon="↻" onClick={reloadLogs} disabled={loadingLogs}>{loadingLogs?"Atualizando…":"Atualizar"}</Btn>
         <Btn size="sm" variant="ghost" icon={Download} style={{marginLeft:"auto"}} disabled title="Em breve">Exportar CSV</Btn>
       </div>
       <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:logs.length?"0 16px":"32px 16px"}}>
-        {logs.length===0
+        {loadingLogs && logs.length===0
+          ? <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Carregando…</div>
+          : logs.length===0
           ? <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Nenhum log ainda — aparecem aqui quando uma integração conectada sincronizar de verdade.</div>
           : logs.map(log=><LogRow key={log.id} log={log}/>)}
       </div>
@@ -1307,6 +1333,8 @@ export default function VantariIntegrationsHub() {
   const [oauthMsg,            setOauthMsg]           = useState(null);
   const extLeads     = DB.external_leads;
   const pendingLeads = extLeads.filter(l=>!l.processed).length;
+  const { logs: recentLogs } = useSyncLogs(50);
+  const failuresLast24h = recentLogs.filter(l => l.status==="error" && (Date.now() - new Date(l.created_at).getTime()) < 24*3600*1000).length;
 
   // Carrega credenciais reais (via edge function — integration_credentials não
   // é mais acessível direto do navegador, ver integration-credentials/index.ts)
@@ -1474,7 +1502,7 @@ export default function VantariIntegrationsHub() {
                   {label:"Plataformas Conectadas", value:`${integrations.filter(i=>i.status==="connected").length}/${integrations.length}`, color:T.teal },
                   {label:"Leads Importados Hoje",   value:extLeads.length,                                                                   color:T.green},
                   {label:"Pendentes de Processar",  value:pendingLeads,                                                                      color:T.amber},
-                  {label:"Falhas nas Últimas 24h",  value:DB.integration_logs.filter(l=>l.status==="error").length,                         color:T.red  },
+                  {label:"Falhas nas Últimas 24h",  value:failuresLast24h,                                                                    color:T.red  },
                 ].map(s=>(
                   <div key={s.label} style={{background:T.surface,border:`0.5px solid ${T.border}`,borderLeft:`3px solid ${s.color}`,borderRadius:10,padding:"14px 18px"}}>
                     <div style={{fontSize:24,fontWeight:700,color:s.color,lineHeight:1,fontFamily:T.head}}>{s.value}</div>
@@ -1492,10 +1520,10 @@ export default function VantariIntegrationsHub() {
                   <h3 style={{margin:0,fontSize:14,fontWeight:700,color:T.text,fontFamily:T.head}}>Atividade Recente</h3>
                   <Btn size="sm" variant="ghost" onClick={()=>setView("logs")}>Ver todos →</Btn>
                 </div>
-                <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:DB.integration_logs.length?"0 16px":"24px 16px"}}>
-                  {DB.integration_logs.length===0
+                <div style={{background:T.surface,border:`0.5px solid ${T.border}`,borderRadius:10,padding:recentLogs.length?"0 16px":"24px 16px"}}>
+                  {recentLogs.length===0
                     ? <div style={{textAlign:"center",color:T.muted,fontSize:13,fontWeight:600,fontFamily:T.font}}>Nenhuma atividade ainda.</div>
-                    : DB.integration_logs.slice(0,8).map(log=><LogRow key={log.id} log={log}/>)}
+                    : recentLogs.slice(0,8).map(log=><LogRow key={log.id} log={log}/>)}
                 </div>
               </div>
             </div>

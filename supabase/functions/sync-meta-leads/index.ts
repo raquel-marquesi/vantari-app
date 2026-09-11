@@ -61,6 +61,24 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+// Uma linha por execução (sucesso ou erro) em public.integration_sync_logs —
+// alimenta a tela /integrations → Logs de Sincronização, que até 11/09 lia de
+// um mock hardcoded no frontend e por isso nunca mostrava nada de verdade.
+async function writeSyncLog(
+  admin: ReturnType<typeof createClient>,
+  entry: { status: "success" | "error" | "warning"; details: string; records_affected?: number; payload?: unknown }
+) {
+  const { error } = await admin.from("integration_sync_logs").insert({
+    provider: "meta",
+    action: "sync_meta_leads",
+    status: entry.status,
+    details: entry.details,
+    records_affected: entry.records_affected ?? 0,
+    payload: entry.payload ?? null,
+  });
+  if (error) console.error("sync-meta-leads: falha ao gravar integration_sync_logs", error.message);
+}
+
 // Mesma heurística da função /ingest — casa por substring no nome do
 // campo, já que o Meta devolve a "key" da pergunta, não um schema fixo.
 function fromMetaFieldData(fd: Array<{ name: string; values: string[] }>) {
@@ -89,6 +107,51 @@ type MetaLead = {
   campaign_id?: string; campaign_name?: string;
   platform?: string;
 };
+
+type MetaPage = { id: string; name: string; access_token: string };
+
+// A Leads Retrieval API exige um Page Access Token da Página DONA do
+// formulário — o token de usuário salvo em integration_credentials (obtido
+// no oauth-callback via /oauth/access_token) não é aceito nela, mesmo com o
+// escopo leads_retrieval concedido. O Graph API não avisa isso claramente:
+// ele responde "Object with ID '...' does not exist, cannot be loaded due
+// to missing permissions" (erro que apareceu em produção em 11/09), que
+// parece "form errado" mas na verdade é "token errado". Por isso é preciso
+// trocar: listar as Páginas administradas pelo usuário (/me/accounts, que
+// já devolve o access_token de cada Página) e achar qual delas consegue
+// enxergar o formulário.
+async function listUserPages(userAccessToken: string): Promise<MetaPage[]> {
+  const pages: MetaPage[] = [];
+  let url = `https://graph.facebook.com/${GRAPH_VERSION}/me/accounts?fields=id,name,access_token&limit=100&access_token=${encodeURIComponent(userAccessToken)}`;
+  while (url) {
+    const res = await fetch(url);
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(
+        json?.error?.message
+          ? `Falha ao listar Páginas do usuário (/me/accounts): ${json.error.message}`
+          : `Falha ao listar Páginas do usuário (/me/accounts), status ${res.status}`
+      );
+    }
+    pages.push(...(json.data || []));
+    url = json.paging?.next || "";
+  }
+  return pages;
+}
+
+// Testa cada Page Access Token contra o formulário até achar a Página dona
+// (o Graph API só deixa o dono ler o objeto do formulário).
+async function resolvePageTokenForForm(pages: MetaPage[], formId: string): Promise<MetaPage> {
+  for (const page of pages) {
+    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${formId}?fields=id&access_token=${encodeURIComponent(page.access_token)}`);
+    if (res.ok) return page;
+  }
+  throw new Error(
+    pages.length
+      ? `Nenhuma das ${pages.length} Página(s) administrada(s) pelo usuário conectado tem acesso ao formulário ${formId}. Confira se a Página dona do anúncio está entre as Páginas desse usuário no Meta Business Suite.`
+      : `O usuário conectado não administra nenhuma Página no Meta (0 resultados em /me/accounts) — verifique o escopo "pages_show_list" na conexão OAuth.`
+  );
+}
 
 async function fetchFormLeads(formId: string, accessToken: string, sinceUnix: number | null): Promise<MetaLead[]> {
   const leads: MetaLead[] = [];
@@ -132,14 +195,31 @@ serve(async (req) => {
     .select("status, access_token, config")
     .eq("provider", "meta")
     .maybeSingle();
-  if (credsErr) return jsonResp({ error: credsErr.message }, 500);
+  if (credsErr) {
+    await writeSyncLog(admin, { status: "error", details: credsErr.message });
+    return jsonResp({ error: credsErr.message }, 500);
+  }
   if (!creds?.access_token || creds.status !== "connected") {
-    return jsonResp({ error: "Meta não está conectado. Salve as credenciais e clique em \"Conectar via OAuth\" primeiro." }, 400);
+    const msg = "Meta não está conectado. Salve as credenciais e clique em \"Conectar via OAuth\" primeiro.";
+    await writeSyncLog(admin, { status: "error", details: msg });
+    return jsonResp({ error: msg }, 400);
   }
 
   const formIds: Array<{ id: string; label?: string; campanha?: string; last_sync_ts?: number }> = creds.config?.form_ids || [];
   if (!formIds.length) {
-    return jsonResp({ error: "Nenhum formulário configurado. Adicione o ID de um Lead Ads Form em Configuração." }, 400);
+    const msg = "Nenhum formulário configurado. Adicione o ID de um Lead Ads Form em Configuração.";
+    await writeSyncLog(admin, { status: "error", details: msg });
+    return jsonResp({ error: msg }, 400);
+  }
+
+  // Resolve os Page Access Tokens do usuário UMA vez (reaproveitado por todos
+  // os formulários do loop abaixo) — ver comentário em resolvePageTokenForForm.
+  let userPages: MetaPage[] = [];
+  let pagesError: string | undefined;
+  try {
+    userPages = await listUserPages(creds.access_token);
+  } catch (err) {
+    pagesError = err instanceof Error ? err.message : String(err);
   }
 
   const results: Array<{ id: string; label?: string; found: number; synced: number; skipped: number; error?: string }> = [];
@@ -149,8 +229,10 @@ serve(async (req) => {
   for (let i = 0; i < formIds.length; i++) {
     const form = formIds[i];
     const stat = { id: form.id, label: form.label, found: 0, synced: 0, skipped: 0, error: undefined as string | undefined };
+    if (pagesError) { stat.error = pagesError; results.push(stat); continue; }
     try {
-      const metaLeads = await fetchFormLeads(form.id, creds.access_token, form.last_sync_ts || null);
+      const page = await resolvePageTokenForForm(userPages, form.id);
+      const metaLeads = await fetchFormLeads(form.id, page.access_token, form.last_sync_ts || null);
       stat.found = metaLeads.length;
 
       for (const lead of metaLeads) {
@@ -266,6 +348,12 @@ serve(async (req) => {
       error_message: results.find(r => r.error)?.error || null,
     })
     .eq("provider", "meta");
+
+  const errs = results.filter(r => r.error);
+  const status: "success" | "error" | "warning" = errs.length === 0 ? "success" : errs.length === results.length ? "error" : "warning";
+  const details = `${totalSynced} lead(s) novo(s) · ${totalSkipped} já existia(m)`
+    + (errs.length ? ` · ${errs.length} formulário(s) com erro: ${errs.map(e => `${e.label || e.id} (${e.id}): ${e.error}`).join("; ")}` : "");
+  await writeSyncLog(admin, { status, details, records_affected: totalSynced, payload: results });
 
   return jsonResp({ synced: totalSynced, skipped: totalSkipped, forms: results });
 });

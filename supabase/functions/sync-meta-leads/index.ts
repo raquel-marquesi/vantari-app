@@ -34,6 +34,20 @@ const SERVICE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 // até agora). Reutilizável por qualquer outra function agendada no futuro.
 const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
+// Token de usuário do SISTEMA do Meta Business Manager (não expira),
+// vinculado à Página "Vantari Crédito" com os escopos leads_retrieval +
+// pages_read_engagement + pages_show_list — configurado em 14/09/2026
+// pra substituir o OAuth pessoal como forma de obter o Page Access Token.
+// Motivo: o OAuth pessoal depende de qual(is) Página(s) o usuário concede
+// no picker do Facebook a cada reconexão, e isso mudava a cada vez (ver
+// histórico em integration_sync_logs) — nunca incluindo de forma confiável
+// a Página dona do formulário. Quando este secret está setado, ele substitui
+// o creds.access_token do OAuth pessoal como entrada do /me/accounts (o
+// endpoint também funciona pra system users, devolvendo o Page Access Token
+// de cada Página atribuída ao system user); se REMOVIDO (unset), a função
+// volta a usar o OAuth pessoal (creds.access_token) como antes.
+const META_SYSTEM_USER_TOKEN = Deno.env.get("META_SYSTEM_USER_TOKEN") ?? "";
+
 // App single-tenant hoje (só a sala "Vantari") — mesmo uuid usado em
 // workspace_settings e nos seeds de tracked_pages/team_members.
 const WORKSPACE_ID = "53092199-7b75-4342-a897-f589d6f34922";
@@ -139,12 +153,25 @@ async function listUserPages(userAccessToken: string): Promise<MetaPage[]> {
   return pages;
 }
 
-// Testa cada Page Access Token contra o formulário até achar a Página dona
-// (o Graph API só deixa o dono ler o objeto do formulário).
+// Testa cada Página listando os formulários de Lead Ads que ELA enxerga
+// (GET /{page_id}/leadgen_forms) e checando se o form_id procurado está na
+// lista — GET /{form_id}?fields=id direto retornava "sem acesso" mesmo com
+// Página/token corretos (permissão leads_retrieval confirmada ativa no app),
+// então a checagem de posse passou a ser feita pela lista da Página, não
+// pelo objeto do formulário isolado.
 async function resolvePageTokenForForm(pages: MetaPage[], formId: string): Promise<MetaPage> {
   for (const page of pages) {
-    const res = await fetch(`https://graph.facebook.com/${GRAPH_VERSION}/${formId}?fields=id&access_token=${encodeURIComponent(page.access_token)}`);
-    if (res.ok) return page;
+    let url = `https://graph.facebook.com/${GRAPH_VERSION}/${page.id}/leadgen_forms?fields=id,name&limit=100&access_token=${encodeURIComponent(page.access_token)}`;
+    let found = false;
+    for (let guard = 0; guard < MAX_PAGES_PER_FORM && url; guard++) {
+      const res = await fetch(url);
+      const json = await res.json().catch((e) => ({ __parse_error: String(e) }));
+      if (!res.ok) break; // essa Página falhou por completo, tenta a próxima
+      const forms: Array<{ id: string; name?: string }> = json.data || [];
+      if (forms.some((f) => String(f.id) === String(formId))) { found = true; break; }
+      url = json.paging?.next || "";
+    }
+    if (found) return page;
   }
   throw new Error(
     pages.length
@@ -199,7 +226,14 @@ serve(async (req) => {
     await writeSyncLog(admin, { status: "error", details: credsErr.message });
     return jsonResp({ error: credsErr.message }, 500);
   }
-  if (!creds?.access_token || creds.status !== "connected") {
+  if (!creds) {
+    const msg = "Nenhuma credencial Meta cadastrada (linha \"meta\" ausente em integration_credentials). Configure em /integrations.";
+    await writeSyncLog(admin, { status: "error", details: msg });
+    return jsonResp({ error: msg }, 400);
+  }
+  // Com META_SYSTEM_USER_TOKEN configurado, o OAuth pessoal (access_token/status)
+  // deixa de ser exigido — só usamos essa linha pra ler config.form_ids.
+  if (!META_SYSTEM_USER_TOKEN && (!creds.access_token || creds.status !== "connected")) {
     const msg = "Meta não está conectado. Salve as credenciais e clique em \"Conectar via OAuth\" primeiro.";
     await writeSyncLog(admin, { status: "error", details: msg });
     return jsonResp({ error: msg }, 400);
@@ -212,14 +246,35 @@ serve(async (req) => {
     return jsonResp({ error: msg }, 400);
   }
 
-  // Resolve os Page Access Tokens do usuário UMA vez (reaproveitado por todos
-  // os formulários do loop abaixo) — ver comentário em resolvePageTokenForForm.
+  // Resolve os Page Access Tokens UMA vez (reaproveitado por todos os
+  // formulários do loop abaixo).
   let userPages: MetaPage[] = [];
   let pagesError: string | undefined;
-  try {
-    userPages = await listUserPages(creds.access_token);
-  } catch (err) {
-    pagesError = err instanceof Error ? err.message : String(err);
+  if (META_SYSTEM_USER_TOKEN) {
+    // Um token de usuário do sistema (Business Manager) NÃO é, por si só, o
+    // Page Access Token — ele autentica como o system user, que só "empresta"
+    // acesso à Página quando trocado. Por isso chamamos /me/accounts com ESSE
+    // token: system users com a Página atribuída como asset também recebem de
+    // volta {id, name, access_token} de cada Página (mesmo endpoint que já
+    // usamos pro OAuth pessoal, o Graph API não diferencia). Só se isso falhar
+    // (ex.: variante de token já pré-vinculada a uma única Página, que às
+    // vezes vem pronta como Page Access Token) caímos pro uso direto do
+    // próprio token como se already fosse o da Página.
+    try {
+      const systemPages = await listUserPages(META_SYSTEM_USER_TOKEN);
+      userPages = systemPages.length
+        ? systemPages
+        : [{ id: "system-user", name: "token de sistema (uso direto, /me/accounts vazio)", access_token: META_SYSTEM_USER_TOKEN }];
+    } catch (err) {
+      console.error("sync-meta-leads: /me/accounts falhou pro token de sistema, usando o token direto como Page Access Token", err instanceof Error ? err.message : String(err));
+      userPages = [{ id: "system-user", name: "token de sistema (uso direto, fallback)", access_token: META_SYSTEM_USER_TOKEN }];
+    }
+  } else {
+    try {
+      userPages = await listUserPages(creds.access_token);
+    } catch (err) {
+      pagesError = err instanceof Error ? err.message : String(err);
+    }
   }
 
   const results: Array<{ id: string; label?: string; found: number; synced: number; skipped: number; error?: string }> = [];
@@ -297,8 +352,9 @@ serve(async (req) => {
         // dedicada quando a campanha do formulário bater com o mapeamento, senão
         // cai no fallback padrão (Esteira de Aquisição)
         const pipelineName = form.campanha ? (CAMPAIGN_PIPELINE_MAP[form.campanha] ?? null) : null;
+        let dealId: string | null = null;
         if (p.processo) {
-          const { error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
+          const { data, error: dealErr } = await admin.schema("crm").rpc("ingest_processo_lead", {
             p_workspace: WORKSPACE_ID,
             p_person: personId,
             p_numero_cnj: p.processo,
@@ -311,6 +367,8 @@ serve(async (req) => {
           });
           if (dealErr) {
             console.error("sync-meta-leads: negócio não criado", { personId, processo: p.processo, detail: dealErr.message });
+          } else {
+            dealId = data as string;
           }
         } else if (pipelineName) {
           // Lead Ads do Instant Form não pediu (ou a pessoa não preencheu) o
@@ -318,7 +376,7 @@ serve(async (req) => {
           // cria o negócio como rascunho em vez de deixar a pessoa invisível
           // no funil, pra ela já aparecer em "Lead capturado" e a Nina já
           // reconhecer o contato quando ele mandar mensagem no WhatsApp.
-          const { error: draftErr } = await admin.schema("crm").rpc("create_draft_deal", {
+          const { data, error: draftErr } = await admin.schema("crm").rpc("create_draft_deal", {
             p_workspace: WORKSPACE_ID,
             p_person: personId,
             p_source: "meta",
@@ -327,6 +385,25 @@ serve(async (req) => {
           });
           if (draftErr) {
             console.error("sync-meta-leads: negócio-rascunho não criado", { personId, detail: draftErr.message });
+          } else {
+            dealId = data as string;
+          }
+        }
+
+        // captador (Alexandra/Vanessa) alternado 50/50 pro negócio recém-criado
+        // — só faz sentido pra campanhas mapeadas numa pipeline (hoje só RECJUD).
+        // crm.assign_next_captador_round_robin é idempotente (não sobrescreve
+        // negócio que já tinha captador de antes) e decide olhando o banco, não
+        // um contador em memória — consistente entre execuções da function.
+        if (pipelineName && dealId) {
+          const { error: captadorErr } = await admin.schema("crm").rpc("assign_next_captador_round_robin", {
+            p_workspace: WORKSPACE_ID,
+            p_deal_id: dealId,
+            p_pipeline_name: pipelineName,
+            p_source: "meta",
+          });
+          if (captadorErr) {
+            console.error("sync-meta-leads: captador não atribuído", { personId, dealId, detail: captadorErr.message });
           }
         }
 

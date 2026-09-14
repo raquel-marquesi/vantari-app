@@ -1383,6 +1383,17 @@ export default function VantariIntegrationsHub() {
 
   const integrations = dbIntegrations.length > 0 ? dbIntegrations : DB.integrations;
 
+  // selectedIntegration é só uma referência (qual card foi aberto) — os dados
+  // de verdade vêm sempre de `integrations`, recalculado a cada render. Sem
+  // isso, reconectar via OAuth (ou qualquer reloadIntegrations() em segundo
+  // plano) atualiza `dbIntegrations` mas a tela aberta continuava mostrando o
+  // snapshot antigo (ex.: "Conecte a integração antes de sincronizar." mesmo
+  // já conectado, porque o objeto congelado em selectedIntegration nunca via
+  // o status novo).
+  const currentIntegration = selectedIntegration
+    ? (integrations.find(i => i.provider === selectedIntegration.provider) || selectedIntegration)
+    : selectedIntegration;
+
   const openIntegration = (integration) => {
     setSelectedIntegration(integration);
     setView(integration.provider==="webhook"?"webhook":integration.provider);
@@ -1529,10 +1540,10 @@ export default function VantariIntegrationsHub() {
             </div>
           )}
 
-          {view==="meta"      &&<MetaView       integration={selectedIntegration} onBack={goBack}/>}
-          {view==="google"    &&<GoogleView     integration={selectedIntegration} onBack={goBack}/>}
-          {view==="whatsapp"  &&<WhatsAppView   integration={selectedIntegration} onBack={goBack}/>}
-          {view==="webhook"   &&<WebhooksView   integration={selectedIntegration} onBack={goBack}/>}
+          {view==="meta"      &&<MetaView       integration={currentIntegration} onBack={goBack}/>}
+          {view==="google"    &&<GoogleView     integration={currentIntegration} onBack={goBack}/>}
+          {view==="whatsapp"  &&<WhatsAppView   integration={currentIntegration} onBack={goBack}/>}
+          {view==="webhook"   &&<WebhooksView   integration={currentIntegration} onBack={goBack}/>}
           {view==="mapping"   &&<FieldMappingView onBack={goBack}/>}
           {view==="logs"      &&<LogsView       onBack={goBack}/>}
         </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useWorkspaceRole } from "./useWorkspaceRole";
-import { getCaptadorUserIdMap } from "./captadores";
+import { getCaptadorUserIdMap, getCaptadorNames } from "./captadores";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -529,9 +529,19 @@ const EMPTY_PROC = {
   _autoTribunal: "", _autoVara: "", _autoUf: "",
 };
 
-// Lista fixa de captadores (provisória — vira cadastro/roles depois).
-// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026).
-const CAPTADORES = ["Alexandra", "Vanessa"];
+// Rótulos amigáveis pra crm.deals.source (fonte/origem) no filtro de Negociações.
+// Fallback pro valor cru pra qualquer fonte nova que apareça e ainda não tenha entrado aqui.
+const SOURCE_LABELS = {
+  import: "Direct Data / RJ (importação)",
+  nina: "Nina (WhatsApp)",
+  nina_auto_detect: "Nina (detecção automática)",
+  nina_backfill: "Nina (backfill)",
+  form: "Formulário do site",
+  meta: "Meta Ads",
+  google: "Google Ads",
+  crm: "Manual (CRM)",
+};
+const sourceLabel = (s) => SOURCE_LABELS[s] || s;
 
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },
@@ -540,7 +550,7 @@ const CNDT_OPTS = [
 ];
 const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
 
-function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }) {
+function NovoProcessoModal({ workspaceId, pipeline, stages, captadores, onClose, onCreated }) {
   const [f, setF] = useState(EMPTY_PROC);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -817,9 +827,9 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
               <label style={labelStyle}>Captador/a (distribuir para)</label>
               <select value={f.captador} onChange={(e) => set("captador", e.target.value)} style={inputStyle}>
                 <option value="">— selecionar —</option>
-                {CAPTADORES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {captadores.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
-              {CAPTADORES.length === 0 && (
+              {captadores.length === 0 && (
                 <div style={{ fontSize: 10.5, color: T.amber, marginTop: 3, fontFamily: T.font }}>
                   Lista de captadores ainda vazia — me passe os nomes para preencher.
                 </div>
@@ -866,18 +876,19 @@ function NovoProcessoModal({ workspaceId, pipeline, stages, onClose, onCreated }
 }
 
 /* ─── Painel de Filtro (popover sob o botão "Filtro") ─── */
-const EMPTY_FILTERS = { stageIds: [], creditType: "all", modalidade: "all", captador: "all", valorMin: "", valorMax: "" };
+const EMPTY_FILTERS = { stageIds: [], creditType: "all", captador: "all", empresa: "all", fonte: "all", valorMin: "", valorMax: "" };
 function countActiveFilters(f) {
   let n = 0;
   if (f.stageIds.length) n++;
   if (f.creditType !== "all") n++;
-  if (f.modalidade !== "all") n++;
   if (f.captador !== "all") n++;
+  if (f.empresa !== "all") n++;
+  if (f.fonte !== "all") n++;
   if (f.valorMin) n++;
   if (f.valorMax) n++;
   return n;
 }
-function FilterPanel({ stages, filters, onChange, onClear, onClose }) {
+function FilterPanel({ stages, filters, onChange, onClear, onClose, captadores, empresaOptions, fonteOptions }) {
   const labelSt = { fontSize: 11.5, fontWeight: 600, color: T.text, display: "block", marginBottom: 5, fontFamily: T.font };
   const selectSt = { width: "100%", padding: "7px 9px", border: `1px solid ${T.border}`, borderRadius: 7, fontSize: 12.5, color: T.text, outline: "none", fontFamily: T.font, boxSizing: "border-box", background: T.surface };
   const toggleStage = (id) => {
@@ -918,19 +929,26 @@ function FilterPanel({ stages, filters, onChange, onClear, onClose }) {
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={labelSt}>Modalidade</label>
-          <select value={filters.modalidade} onChange={(e) => onChange({ ...filters, modalidade: e.target.value })} style={selectSt}>
-            <option value="all">Todas</option>
-            <option value="tradicional">Tradicional</option>
-            <option value="kicker">Kicker</option>
+          <label style={labelSt}>Responsável</label>
+          <select value={filters.captador} onChange={(e) => onChange({ ...filters, captador: e.target.value })} style={selectSt}>
+            <option value="all">Todos</option>
+            {captadores.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
 
         <div style={{ marginBottom: 12 }}>
-          <label style={labelSt}>Captador/a</label>
-          <select value={filters.captador} onChange={(e) => onChange({ ...filters, captador: e.target.value })} style={selectSt}>
-            <option value="all">Todos</option>
-            {CAPTADORES.map((c) => <option key={c} value={c}>{c}</option>)}
+          <label style={labelSt}>Empresa (reclamada)</label>
+          <select value={filters.empresa} onChange={(e) => onChange({ ...filters, empresa: e.target.value })} style={selectSt}>
+            <option value="all">Todas</option>
+            {empresaOptions.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelSt}>Fonte/origem</label>
+          <select value={filters.fonte} onChange={(e) => onChange({ ...filters, fonte: e.target.value })} style={selectSt}>
+            <option value="all">Todas</option>
+            {fonteOptions.map((s) => <option key={s} value={s}>{sourceLabel(s)}</option>)}
           </select>
         </div>
 
@@ -959,6 +977,8 @@ export default function CRM() {
   const [stages, setStages] = useState([]);
   const [deals, setDeals] = useState([]);
   const [personMap, setPersonMap] = useState({});
+  const [companyMap, setCompanyMap] = useState({}); // processo_id -> nome da empresa reclamada
+  const [captadores, setCaptadores] = useState([]); // public.captadores — fonte única, evita lista fixa no código
   const [view, setView] = useState("kanban");
   const [showNovo, setShowNovo] = useState(false);
   const [toast, setToast] = useState(null);
@@ -990,7 +1010,7 @@ export default function CRM() {
 
       const { data: dl, error: e3 } = await crm
         .from("deals")
-        .select("id,person_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status,captador,created_at")
+        .select("id,person_id,processo_id,credit_type,modalidade,valor_face_cents,valor_ofertado_cents,desagio_pct,stage_id,status,captador,source,created_at")
         .eq("pipeline_id", pipe.id);
       if (e3) throw e3;
       // mais recente (chegada) primeiro em cada coluna do Kanban
@@ -1007,6 +1027,27 @@ export default function CRM() {
       } else {
         setPersonMap({});
       }
+
+      // empresa reclamada por negócio — vem de crm.processos.reclamada_company_id,
+      // não da tabela deals; duas idas (processos -> empresas) porque o cliente
+      // supabase-js não embeda entre schemas diferentes (crm/core) sem FK exposta
+      const processoIds = [...new Set((dl || []).map((d) => d.processo_id).filter(Boolean))];
+      if (processoIds.length) {
+        const { data: procs } = await crm
+          .from("processos").select("id,reclamada_company_id").in("id", processoIds);
+        const companyIds = [...new Set((procs || []).map((p) => p.reclamada_company_id).filter(Boolean))];
+        let companyNameById = {};
+        if (companyIds.length) {
+          const { data: cos } = await supabase.schema("core")
+            .from("companies").select("id,name").in("id", companyIds);
+          (cos || []).forEach((c) => { companyNameById[c.id] = c.name; });
+        }
+        const map = {};
+        (procs || []).forEach((p) => { if (p.reclamada_company_id) map[p.id] = companyNameById[p.reclamada_company_id] || null; });
+        setCompanyMap(map);
+      } else {
+        setCompanyMap({});
+      }
     } catch (err) {
       setError(err.message || String(err));
     } finally {
@@ -1015,6 +1056,8 @@ export default function CRM() {
   }, [pipelineId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => { getCaptadorNames().then(setCaptadores); }, []);
 
   const switchPipeline = (id) => {
     setPipelineId(id);
@@ -1035,8 +1078,9 @@ export default function CRM() {
     return deals.filter((d) => {
       if (filters.stageIds.length && !filters.stageIds.includes(d.stage_id)) return false;
       if (filters.creditType !== "all" && d.credit_type !== filters.creditType) return false;
-      if (filters.modalidade !== "all" && d.modalidade !== filters.modalidade) return false;
       if (filters.captador !== "all" && d.captador !== filters.captador) return false;
+      if (filters.empresa !== "all" && companyMap[d.processo_id] !== filters.empresa) return false;
+      if (filters.fonte !== "all" && d.source !== filters.fonte) return false;
       const valor = d.valor_ofertado_cents ?? d.valor_face_cents ?? 0;
       if (min != null && valor < min) return false;
       if (max != null && valor > max) return false;
@@ -1047,7 +1091,18 @@ export default function CRM() {
       }
       return true;
     });
-  }, [deals, filters, searchTerm, personMap]);
+  }, [deals, filters, searchTerm, personMap, companyMap]);
+
+  // opções dos selects de Empresa/Fonte — só o que de fato aparece no pipeline
+  // atual (evita listar empresa/fonte sem nenhum negócio pra filtrar)
+  const empresaOptions = useMemo(
+    () => [...new Set(deals.map((d) => companyMap[d.processo_id]).filter(Boolean))].sort(),
+    [deals, companyMap]
+  );
+  const fonteOptions = useMemo(
+    () => [...new Set(deals.map((d) => d.source).filter(Boolean))].sort((a, b) => sourceLabel(a).localeCompare(sourceLabel(b))),
+    [deals]
+  );
 
   const activeFilterCount = countActiveFilters(filters);
   const dealsByStage = (stageId) => filteredDeals.filter((d) => d.stage_id === stageId);
@@ -1123,7 +1178,8 @@ export default function CRM() {
               </button>
               {showFilter && (
                 <FilterPanel stages={stages} filters={filters} onChange={setFilters}
-                  onClear={() => setFilters(EMPTY_FILTERS)} onClose={() => setShowFilter(false)} />
+                  onClear={() => setFilters(EMPTY_FILTERS)} onClose={() => setShowFilter(false)}
+                  captadores={captadores} empresaOptions={empresaOptions} fonteOptions={fonteOptions} />
               )}
             </div>
             <button onClick={() => pipeline && setShowNovo(true)} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px",
@@ -1209,6 +1265,7 @@ export default function CRM() {
           workspaceId={WORKSPACE_VANTARI}
           pipeline={pipeline}
           stages={stages}
+          captadores={captadores}
           onClose={() => setShowNovo(false)}
           onCreated={({ elegivel, status }) => {
             setShowNovo(false);

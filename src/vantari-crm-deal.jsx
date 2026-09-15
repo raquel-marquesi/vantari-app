@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSidebarCollapsed } from "./sidebar-collapsed";
 import { useWorkspaceRole } from "./useWorkspaceRole";
-import { getCaptadorUserIdMap } from "./captadores";
+import { getCaptadorUserIdMap, getCaptadorNames } from "./captadores";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "./supabase";
 import {
@@ -27,8 +27,6 @@ const T = {
   font: "'Inter', system-ui, sans-serif", head: "'Sora', system-ui, sans-serif", mono: "'JetBrains Mono', monospace",
 };
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
-// Camila não faz mais parte do time (confirmado pela Catarina, 01/09/2026).
-const CAPTADORES = ["Alexandra", "Vanessa"];
 const CNDT_OPTS = [
   { v: "negativa", l: "Negativa (ok)" },
   { v: "positiva_efeito_negativa", l: "Positiva c/ efeito negativo (ok)" },
@@ -334,7 +332,10 @@ export default function DealDetail() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [collapsed, setCollapsed] = useSidebarCollapsed();
+  const [captadores, setCaptadores] = useState([]); // public.captadores — fonte única, evita lista fixa no código
   const setF = (k, v) => setForm((s) => ({ ...s, [k]: v }));
+
+  useEffect(() => { getCaptadorNames().then(setCaptadores); }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
@@ -996,7 +997,7 @@ export default function DealDetail() {
                         {efield("Valor de face (R$)", "valor_face", { mask: maskMoney })}
                         {efield("Valor ofertado (R$)", "valor_ofertado", { mask: maskMoney })}
                         {efield("Deságio (%)", "desagio")}
-                        {eselect("Captador/a", "captador", [{ v: "", l: "— selecionar —" }, ...CAPTADORES.map((c) => ({ v: c, l: c }))])}
+                        {eselect("Captador/a", "captador", [{ v: "", l: "— selecionar —" }, ...captadores.map((c) => ({ v: c, l: c }))])}
                       </div>
                     </div>
                   ) : (

@@ -13,3 +13,10 @@ export async function getCaptadorUserIdMap({ fresh = false } = {}) {
   (data || []).forEach((r) => { _cache[r.name] = r.user_id; });
   return _cache;
 }
+
+// Lista de nomes pra selects/filtros (Kanban de Negociações, detalhe do negócio).
+// Fonte única em public.captadores — nunca mais hardcodear a lista no componente.
+export async function getCaptadorNames({ fresh = false } = {}) {
+  const map = await getCaptadorUserIdMap({ fresh });
+  return Object.keys(map).sort();
+}

@@ -128,32 +128,29 @@ serve(async (req) => {
   }
 
   const nowIso = new Date().toISOString();
-  const { data: msg, error: msgErr } = await core
-    .from("messages")
-    .insert({
-      workspace_id: conv.workspace_id,
-      conversation_id: conversationId,
-      person_id: conv.person_id,
-      direction: "out",
-      sender: "human",
-      body: text || null,
-      media_url: mediaUrl,
-      media_type: mediaType,
-      media_filename: mediaFilename,
-      created_at: nowIso,
+  // core.record_human_message (em vez de um insert direto): toma o mesmo
+  // advisory lock por conversa que core.ingest_message usa, então se a Nina
+  // já chamou /ingest-message de volta confirmando o despacho (o que pode
+  // acontecer antes OU depois desta chamada terminar, dependendo de qual
+  // chamada de rede é mais rápida) esta função não cria uma segunda linha —
+  // era exatamente essa corrida que fazia toda mensagem enviada por um
+  // atendente aparecer duplicada no /inbox.
+  const { data: recordResult, error: msgErr } = await core
+    .rpc("record_human_message", {
+      p_workspace: conv.workspace_id,
+      p_conversation_id: conversationId,
+      p_person: conv.person_id,
+      p_body: text || null,
+      p_media_url: mediaUrl,
+      p_media_type: mediaType,
+      p_media_filename: mediaFilename,
+      p_occurred_at: nowIso,
     })
-    .select("id, created_at")
     .single();
   if (msgErr) {
     // mensagem já foi despachada pro cliente pela Nina; só o registro local falhou
     return jsonResp({ warning: "mensagem enviada mas não registrada no histórico do Next", detail: msgErr.message }, 207);
   }
 
-  const listPreview = text || (mediaType?.startsWith("audio/") ? "[Áudio]" : "[Arquivo]");
-  await core
-    .from("conversations")
-    .update({ last_message_at: nowIso, last_message_body: listPreview, last_message_sender: "human", updated_at: nowIso })
-    .eq("id", conversationId);
-
-  return jsonResp({ message_id: msg.id, conversation_id: conversationId, created_at: msg.created_at });
+  return jsonResp({ message_id: recordResult.message_id, conversation_id: conversationId, created_at: nowIso });
 });

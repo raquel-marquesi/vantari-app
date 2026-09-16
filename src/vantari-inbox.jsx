@@ -398,6 +398,9 @@ export default function InboxAtendimento() {
   const scrollRef = useRef(null);
   const convReqId = useRef(0);
   const msgReqId = useRef(0);
+  // força ir pro fim assim que as mensagens da conversa recém-selecionada
+  // chegarem — ver comentário no efeito de scroll mais abaixo
+  const forceScrollRef = useRef(false);
   // guarda síncrona contra envio duplicado: o estado `sending` (via setState)
   // só atualiza no próximo render, então duas invocações de send() disparadas
   // no mesmo tick (Enter + clique quase simultâneos, ou o próprio evento de
@@ -568,20 +571,30 @@ export default function InboxAtendimento() {
     return () => clearInterval(id);
   }, [selectedId, loadMessages]);
 
-  // só rola pro fim sozinho se o usuário já estava perto do fim — assim o
-  // polling de segurança não puxa a tela pra baixo enquanto alguém lê o
-  // histórico mais antigo
+  // ao trocar de conversa, marca que o próximo carregamento de mensagens
+  // deve forçar o scroll pro fim — antes disso esse scroll acontecia aqui
+  // mesmo (no efeito de [selectedId]), mas nesse momento `messages` ainda é
+  // da conversa ANTERIOR (o fetch da nova é assíncrono), então o scrollTop
+  // ia pro fim de um conteúdo errado; quando as mensagens novas chegavam
+  // depois, o "só rola se já estava perto do fim" abaixo quase sempre dava
+  // falso (a altura mudou), deixando a tela parada lá em cima na 1ª
+  // mensagem em vez da mais recente.
+  useEffect(() => { forceScrollRef.current = true; }, [selectedId]);
+
+  // só rola pro fim sozinho se o usuário já estava perto do fim (ou acabou
+  // de trocar de conversa) — assim o polling de segurança não puxa a tela
+  // pra baixo enquanto alguém lê o histórico mais antigo
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
+    if (forceScrollRef.current) {
+      el.scrollTop = el.scrollHeight;
+      forceScrollRef.current = false;
+      return;
+    }
     const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
     if (nearBottom) el.scrollTop = el.scrollHeight;
   }, [messages]);
-
-  // ao trocar de conversa, sempre começa no fim
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [selectedId]);
 
   const filteredConvs = useMemo(() => {
     const term = search.trim().toLowerCase();

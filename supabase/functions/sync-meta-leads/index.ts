@@ -290,6 +290,24 @@ serve(async (req) => {
       const metaLeads = await fetchFormLeads(form.id, page.access_token, form.last_sync_ts || null);
       stat.found = metaLeads.length;
 
+      // watermark do "since": usa o created_time mais recente entre os leads
+      // ENCONTRADOS nesta rodada, nunca o relógio de agora. Achado 17/09/2026
+      // investigando um lead de teste que nunca sincronizava: a versão antiga
+      // gravava last_sync_ts = Date.now() incondicionalmente (abaixo, na l.413
+      // original), mesmo quando found=0 — se a API do Graph ainda não tinha
+      // indexado um lead recém-criado (delay normal de propagação), a próxima
+      // rodada filtrava "time_created > sinceUnix" com o relógio já tendo
+      // passado do created_time do lead, perdendo ele PRA SEMPRE (o filtro é
+      // "maior que", não "maior ou igual", e o watermark nunca volta atrás).
+      // Agora: found=0 não avança nada (mesma janela é reconsultada até o
+      // Graph indexar); found>0 avança só até o created_time mais recente
+      // realmente recebido.
+      let maxFoundCreatedTs: number | null = null;
+      for (const lead of metaLeads) {
+        const ts = Math.floor(new Date(lead.created_time).getTime() / 1000);
+        if (Number.isFinite(ts) && (maxFoundCreatedTs === null || ts > maxFoundCreatedTs)) maxFoundCreatedTs = ts;
+      }
+
       for (const lead of metaLeads) {
         // idempotência: não duplica se essa sync já rodou sobre o mesmo lead antes
         // (rede de segurança além do filtro "since" por formulário).
@@ -410,7 +428,9 @@ serve(async (req) => {
         stat.synced++; totalSynced++;
       }
 
-      nextFormIds[i] = { ...form, last_sync_ts: Math.floor(Date.now() / 1000) };
+      if (maxFoundCreatedTs !== null) {
+        nextFormIds[i] = { ...form, last_sync_ts: maxFoundCreatedTs };
+      } // found=0: mantém form (last_sync_ts intocado) — não perde a janela
     } catch (err: unknown) {
       stat.error = err instanceof Error ? err.message : String(err);
     }

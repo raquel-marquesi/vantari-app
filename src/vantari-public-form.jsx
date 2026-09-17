@@ -26,6 +26,19 @@ const T = {
   head:    "'Sora', system-ui, sans-serif",
 };
 
+/* ─── Meta Pixel: fbclid/_fbp/_fbc ───
+   Pixel já instalado nas LPs (fbq('init','785226807252342')) — os
+   cookies _fbp/_fbc já são setados sozinhos pelo navegador, só faltava
+   alguém ler e guardar isso no momento da conversão. _fbc é o que a
+   Conversions API espera; se o cookie ainda não existir (pixel não deu
+   tempo de rodar, bloqueador etc.), monta o fallback a partir do fbclid
+   cru, no mesmo formato que o próprio Pixel usa. ─── */
+const readCookie = (name) => {
+  if (typeof document === "undefined") return null;
+  const m = document.cookie.match(`(^|;)\\s*${name}=([^;]+)`);
+  return m ? decodeURIComponent(m[2]) : null;
+};
+
 /* ─── CPF utils ─── */
 const cleanCpf = (raw) => {
   if (!raw) return null;
@@ -243,6 +256,10 @@ export default function VantariPublicForm() {
     const utm_content  = searchParams.get("utm_content");
     const utm_term     = searchParams.get("utm_term");
 
+    const fbclid = searchParams.get("fbclid");
+    const fbp = readCookie("_fbp");
+    const fbc = readCookie("_fbc") || (fbclid ? `fb.1.${Date.now()}.${fbclid}` : null);
+
     let error;
     if (form._src === "mkt") {
       // form novo → mkt.form_submissions (dispara on_form_submission + scoring)
@@ -258,6 +275,7 @@ export default function VantariPublicForm() {
         form_id: form.id,
         payload,
         utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+        fbclid, fbp, fbc,
         referrer: typeof document !== "undefined" ? document.referrer : null,
         user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       }));

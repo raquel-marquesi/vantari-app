@@ -18,6 +18,7 @@
 //   "user_agent":  "...",
 //   "utm_source":  "...", "utm_medium": "...",
 //   "utm_campaign":"...", "utm_content":"...", "utm_term": "...",
+//   "fbclid":      "...", "fbp": "...", "fbc": "...",  // Meta Pixel — 17/09
 //   "duration_s":  42                           // opcional (heartbeat)
 // }
 // ════════════════════════════════════════════════════════════════
@@ -95,6 +96,9 @@ serve(async (req) => {
     utm_campaign:    body.utm_campaign || null,
     utm_content:     body.utm_content  || null,
     utm_term:        body.utm_term     || null,
+    fbclid:          body.fbclid       || null,
+    fbp:             body.fbp          || null,
+    fbc:             body.fbc          || null,
     duration_s:      body.duration_s   || null,
   });
 

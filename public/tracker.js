@@ -61,6 +61,18 @@
       utm_term:     p.get("utm_term")     || undefined,
     };
   }
+  // fbclid da URL + cookies _fbp/_fbc que o Meta Pixel (já instalado nas
+  // LPs) seta sozinho no navegador — hoje nada do lado do Vantari lia ou
+  // gravava isso, então se perdia pra sempre depois da sessão. _fbc é o
+  // que a Conversions API espera em user_data; se o Pixel ainda não tiver
+  // gravado o cookie (race condition no primeiro load), cai pro fallback
+  // montado a partir do fbclid cru, no formato que a própria Meta usa.
+  function parseFbIds() {
+    var fbclid = new URLSearchParams(window.location.search).get("fbclid") || undefined;
+    var fbp = readCookie("_fbp") || undefined;
+    var fbc = readCookie("_fbc") || (fbclid ? ("fb.1." + Date.now() + "." + fbclid) : undefined);
+    return { fbclid: fbclid, fbp: fbp, fbc: fbc };
+  }
   function send(payload) {
     try {
       var body = JSON.stringify(payload);
@@ -83,6 +95,7 @@
   function track(pathOverride) {
     var id  = getIdentity();
     var utm = parseUTM();
+    var fb  = parseFbIds();
     var url = pathOverride
       ? (location.hostname + pathOverride)
       : (location.hostname + location.pathname);
@@ -98,6 +111,9 @@
       utm_campaign: utm.utm_campaign,
       utm_content:  utm.utm_content,
       utm_term:     utm.utm_term,
+      fbclid:       fb.fbclid,
+      fbp:          fb.fbp,
+      fbc:          fb.fbc,
     });
   }
   function heartbeat() {

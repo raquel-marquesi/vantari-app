@@ -148,6 +148,27 @@ const statusBadge = (st) => st === "identificado"
   ? { label: "Identificado", color: "#0F6E4E", bg: "#F0FDF7", border: "#6EE7B7" }
   : { label: "Pendente", color: "#9A6A00", bg: "#FFF8E6", border: "#F5D58A" };
 
+// Mesma classificação de core.channel_of (SQL) — porta pro front pra mostrar
+// a fonte/canal no card do lead sem precisar de round-trip extra por pessoa.
+// Ver supabase/migrations/20260731000001_core_persons_utm_channel.sql.
+const channelLabel = (utmSource, utmMedium, firstSource) => {
+  const src = (utmSource || "").toLowerCase();
+  const med = (utmMedium || "").toLowerCase();
+  if (utmSource && ["cpc", "ppc", "paid", "paidsearch"].includes(med) && src.includes("google")) return "Busca paga (Google Ads)";
+  if (utmSource && src.includes("google")) return "Busca orgânica";
+  if (["cpc", "ppc", "paid", "paidsocial"].includes(med) && ["facebook", "instagram", "meta", "fb", "ig"].includes(src)) return "Social paga (Meta Ads)";
+  if (["facebook", "instagram", "meta", "fb", "ig"].includes(src)) return "Social orgânica";
+  if (med === "email" || src === "email") return "Email marketing";
+  if (med === "referral") return "Indicação";
+  if (utmSource) return `${utmSource[0].toUpperCase()}${utmSource.slice(1)} (${utmMedium || "outro"})`;
+  if (firstSource === "nina") return "WhatsApp (Nina)";
+  if (firstSource === "form") return "Formulário (sem UTM)";
+  if (firstSource === "tracking") return "Site (sem origem identificada)";
+  if (firstSource === "import") return "Importação manual";
+  if (firstSource) return `${firstSource[0].toUpperCase()}${firstSource.slice(1)}`;
+  return "Direto";
+};
+
 /* ─── Sidebar ─── */
 const NavSection = ({ label, collapsed = false }) => (
   collapsed ? <div style={{ height: 10 }} /> : (
@@ -546,6 +567,11 @@ function LeadDetailModal({ lead, companyName, onClose, onSaved }) {
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>E-mail</div><div style={{ fontSize: 13, color: T.text, display: "flex", alignItems: "center" }}>{lead.primary_email || "—"}<EmailQualityBadge status={lead.email_status} /></div></div>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Empresa</div><div style={{ fontSize: 13, color: T.text }}>{companyName || "—"}</div></div>
               <div><div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Criado em</div><div style={{ fontSize: 13, fontFamily: T.mono, color: T.text }}>{fmtDate(lead.created_at)}</div></div>
+              <div>
+                <div style={{ fontSize: 11, color: T.faint3, marginBottom: 2 }}>Fonte</div>
+                <div style={{ fontSize: 13, color: T.text }}>{channelLabel(lead.utm_source, lead.utm_medium, lead.first_source)}</div>
+                {lead.utm_campaign && <div style={{ fontSize: 11, color: T.faint3, marginTop: 1 }}>{lead.utm_campaign}</div>}
+              </div>
             </div>
           )}
 
@@ -1012,7 +1038,7 @@ export default function Contatos() {
     try {
       const core = supabase.schema("core");
       let query = core.from("persons")
-        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at,email_status", { count: "exact" })
+        .select("id,full_name,cpf,primary_email,primary_phone,status,company_id,created_at,email_status,utm_source,utm_medium,utm_campaign,first_source", { count: "exact" })
         .order("created_at", { ascending: false });
       if (statusFilter !== "all") query = query.eq("status", statusFilter);
       const term = q.trim();

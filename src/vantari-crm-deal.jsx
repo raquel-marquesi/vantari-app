@@ -33,6 +33,19 @@ const CNDT_OPTS = [
   { v: "positiva", l: "Positiva (veta)" },
 ];
 const PORTE_OPTS = ["MEI", "ME", "EPP", "Médio", "Grande"];
+// Mesmos rótulos amigáveis pra crm.deals.source usados no filtro de /crm
+// (vantari-crm.jsx) — duplicado aqui por ser self-contained (padrão do projeto).
+const SOURCE_LABELS = {
+  import: "Direct Data / RJ (importação)",
+  nina: "Nina (WhatsApp)",
+  nina_auto_detect: "Nina (detecção automática)",
+  nina_backfill: "Nina (backfill)",
+  form: "Formulário do site",
+  meta: "Meta Ads",
+  google: "Google Ads",
+  crm: "Manual (CRM)",
+};
+const sourceLabel = (s) => SOURCE_LABELS[s] || s;
 const LOST_REASONS = [
   { v: "valor_abaixo_regua",          l: "Valor abaixo da régua de compra" },
   { v: "valor_acima_regua",           l: "Valor acima da régua de compra" },
@@ -678,6 +691,7 @@ export default function DealDetail() {
                   <span style={{ fontSize: 18, fontWeight: 700, color: T.teal, fontFamily: T.mono }}>{fmtBRL(valor)}</span>
                   <span style={{ fontSize: 12, color: T.muted }}>{creditTypeLabel(deal.credit_type)}{deal.modalidade ? ` · ${deal.modalidade}` : ""}</span>
                   {deal.captador && <span style={{ fontSize: 11.5, color: T.muted }}>captador: <strong style={{ color: T.text }}>{deal.captador}</strong></span>}
+                  {deal.source && <span style={{ fontSize: 11.5, color: T.muted }}>fonte: <strong style={{ color: T.text }}>{sourceLabel(deal.source)}</strong></span>}
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -1008,6 +1022,7 @@ export default function DealDetail() {
                       <Row label="Valor ofertado" value={deal.valor_ofertado_cents != null ? fmtBRL(deal.valor_ofertado_cents) : "—"} />
                       <Row label="Deságio" value={deal.desagio_pct != null ? `${Number(deal.desagio_pct).toFixed(0)}%` : "—"} />
                       <Row label="Captador/a" value={deal.captador} />
+                      <Row label="Fonte" value={deal.source ? sourceLabel(deal.source) : "—"} />
                       {deal.status === "lost" && (
                         <>
                           <Row label="Motivo do declínio" value={LOST_REASONS.find((r) => r.v === deal.lost_reason)?.l || "—"} />

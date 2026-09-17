@@ -370,6 +370,11 @@ function DealCard({ deal, personName, onDragStartDeal, onDragEndDeal, dragging }
           <span style={{ color: T.faint3 }}>captador:</span> <strong style={{ color: T.text }}>{deal.captador}</strong>
         </div>
       )}
+      {deal.source && (
+        <div style={{ fontSize: 10.5, color: T.muted, fontFamily: T.font, marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ color: T.faint3 }}>fonte:</span> <strong style={{ color: T.text }}>{sourceLabel(deal.source)}</strong>
+        </div>
+      )}
     </div>
   );
 }

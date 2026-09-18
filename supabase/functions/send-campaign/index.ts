@@ -169,90 +169,106 @@ Deno.serve(async (req) => {
 
     await mkt.from("campaigns").update({ status: "sending" }).eq("id", campaign_id);
 
-    /* ── envio em lotes de 100 ── */
-    const BATCH = 100;
-    let sentCount = 0;
-    const sendRecords: object[] = [];
-    // mesmo timestamp pra TODOS os registros deste disparo — é o que distingue
-    // "semana 1" de "semana 2" numa campanha recorrente (ver constraint
-    // send_unico = UNIQUE(campaign_id, person_id, run_at) na migration).
-    const runAt = new Date().toISOString();
+    // ⚠️ Achado 18/09/2026 investigando "está tudo ok pra enviar?": 2 campanhas
+    // de teste (jul/2026) ficaram travadas em status "sending" pra sempre —
+    // mkt.campaign_sends está zerada desde sempre, nenhum envio jamais
+    // completou. Causa raiz: se algo quebrasse aqui embaixo (timeout de rede
+    // com a Resend, exceção inesperada), o catch geral do fim da function só
+    // devolvia um 500 pro chamador — a campanha ficava presa em "sending" sem
+    // nenhum recuo. Esse try/catch garante que qualquer erro daqui pra frente
+    // sempre marca a campanha como "failed" antes de propagar o erro.
+    try {
+      /* ── envio em lotes de 100 ── */
+      const BATCH = 100;
+      let sentCount = 0;
+      const sendRecords: object[] = [];
+      // mesmo timestamp pra TODOS os registros deste disparo — é o que distingue
+      // "semana 1" de "semana 2" numa campanha recorrente (ver constraint
+      // send_unico = UNIQUE(campaign_id, person_id, run_at) na migration).
+      const runAt = new Date().toISOString();
 
-    for (let i = 0; i < recipients.length; i += BATCH) {
-      const batch = recipients.slice(i, i + BATCH);
-      const emails = batch.map(r => ({
-        from:    `${fromName} <${fromEmail}>`,
-        to:      [r.email],
-        subject: campaign.subject || campaign.name,
-        html:    buildHtml(campaign.template_html, r, campaign.name, campaign.workspace_id),
-      }));
+      for (let i = 0; i < recipients.length; i += BATCH) {
+        const batch = recipients.slice(i, i + BATCH);
+        const emails = batch.map(r => ({
+          from:    `${fromName} <${fromEmail}>`,
+          to:      [r.email],
+          subject: campaign.subject || campaign.name,
+          html:    buildHtml(campaign.template_html, r, campaign.name, campaign.workspace_id),
+        }));
 
-      const res = await fetch("https://api.resend.com/emails/batch", {
-        method:  "POST",
-        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-        body:    JSON.stringify(emails),
-      });
-
-      if (!res.ok) {
-        const errBody = await res.text();
-        console.error("Resend error:", errBody);
-        batch.forEach(r => {
-          if (r.person_id) {
-            sendRecords.push({ workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id, status: "failed", error: errBody.slice(0, 500), run_at: runAt });
-          }
+        const res = await fetch("https://api.resend.com/emails/batch", {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+          body:    JSON.stringify(emails),
         });
-      } else {
-        sentCount += batch.length;
-        // resend /emails/batch responde { data: [{ id }, ...] } na mesma ordem
-        // do array enviado — guardamos esse id pra correlacionar com o webhook
-        // de bounce/complaint/open/click (resend-webhook) depois.
-        let resendIds: (string | undefined)[] = [];
-        try {
-          const body = await res.json();
-          resendIds = Array.isArray(body?.data) ? body.data.map((d: any) => d?.id) : [];
-        } catch { /* segue sem ids — tracking básico ainda funciona */ }
-        batch.forEach((r, idx) => {
-          if (r.person_id) {
-            sendRecords.push({
-              workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id,
-              status: "sent", sent_at: new Date().toISOString(),
-              resend_email_id: resendIds[idx] ?? null,
-              run_at: runAt,
-            });
-          }
-        });
+
+        if (!res.ok) {
+          const errBody = await res.text();
+          console.error("Resend error:", errBody);
+          batch.forEach(r => {
+            if (r.person_id) {
+              sendRecords.push({ workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id, status: "failed", error: errBody.slice(0, 500), run_at: runAt });
+            }
+          });
+        } else {
+          sentCount += batch.length;
+          // resend /emails/batch responde { data: [{ id }, ...] } na mesma ordem
+          // do array enviado — guardamos esse id pra correlacionar com o webhook
+          // de bounce/complaint/open/click (resend-webhook) depois.
+          let resendIds: (string | undefined)[] = [];
+          try {
+            const body = await res.json();
+            resendIds = Array.isArray(body?.data) ? body.data.map((d: any) => d?.id) : [];
+          } catch { /* segue sem ids — tracking básico ainda funciona */ }
+          batch.forEach((r, idx) => {
+            if (r.person_id) {
+              sendRecords.push({
+                workspace_id: campaign.workspace_id, campaign_id, person_id: r.person_id,
+                status: "sent", sent_at: new Date().toISOString(),
+                resend_email_id: resendIds[idx] ?? null,
+                run_at: runAt,
+              });
+            }
+          });
+        }
       }
+
+      /* ── persist tracking (só quem tem person_id — mkt.campaign_sends.person_id é NOT NULL) ── */
+      if (sendRecords.length > 0) {
+        const { error: sendErr } = await mkt.from("campaign_sends").insert(sendRecords);
+        if (sendErr) console.error("Falha ao gravar campaign_sends:", sendErr.message);
+      }
+
+      // campanha recorrente: mantém status "scheduled" (Agendada) depois de
+      // cada disparo — ela não "terminou", só está armada pra próxima semana.
+      // Campanha avulsa: vira "sent" (terminal) normalmente.
+      const finalStatus = campaign.recurrence_enabled
+        ? (sentCount > 0 ? "scheduled" : "failed")
+        : (sentCount > 0 ? "sent" : "failed");
+      await mkt.from("campaigns").update({
+        status: finalStatus,
+        sent_at: sentCount > 0 ? new Date().toISOString() : null,
+        audience_count: recipients.length,
+      }).eq("id", campaign_id);
+
+      return new Response(
+        JSON.stringify({
+          sent: sentCount,
+          total: recipients.length,
+          skipped_invalid: skippedInvalid,
+          skipped_unsubscribed: skippedUnsubscribed,
+          skipped_invalid_quality: skippedInvalidQuality,
+          test: false,
+        }),
+        { headers: { ...CORS, "Content-Type": "application/json" } }
+      );
+    } catch (sendErr: unknown) {
+      // nunca deixa a campanha presa em "sending" — sempre recua pra "failed"
+      // antes de propagar o erro pro chamador.
+      const msg = sendErr instanceof Error ? sendErr.message : String(sendErr);
+      await mkt.from("campaigns").update({ status: "failed" }).eq("id", campaign_id);
+      return new Response(JSON.stringify({ error: `Falha durante o envio: ${msg}` }), { status: 500, headers: CORS });
     }
-
-    /* ── persist tracking (só quem tem person_id — mkt.campaign_sends.person_id é NOT NULL) ── */
-    if (sendRecords.length > 0) {
-      const { error: sendErr } = await mkt.from("campaign_sends").insert(sendRecords);
-      if (sendErr) console.error("Falha ao gravar campaign_sends:", sendErr.message);
-    }
-
-    // campanha recorrente: mantém status "scheduled" (Agendada) depois de
-    // cada disparo — ela não "terminou", só está armada pra próxima semana.
-    // Campanha avulsa: vira "sent" (terminal) normalmente.
-    const finalStatus = campaign.recurrence_enabled
-      ? (sentCount > 0 ? "scheduled" : "failed")
-      : (sentCount > 0 ? "sent" : "failed");
-    await mkt.from("campaigns").update({
-      status: finalStatus,
-      sent_at: sentCount > 0 ? new Date().toISOString() : null,
-      audience_count: recipients.length,
-    }).eq("id", campaign_id);
-
-    return new Response(
-      JSON.stringify({
-        sent: sentCount,
-        total: recipients.length,
-        skipped_invalid: skippedInvalid,
-        skipped_unsubscribed: skippedUnsubscribed,
-        skipped_invalid_quality: skippedInvalidQuality,
-        test: false,
-      }),
-      { headers: { ...CORS, "Content-Type": "application/json" } }
-    );
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

@@ -307,19 +307,33 @@ function buildHtml(
     ? `<a href="${unsubUrl}" style="color:#0079a9;text-decoration:none;">Descadastrar</a>`
     : `Para se descadastrar, responda este email.`;
 
+  // Achado 18/09/2026 (template "Oferta qualificada" chegou "todo desconexo"
+  // no teste real): blocos tipo "html" da Biblioteca Vantari trazem seus
+  // próprios <link>/<style> (CSS por classe — .offer, .stats etc.) soltos
+  // no MEIO do corpo do email, dentro de uma <td>. Muitos clientes de email
+  // (Gmail incluído) ignoram <style> fora do <head> — o resultado é HTML
+  // sem estilo nenhum aplicado, "div soup". Corrigido: extrai qualquer
+  // <style>/<link rel=stylesheet> que venha dentro do body e move pro
+  // <head> de verdade, onde os clientes de fato aplicam.
+  const styleRe = /<style[^>]*>[\s\S]*?<\/style>/gi;
+  const linkRe = /<link[^>]*rel=["']?stylesheet["']?[^>]*>/gi;
+  const extraHead = [...(body.match(styleRe) || []), ...(body.match(linkRe) || [])].join("\n");
+  const bodyNoStyles = body.replace(styleRe, "").replace(linkRe, "");
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>${campaignName}</title>
+  ${extraHead}
 </head>
 <body style="margin:0;padding:0;background:#f2f5f8;font-family:'Helvetica Neue',Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center" style="padding:32px 16px;">
       <table width="600" cellpadding="0" cellspacing="0"
              style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
-        <tr><td>${body}</td></tr>
+        <tr><td>${bodyNoStyles}</td></tr>
         <tr>
           <td style="padding:20px 40px;background:#f8fafc;text-align:center;border-top:1px solid #e8edf2;">
             <p style="margin:0;font-size:11px;color:#888891;">

@@ -1955,7 +1955,7 @@ const EMAIL_BODIES = {
     <div class="stat"><div class="v">100%</div><div class="l">online</div></div>
     <div class="stat"><div class="v">0</div><div class="l">parcelas</div></div>
   </div>
-  <div class="ps" style="border-left-color:#14A273;background:#ECFDF5"><b style="color:#0E1A24">P.S.</b> Ainda em dúvida? Nosso especialista responde em até 2h pelo <a href="#" style="color:#14A273">WhatsApp</a>.</div>
+  <div class="ps" style="border-left-color:#14A273;background:#ECFDF5"><b style="color:#0E1A24">P.S.</b> Ainda em dúvida? Nossa equipe responde em até 2h pelo <a href="__WA_LINK__" style="color:#14A273">WhatsApp</a>.</div>
 </div>
 <div class="ftr">
   <nav class="ftr-nav"><a href="#">Como funciona</a><a href="#">Perguntas frequentes</a><a href="#">Blog</a></nav>
@@ -1987,8 +1987,8 @@ const EMAIL_BODIES = {
     <div class="stat"><div class="v" style="color:#14A273">Premium</div><div class="l">atendimento</div></div>
   </div>
   <p class="p" style="color:#8696A5;font-size:12px">Esta análise expira em 7 dias e foi enviada apenas para a base qualificada.</p>
-  <div class="cta-row"><a class="cta ghost" href="#">Falar pelo WhatsApp</a></div>
-  <div class="sig"><strong style="color:#0E1A24">Raquel · Especialista Vantari</strong><br><span style="color:#5A6B7A;font-size:11px">raquel@vantari.com.br · (11) 93401-8661</span></div>
+  <div class="cta-row"><a class="cta ghost" href="__WA_LINK__">Falar pelo WhatsApp</a></div>
+  <div class="sig"><strong style="color:#0E1A24">Equipe Vantari</strong><br><span style="color:#5A6B7A;font-size:11px">__WA_PHONE__ (WhatsApp)</span></div>
 </div>
 <div class="ftr">
   <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>Você recebeu este e-mail porque consultou uma antecipação conosco.<br><a href="#">Descadastrar destas ofertas</a> · <a href="#">Atualizar preferências</a></div>
@@ -2038,21 +2038,43 @@ const EMAIL_BODIES = {
     <div class="trow"><div class="stage">04 · Assinatura</div><div class="title">Contrato digital</div><div class="date">—</div></div>
     <div class="trow"><div class="stage">05 · Pagamento</div><div class="title">Transferência via PIX</div><div class="date">—</div></div>
   </div>
-  <div class="cta-row"><a class="cta" href="#">Ver proposta completa</a><a class="cta ghost" href="#">Falar com Raquel</a></div>
-  <p class="p" style="font-size:12px;color:#8696A5;margin-top:16px">A proposta fica válida por 7 dias corridos. Se precisar de mais tempo ou tiver qualquer dúvida sobre o cálculo, sua especialista responde no WhatsApp.</p>
-  <div class="sig"><strong style="color:#0E1A24">Raquel Andrade</strong><br><span style="color:#5A6B7A;font-size:11px">Especialista responsável · raquel@vantari.com.br</span></div>
+  <div class="cta-row"><a class="cta" href="#">Ver proposta completa</a><a class="cta ghost" href="__WA_LINK__">Falar no WhatsApp</a></div>
+  <p class="p" style="font-size:12px;color:#8696A5;margin-top:16px">A proposta fica válida por 7 dias corridos. Se precisar de mais tempo ou tiver qualquer dúvida sobre o cálculo, nossa equipe responde no WhatsApp.</p>
+  <div class="sig"><strong style="color:#0E1A24">Equipe Vantari</strong><br><span style="color:#5A6B7A;font-size:11px">__WA_PHONE__ (WhatsApp)</span></div>
 </div>
 <div class="ftr">
   <div class="ftr-info"><span class="ftr-brand">Vantari Soluções Financeiras</span>E-mail transacional · enviado em 13/05/2026 às 16:12<br>Identificador da proposta: <a href="#">#VTR-2026-04823</a></div>
 </div>`,
 };
 
-function getEmailPreviewHtml(tplId) {
-  return `<!doctype html><html><head><meta charset="utf-8">${EMAIL_PREVIEW_CSS}</head><body>${EMAIL_BODIES[tplId] || ""}</body></html>`;
+// mesmo fallback hardcoded de vantari-public-form.jsx (LPs) — usado só se a
+// RPC get_lp_whatsapp falhar/demorar; o número de verdade vem de
+// /settings → Workspace, fonte única já usada pelas LPs e pelo form público.
+const WA_NUMBER_FALLBACK = "5511952135676";
+
+// Achado 18/09/2026 (teste real: template "Oferta qualificada" chegou com
+// "Raquel · Especialista Vantari" e um número de WhatsApp desatualizado
+// hardcoded): a Biblioteca Vantari tinha um nome de pessoa específica e um
+// telefone fixo direto no HTML dos templates — nunca acompanhava se o
+// número mudasse em /settings, e prometia um atendimento pessoal que nem
+// sempre é real. Troca os placeholders __WA_LINK__/__WA_PHONE__ (ver
+// EMAIL_BODIES.offer/.compare/.transactional) pelo número centralizado de
+// verdade — mesma fonte que as Landing Pages já usam.
+function withWhatsApp(html, waNumber) {
+  const digits = (waNumber || WA_NUMBER_FALLBACK).replace(/\D/g, "");
+  const display = digits.replace(/^55/, "").replace(/^(\d{2})(\d{5})(\d{4})$/, "($1) $2-$3");
+  return html
+    .replace(/__WA_LINK__/g, `https://wa.me/${digits}`)
+    .replace(/__WA_PHONE__/g, display || waNumber || WA_NUMBER_FALLBACK);
+}
+
+function getEmailPreviewHtml(tplId, waNumber) {
+  const body = withWhatsApp(EMAIL_BODIES[tplId] || "", waNumber);
+  return `<!doctype html><html><head><meta charset="utf-8">${EMAIL_PREVIEW_CSS}</head><body>${body}</body></html>`;
 }
 
 /* Template card for the Biblioteca Vantari section */
-function LibraryTemplateCard({ tpl, onUse, onPreview }) {
+function LibraryTemplateCard({ tpl, onUse, onPreview, waNumber }) {
   const [hov, setHov] = useState(false);
   const scale = 0.46;
   const emailW = 600;
@@ -2097,7 +2119,7 @@ function LibraryTemplateCard({ tpl, onUse, onPreview }) {
       <div style={{ background:"#EBEEF2", padding:"18px 20px", display:"grid", placeItems:"start center" }}>
         <div style={{ width: emailW * scale, height: containerH, overflow:"hidden", borderRadius:6, boxShadow:"0 2px 8px rgba(14,26,36,.08)" }}>
           <iframe
-            srcDoc={getEmailPreviewHtml(tpl.id)}
+            srcDoc={getEmailPreviewHtml(tpl.id, waNumber)}
             style={{ width:emailW, height:Math.ceil(containerH / scale), border:"none", transform:`scale(${scale})`, transformOrigin:"top left", pointerEvents:"none" }}
             title={`Preview: ${tpl.name}`}
             sandbox="allow-same-origin"
@@ -2151,6 +2173,8 @@ function TemplatesView({ onUseTemplate }) {
   const [loading,    setLoading]    = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [previewTpl, setPreviewTpl] = useState(null);
+  const [waNumber, setWaNumber] = useState(WA_NUMBER_FALLBACK); // ver withWhatsApp/get_lp_whatsapp
+  useEffect(() => { supabase.rpc("get_lp_whatsapp").then(({ data }) => { if (data) setWaNumber(data); }).catch(() => {}); }, []);
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -2176,7 +2200,7 @@ function TemplatesView({ onUseTemplate }) {
   // pra editar campo a campo pelos controles visuais, mas garante que o que
   // você vê é exatamente o que vai ser enviado.
   const useLibraryTemplate = (tpl) => {
-    const html = `${EMAIL_PREVIEW_CSS}${EMAIL_BODIES[tpl.id] || ""}`;
+    const html = `${EMAIL_PREVIEW_CSS}${withWhatsApp(EMAIL_BODIES[tpl.id] || "", waNumber)}`;
     onUseTemplate([{ id:`b${Date.now()}_${Math.random()}`, type:"html", content:{ html } }]);
   };
 
@@ -2276,8 +2300,9 @@ const migrateExternalImages = async (tpl) => {
             <LibraryTemplateCard
               key={tpl.id}
               tpl={tpl}
+              waNumber={waNumber}
               onUse={useLibraryTemplate}
-              onPreview={(t) => setPreviewTpl({ name:t.name, html: getEmailPreviewHtml(t.id) })}
+              onPreview={(t) => setPreviewTpl({ name:t.name, html: getEmailPreviewHtml(t.id, waNumber) })}
             />
           ))}
         </div>

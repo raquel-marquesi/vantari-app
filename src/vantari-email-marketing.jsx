@@ -19,7 +19,7 @@ import { Activity, ListChecks } from "lucide-react";
 import { Inbox } from "lucide-react";
 import { FileBarChart } from "lucide-react";
 import { supabase } from "./supabase";
-import { loadEmailSegments, resolveRecipients } from "./segment-resolver";
+import { loadEmailSegments, resolveRecipients, countRecipients } from "./segment-resolver";
 
 const WORKSPACE_VANTARI = "53092199-7b75-4342-a897-f589d6f34922";
 
@@ -115,10 +115,6 @@ const TEMPLATES = [
     {id:"b4",type:"footer", content:{text:"© Vantari · E-mail transacional"}},
   ]},
 ];
-
-const mkTimelineData = () => Array.from({length:24},(_,i)=>({
-  hour:i, opens:Math.floor(Math.random()*180+(i>=8&&i<=20?80:10)), clicks:Math.floor(Math.random()*60+(i>=8&&i<=20?30:5)),
-}));
 
 /* ═══════════════════════════════════════════════════
    CAMPAIGN TYPE ICONS
@@ -904,8 +900,6 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
 /* ═══════════════════════════════════════════════════
    CAMPAIGN FORM
 ═══════════════════════════════════════════════════ */
-const SEGMENTS = ["Todos os leads","Newsletter","Demo Solicitada","Inativos 30d","MQL + SQL","Alto Valor B2B","Leads Quentes"];
-
 const WEEKDAY_LABELS = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
 
 // Espelho de supabase/functions/run-scheduled-campaigns/index.ts::nextOccurrenceUtc
@@ -937,7 +931,6 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     subject:    campaign?.subject    ||"",
     sender:     campaign?.sender     ||"marketing@vantari.com.br",
     replyTo:    campaign?.replyTo    ||"",
-    audience:   campaign?.audience   ||"Todos os leads",
     schedule:   campaign?.recurrenceEnabled ? "recurring" : campaign?.scheduledAt ? "scheduled" : "immediate",
     scheduledAt:campaign?.scheduledAt?new Date(campaign.scheduledAt).toISOString().slice(0,16):"",
     timezone:   "America/Sao_Paulo",
@@ -945,20 +938,48 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
     type:       campaign?.type       ||"newsletter",
     htmlContent:campaign?.htmlContent||"",
     emailBlocks:campaign?.emailBlocks||null,
-    // recorrência semanal (pedido da Catarina, 06/08/2026 — equivalente ao
-    // disparo programado do RD Station): precisa de um SEGMENTO REAL
-    // (public.segments), diferente do seletor "Audiência" acima (que é só
-    // um rótulo/estimativa mockada, não usado no envio de verdade)
+    // Achado 18/09/2026: existiam DOIS seletores de audiência nesta tela — um
+    // "Audiência" com lista e contagem 100% inventadas (SEGMENTS/audienceCount
+    // fixos no código, nunca usados no envio de verdade) e este segmentId,
+    // que já era o único real (public.segments), mas só aparecia no modo
+    // "recorrente". Unificado: agora é o único seletor, pra todos os modos.
     segmentId:          campaign?.segmentId || "",
     recurrenceDayOfWeek: campaign?.recurrenceDayOfWeek ?? 1, // 1 = segunda
     recurrenceHour:      campaign?.recurrenceHour ?? 9,
     recurrenceMinute:    campaign?.recurrenceMinute ?? 0,
   });
   const upd = (k,v)=>setForm(p=>({...p,[k]:v}));
-  const audienceCount = {"Todos os leads":6284,"Newsletter":3820,"Demo Solicitada":91,"Inativos 30d":840,"MQL + SQL":2460,"Alto Valor B2B":420,"Leads Quentes":1200}[form.audience]||0;
 
   const [realSegments, setRealSegments] = useState([]);
   useEffect(() => { loadEmailSegments().then(setRealSegments).catch(() => setRealSegments([])); }, []);
+
+  // contagem real de destinatários do segmento escolhido — substitui o
+  // "audienceCount" inventado que existia antes.
+  const [recipientCount, setRecipientCount] = useState(null); // null = não calculado ainda
+  const [countingRecipients, setCountingRecipients] = useState(false);
+  useEffect(() => {
+    const seg = realSegments.find(s => s.id === form.segmentId);
+    if (!seg) { setRecipientCount(null); return; }
+    let alive = true;
+    setCountingRecipients(true);
+    countRecipients(seg.rules || [])
+      .then(n => { if (alive) setRecipientCount(n); })
+      .catch(() => { if (alive) setRecipientCount(null); })
+      .finally(() => { if (alive) setCountingRecipients(false); });
+    return () => { alive = false; };
+  }, [form.segmentId, realSegments]);
+
+  const [sendError, setSendError] = useState(null);
+  const [sendingNow, setSendingNow] = useState(false);
+
+  // anexa o nome do segmento + contagem real (já resolvidos aqui) antes de
+  // mandar pro onSave do componente pai, que só sabe gravar no banco — não
+  // tem acesso a realSegments/recipientCount, que são estado local desta tela.
+  const withSegmentInfo = (f) => ({
+    ...f,
+    segmentName: realSegments.find(s=>s.id===f.segmentId)?.name || null,
+    recipientCount,
+  });
 
   const nextRunPreview = useMemo(() => {
     if (form.schedule !== "recurring") return null;
@@ -979,7 +1000,7 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
         <div style={{display:"flex",gap:8}}>
           <Btn onClick={onBack} variant="ghost" size="md">Cancelar</Btn>
           <Btn onClick={()=>onEdit(form)} variant="secondary" size="md" icon={Pencil}>Editor de Email</Btn>
-          <Btn onClick={()=>onSave(form)} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
+          <Btn onClick={async ()=>{ const id = await onSave(withSegmentInfo(form)); if (id) onBack(); }} variant="ink" size="md" icon={Save}>Salvar Rascunho</Btn>
         </div>
       </div>
 
@@ -1012,18 +1033,24 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
             <SectionTitle>Audiência</SectionTitle>
             <div style={{marginBottom:12}}>
               <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Segmento</label>
-              <select value={form.audience} onChange={e=>upd("audience",e.target.value)}
+              <select value={form.segmentId} onChange={e=>upd("segmentId",e.target.value)}
                 style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
-                {SEGMENTS.map(s=><option key={s}>{s}</option>)}
+                <option value="">Selecione um segmento…</option>
+                {realSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
+              {!form.segmentId && (
+                <p style={{margin:"6px 0 0",fontFamily:T.font,fontSize:11,fontWeight:600,color:T.amber}}>Sem segmento selecionado, este envio não sabe pra quem mandar.</p>
+              )}
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",background:T.bg,borderRadius:8,border:`0.5px solid ${T.border}`}}>
               <div style={{width:34,height:34,borderRadius:8,background:`${T.blue}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <Users size={16} color={T.blue} aria-hidden="true"/>
               </div>
               <div>
-                <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink}}>{audienceCount.toLocaleString("pt-BR")} leads</div>
-                <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted}}>receberão este email</div>
+                <div style={{fontFamily:T.font,fontSize:13,fontWeight:700,color:T.ink}}>
+                  {!form.segmentId ? "—" : countingRecipients ? "calculando…" : `${(recipientCount ?? 0).toLocaleString("pt-BR")} leads`}
+                </div>
+                <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted}}>receberão este email (contagem real, ao vivo)</div>
               </div>
             </div>
           </div>
@@ -1039,30 +1066,16 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
               ))}
             </div>
             {form.schedule==="scheduled"&&(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                <Field label="Data e hora" value={form.scheduledAt} onChange={e=>upd("scheduledAt",e.target.value)} type="datetime-local"/>
-                <div>
-                  <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Fuso Horário</label>
-                  <select value={form.timezone} onChange={e=>upd("timezone",e.target.value)}
-                    style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink}}>
-                    {["America/Sao_Paulo","America/New_York","Europe/London","America/Chicago"].map(tz=><option key={tz}>{tz}</option>)}
-                  </select>
-                </div>
-              </div>
+              // Achado 18/09/2026: existia um seletor de "Fuso Horário" aqui,
+              // mas nunca foi usado em lugar nenhum — a data salva sempre
+              // interpretava o campo como horário de Brasília (fixo, sem
+              // horário de verão desde 2019, mesma lógica de
+              // run-scheduled-campaigns::nextOccurrenceUtc). Removido em vez
+              // de fingir suportar outros fusos.
+              <Field label="Data e hora (horário de Brasília)" value={form.scheduledAt} onChange={e=>upd("scheduledAt",e.target.value)} type="datetime-local"/>
             )}
             {form.schedule==="recurring"&&(
               <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                <div>
-                  <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Segmento (destinatários reais)</label>
-                  <select value={form.segmentId} onChange={e=>upd("segmentId",e.target.value)}
-                    style={{width:"100%",fontFamily:T.font,fontSize:13,fontWeight:600,padding:"10px 13px",border:`1px solid ${T.border}`,borderRadius:8,outline:"none",background:T.white,color:T.ink,cursor:"pointer"}}>
-                    <option value="">Selecione um segmento…</option>
-                    {realSegments.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                  {!form.segmentId && (
-                    <p style={{margin:"6px 0 0",fontFamily:T.font,fontSize:11,fontWeight:600,color:T.amber}}>Sem segmento selecionado, o disparo semanal não sabe pra quem enviar.</p>
-                  )}
-                </div>
                 <div>
                   <label style={{display:"block",fontFamily:T.font,fontSize:11,fontWeight:700,color:T.muted,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Dia da semana</label>
                   <div style={{display:"flex",gap:6}}>
@@ -1149,10 +1162,44 @@ const CampaignForm = ({ campaign, onSave, onEdit, onBack }) => {
             </div>
           </div>
 
-          <Btn onClick={()=>onSave({...form,status:form.schedule==="immediate"?"sending":"scheduled"})}
+          {sendError && (
+            <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"#FFF1F0",border:`1px solid ${T.red}`,borderRadius:8,color:"#9B2C2C",fontSize:12,fontFamily:T.font,fontWeight:600}}>
+              <AlertTriangle size={14} color={T.red} aria-hidden="true"/> {sendError}
+            </div>
+          )}
+          {/* Achado 18/09/2026: este botão só gravava status="sending"/"scheduled"
+             no banco — nunca chamava send-campaign, nunca mandava email
+             nenhum. "Agendar Envio" em especial não tinha NENHUM mecanismo em
+             lugar nenhum do sistema que disparasse uma campanha agendada na
+             hora certa (run-scheduled-campaigns só olhava recorrência). Agora:
+             "Enviar Agora" dispara de verdade (mesma chamada do SendModal);
+             "Agendar Envio" salva e é pego por run-scheduled-campaigns, que
+             ganhou suporte a envio único agendado (ver migration/edge
+             function do mesmo dia). */}
+          <Btn onClick={async ()=>{
+              setSendError(null);
+              if (!form.segmentId) { setSendError("Selecione um segmento em Audiência antes de continuar."); return; }
+              setSendingNow(true);
+              try {
+                const status = form.schedule==="immediate" ? "sending" : "scheduled";
+                const savedId = await onSave(withSegmentInfo({...form, status}));
+                if (!savedId) { setSendingNow(false); return; } // onSave já mostrou o erro
+                if (form.schedule === "immediate") {
+                  const seg = realSegments.find(s=>s.id===form.segmentId);
+                  const recipients = await resolveRecipients(seg?.rules||[]);
+                  const { data, error: fnErr } = await supabase.functions.invoke("send-campaign", { body: { campaign_id: savedId, recipients } });
+                  if (fnErr) throw new Error(fnErr.message);
+                  if (data?.error) throw new Error(data.error);
+                }
+                onBack();
+              } catch (e) {
+                setSendError(e.message || "Erro ao enviar.");
+              }
+              setSendingNow(false);
+            }}
             variant="ink" size="lg" full icon={Send}
-            disabled={form.schedule==="recurring" && !form.segmentId}>
-            {form.schedule==="immediate"?"Enviar Agora":form.schedule==="recurring"?"Ativar Recorrência Semanal":"Agendar Envio"}
+            disabled={sendingNow || !form.segmentId}>
+            {sendingNow?"Enviando…":form.schedule==="immediate"?"Enviar Agora":form.schedule==="recurring"?"Ativar Recorrência Semanal":"Agendar Envio"}
           </Btn>
         </div>
       </div>
@@ -1347,21 +1394,60 @@ const CampaignList = ({ campaigns, onNew, onEdit, onReport, onDuplicate, onDelet
 /* ═══════════════════════════════════════════════════
    REPORT VIEW
 ═══════════════════════════════════════════════════ */
+// Achado 18/09/2026, a pedido da Catarina ("olha o calor de cliques"):
+// toda a metade direita/inferior deste relatório era decorativa — o gráfico
+// de "Abertura ao Longo do Tempo" usava Math.random() (números diferentes a
+// cada vez que a tela renderizava, nem estável durante a mesma sessão),
+// "Cliques por Link" eram 5 URLs e números fixos IGUAIS pra qualquer
+// campanha, o CSV exportava sempre as mesmas 2 pessoas fictícias (Ana
+// Costa/Carlos M.), e o heatmap de 28 dias também era Math.random() puro.
+// Os KPIs do topo (Enviados/Entregues/Abertos/etc.) já eram reais — só
+// "Descadastr." ficava hardcoded em 0 (corrigido também, ver fetchCampaigns).
+//
+// Corrigido: timeline por hora agora vem de campaign_sends de verdade
+// (opened_at/clicked_at reais). CSV exporta os destinatários reais. Removido
+// (em vez de re-fingir com dado real): heatmap de 28 dias — não existe dado
+// granular por dia nem faz muito sentido pra uma campanha de disparo único
+// (não é um site com tráfego contínuo); "Cliques por Link" — precisaria de
+// um webhook novo da Resend capturando qual link foi clicado por evento
+// (hoje só grava 1 clicked_at por envio, não por link) — fica como ideia de
+// feature futura, não implementada às cegas aqui.
 const ReportView = ({ campaign, onBack }) => {
   const m = campaign.metrics;
-  const timeline = useMemo(()=>mkTimelineData(),[]);
-  const maxVal = Math.max(...timeline.map(t=>t.opens));
-  const links = [
-    {url:"https://vantari.com.br/demo",     clicks:312,pct:35.0},
-    {url:"https://vantari.com.br/pricing",  clicks:228,pct:25.6},
-    {url:"https://vantari.com.br/blog/roi", clicks:180,pct:20.2},
-    {url:"https://vantari.com.br/features", clicks:108,pct:12.1},
-    {url:"https://vantari.com.br/contact",  clicks:64, pct:7.2 },
-  ];
+  const sends = campaign.rawSends || [];
+
+  const [peopleById, setPeopleById] = useState({});
+  useEffect(() => {
+    const ids = [...new Set(sends.map(s => s.person_id).filter(Boolean))];
+    if (!ids.length) return;
+    supabase.schema("core").from("persons").select("id, full_name, primary_email").in("id", ids)
+      .then(({ data }) => setPeopleById(Object.fromEntries((data || []).map(p => [p.id, p]))));
+  }, [campaign.id]);
+
+  // hora local de Brasília (mesmo offset fixo usado no resto do app —
+  // sem horário de verão desde 2019)
+  const brHour = (iso) => (new Date(iso).getUTCHours() + 24 - 3) % 24;
+  const timeline = useMemo(() => {
+    const buckets = Array.from({ length: 24 }, (_, h) => ({ hour: h, opens: 0, clicks: 0 }));
+    sends.forEach(s => {
+      if (s.opened_at)  buckets[brHour(s.opened_at)].opens++;
+      if (s.clicked_at) buckets[brHour(s.clicked_at)].clicks++;
+    });
+    return buckets;
+  }, [sends]);
+  const maxVal = Math.max(...timeline.map(t=>t.opens), 1);
+  const peakHour = timeline.reduce((best,t)=> t.opens>best.opens?t:best, timeline[0]);
 
   const downloadCSV = () => {
-    const rows=[["Lead","Email","Status","Enviado","Abriu","Clicou"],["Ana Costa","ana@techno.com","delivered","sim","sim","sim"],["Carlos M.","carlos@pixel.com","delivered","sim","não","não"]];
-    const csv=rows.map(r=>r.join(",")).join("\n");
+    const rows = [["Lead","Email","Status","Enviado","Abriu","Clicou"]];
+    sends.forEach(s => {
+      const p = s.person_id ? peopleById[s.person_id] : null;
+      rows.push([
+        p?.full_name || "—", p?.primary_email || "—", s.status || "—",
+        s.sent_at ? "sim" : "não", s.opened_at ? "sim" : "não", s.clicked_at ? "sim" : "não",
+      ]);
+    });
+    const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=`${campaign.name}.csv`;a.click();
   };
 
@@ -1383,7 +1469,9 @@ const ReportView = ({ campaign, onBack }) => {
           </button>
           <div>
             <h2 style={{margin:"0 0 3px",fontFamily:T.head,fontSize:20,fontWeight:700,color:T.ink,letterSpacing:"-0.02em"}}>{campaign.name}</h2>
-            <p style={{margin:0,fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted}}>Enviada em {new Date(campaign.scheduledAt).toLocaleString("pt-BR")} · {campaign.audienceCount.toLocaleString("pt-BR")} destinatários</p>
+            <p style={{margin:0,fontFamily:T.font,fontSize:12,fontWeight:600,color:T.muted}}>
+              {campaign.sentAt ? `Enviada em ${new Date(campaign.sentAt).toLocaleString("pt-BR")}` : "Data de envio indisponível"} · {campaign.audienceCount.toLocaleString("pt-BR")} destinatários
+            </p>
           </div>
         </div>
         <Btn onClick={downloadCSV} variant="ghost" size="md" icon={Download}>Exportar CSV</Btn>
@@ -1414,36 +1502,22 @@ const ReportView = ({ campaign, onBack }) => {
             ))}
           </div>
           <div style={{display:"flex",justifyContent:"space-between",fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,marginTop:8}}>
-            <span>Pico: 9h–11h da manhã</span>
-            <span>Taxa de clique-por-abertura: {((m.clicked/m.opened)*100).toFixed(1)}%</span>
+            <span>{m.opened>0?`Pico: ${peakHour.hour}h–${(peakHour.hour+1)%24}h (horário de Brasília)`:"Sem aberturas registradas ainda"}</span>
+            <span>Taxa de clique-por-abertura: {m.opened>0?((m.clicked/m.opened)*100).toFixed(1):"0.0"}%</span>
           </div>
         </div>
 
         <div style={{background:T.white,border:`0.5px solid ${T.border}`,borderRadius:12,padding:"22px"}}>
-          <div style={{fontFamily:T.head,fontSize:15,fontWeight:700,color:T.ink,marginBottom:16}}>Cliques por Link</div>
-          {links.map((l,i)=>(
-            <div key={i} style={{marginBottom:14}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-                <span style={{fontFamily:T.mono,fontSize:10,color:T.muted,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:190}}>{l.url.replace("https://","")}</span>
-                <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0,marginLeft:8}}>
-                  <span style={{fontFamily:T.head,fontSize:12,fontWeight:700,color:T.ink}}>{l.clicks}</span>
-                  <span style={{fontFamily:T.font,fontSize:10,fontWeight:700,color:T.green,background:"#f0fdf7",padding:"1px 5px",borderRadius:4}}>{l.pct}%</span>
-                </div>
-              </div>
-              <div style={{height:6,background:T.bg,borderRadius:99,overflow:"hidden"}}>
-                <div style={{height:"100%",width:`${l.pct}%`,background:T.blue,borderRadius:99,transition:"width 0.6s ease"}}/>
-              </div>
-            </div>
-          ))}
-          <div style={{marginTop:16,background:T.bg,borderRadius:8,padding:"12px",textAlign:"center"}}>
-            <div style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,marginBottom:8}}>Heatmap de cliques</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
-              {Array.from({length:28},(_,i)=>{
-                const intensity=Math.random();
-                return <div key={i} style={{height:14,borderRadius:3,background:`rgba(0,121,169,${intensity*0.8+0.05})`,transition:"all 0.3s"}} title={`${Math.floor(intensity*100)} cliques`}/>;
-              })}
-            </div>
-            <div style={{fontFamily:T.font,fontSize:9,fontWeight:600,color:T.muted,marginTop:4}}>4 semanas · 7 dias</div>
+          <div style={{fontFamily:T.head,fontSize:15,fontWeight:700,color:T.ink,marginBottom:12}}>Cliques por Link</div>
+          {/* Achado 18/09/2026: essa seção mostrava 5 URLs e números fixos,
+             iguais em QUALQUER campanha — removido em vez de continuar
+             fingindo. Rastrear clique por link individual precisaria de um
+             webhook novo (a Resend manda qual link foi clicado por evento;
+             hoje só gravamos 1 clicked_at por envio, sem o link) — fica
+             registrado como ideia de feature, não implementado às cegas. */}
+          <div style={{background:T.bg,borderRadius:8,padding:"16px",textAlign:"center",color:T.muted,fontFamily:T.font,fontSize:12,fontWeight:600}}>
+            Ainda não rastreamos qual link foi clicado dentro do email — só se houve clique ou não.
+            {m.clicked>0 && <><br/><strong style={{color:T.ink}}>{m.clicked}</strong> {m.clicked===1?"pessoa clicou":"pessoas clicaram"} em algum link.</>}
           </div>
         </div>
       </div>
@@ -2578,11 +2652,24 @@ export default function VantariEmailMarketing() {
       const { data, error: err } = await supabase
         .schema("mkt")
         .from("campaigns")
-        .select(`id, name, subject, template_html, email_blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at,
+        .select(`id, name, subject, template_html, email_blocks, from_name, from_email, status, type, audience, audience_count, scheduled_at, sent_at,
                  segment_id, recurrence_enabled, recurrence_day_of_week, recurrence_hour, recurrence_minute, next_run_at, last_run_at,
-                 campaign_sends(status, sent_at, opened_at, clicked_at, converted_at)`)
+                 campaign_sends(person_id, status, sent_at, opened_at, clicked_at, converted_at)`)
         .order("created_at", { ascending: false });
       if (err) throw err;
+
+      // Achado 18/09/2026: "unsubscribed" no relatório era hardcoded em 0 —
+      // sempre errado, mesmo tendo o dado real disponível (core.consents).
+      // Uma query só pra todo mundo que revogou email, reaproveitada por
+      // todas as campanhas (evita N+1).
+      const allPersonIds = [...new Set((data || []).flatMap(c => (c.campaign_sends || []).map(s => s.person_id).filter(Boolean)))];
+      let revokedSet = new Set();
+      if (allPersonIds.length) {
+        const { data: revoked } = await supabase.schema("core").from("consents")
+          .select("person_id").eq("channel", "email").eq("status", "revoked").in("person_id", allPersonIds);
+        revokedSet = new Set((revoked || []).map(r => r.person_id));
+      }
+
       setCampaigns((data || []).map(c => {
         const sends        = c.campaign_sends || [];
         // métricas derivadas do shape do mkt (status enum + *_at), não de booleans
@@ -2591,8 +2678,9 @@ export default function VantariEmailMarketing() {
         const opened       = sends.filter(s => s.opened_at  || ["opened", "clicked", "converted"].includes(s.status)).length;
         const clicked      = sends.filter(s => s.clicked_at || ["clicked", "converted"].includes(s.status)).length;
         const bounced      = sends.filter(s => s.status === "bounced").length;
-        const unsubscribed = 0; // descadastro vive em core.consents (não por envio)
+        const unsubscribed = sends.filter(s => s.person_id && revokedSet.has(s.person_id)).length;
         return {
+          rawSends:      sends,
           id:            c.id,
           name:          c.name || "—",
           subject:       c.subject || "",
@@ -2606,6 +2694,7 @@ export default function VantariEmailMarketing() {
           audience:      c.audience || "Todos os leads",
           audienceCount: c.audience_count || 0,
           scheduledAt:   c.scheduled_at,
+          sentAt:        c.sent_at,
           segmentId:           c.segment_id || "",
           recurrenceEnabled:   !!c.recurrence_enabled,
           recurrenceDayOfWeek: c.recurrence_day_of_week,
@@ -2636,6 +2725,16 @@ export default function VantariEmailMarketing() {
   const handleOpenEditor = (c) => { setEditCamp(c);    setView("editor"); };
   const handleSend       = (c) => setSendModal(c);
 
+  // Achado 18/09/2026: "audience"/"audience_count" eram um rótulo e uma
+  // contagem 100% inventados no formulário (SEGMENTS/audienceCount fixos no
+  // código) — nunca refletiam o segmento real nem quantos destinatários de
+  // verdade existiam. Agora "audience" guarda o nome do segmento real
+  // (só pra exibição no card) e "audience_count" a contagem real calculada
+  // no formulário; segment_id passa a ser gravado pra QUALQUER modo de
+  // agendamento, não só recorrente (era o que impedia "Agendar Envio" e
+  // "Enviar Agora" de saberem pra quem mandar). Não navega mais sozinho —
+  // devolve o id salvo pra quem chamou decidir o que fazer a seguir (CampaignForm
+  // dispara o envio de verdade antes de voltar pra lista, quando aplicável).
   const handleSaveCampaign = useCallback(async (data) => {
     const payload = {
       workspace_id:   WORKSPACE_VANTARI,
@@ -2647,14 +2746,14 @@ export default function VantariEmailMarketing() {
       from_email:     data.fromEmail || data.sender || null,
       status:         data.status || "draft",
       type:           data.type   || "newsletter",
-      audience:       data.audience || "Todos os leads",
-      audience_count: data.audienceCount || 0,
+      audience:       data.segmentName || null, // nome do segmento real, resolvido no CampaignForm
+      audience_count: data.recipientCount ?? 0,
       scheduled_at:   data.schedule === "scheduled" && data.scheduledAt
                         ? new Date(data.scheduledAt).toISOString()
                         : null,
-      // recorrência semanal — cron run-scheduled-campaigns lê essas colunas
-      // (mkt.campaigns) pra saber o que disparar e quando
-      segment_id:             data.schedule === "recurring" ? (data.segmentId || null) : null,
+      // recorrência semanal e agendamento único — cron run-scheduled-campaigns
+      // lê essas colunas (mkt.campaigns) pra saber o que disparar e quando
+      segment_id:             data.segmentId || null,
       recurrence_enabled:     data.schedule === "recurring",
       recurrence_day_of_week: data.schedule === "recurring" ? Number(data.recurrenceDayOfWeek) : null,
       recurrence_hour:        data.schedule === "recurring" ? Number(data.recurrenceHour) : null,
@@ -2663,12 +2762,16 @@ export default function VantariEmailMarketing() {
                                 ? nextOccurrenceUtc(Number(data.recurrenceDayOfWeek), Number(data.recurrenceHour), Number(data.recurrenceMinute ?? 0), new Date()).toISOString()
                                 : null,
     };
-    const { error: err } = editCamp?.id
-      ? await supabase.schema("mkt").from("campaigns").update(payload).eq("id", editCamp.id)
-      : await supabase.schema("mkt").from("campaigns").insert(payload);
-    if (err) { setError(err.message); return; }
+    if (editCamp?.id) {
+      const { error: err } = await supabase.schema("mkt").from("campaigns").update(payload).eq("id", editCamp.id);
+      if (err) { setError(err.message); return null; }
+      await fetchCampaigns();
+      return editCamp.id;
+    }
+    const { data: inserted, error: err } = await supabase.schema("mkt").from("campaigns").insert(payload).select("id").single();
+    if (err) { setError(err.message); return null; }
     await fetchCampaigns();
-    setView("list"); setEditCamp(null);
+    return inserted.id;
   }, [editCamp, fetchCampaigns]);
 
   const handleDuplicate = useCallback(async (c) => {

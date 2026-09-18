@@ -186,6 +186,29 @@ async function resolveRecipients(supabase: any, rules: Rule[]) {
 /* ════════════════════════════════════════════════════════════════
    HANDLER
    ════════════════════════════════════════════════════════════════ */
+// Resolve o segmento + chama send-campaign de verdade pra uma campanha.
+// Compartilhado entre o disparo recorrente e o agendamento único (ver nota
+// grande abaixo sobre o achado de 18/09/2026).
+async function dispatchCampaign(
+  supabase: any, mkt: any, SUPABASE_URL: string, SERVICE_KEY: string, camp: { id: string; name: string; segment_id: string | null }
+): Promise<{ skipped?: string; error?: string; send_result?: unknown }> {
+  if (!camp.segment_id) return { skipped: "sem segmento vinculado" };
+
+  const { data: seg, error: segErr } = await supabase
+    .from("segments").select("rules").eq("id", camp.segment_id).maybeSingle();
+  if (segErr) throw segErr;
+  const recipients = await resolveRecipients(supabase, (seg?.rules as Rule[]) || []);
+  if (recipients.length === 0) return { skipped: "segmento resolveu 0 destinatários" };
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/send-campaign`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
+    body: JSON.stringify({ campaign_id: camp.id, recipients }),
+  });
+  const sendResult = await res.json();
+  return { send_result: sendResult, error: (!res.ok || sendResult?.error) ? (sendResult?.error || `HTTP ${res.status}`) : undefined };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
 
@@ -198,6 +221,8 @@ Deno.serve(async (req) => {
 
   try {
     const nowUtc = new Date();
+
+    // ── 1) recorrentes devidas (sem mudança de comportamento) ──
     const { data: due, error } = await mkt.from("campaigns")
       .select("id, name, segment_id, recurrence_day_of_week, recurrence_hour, recurrence_minute, next_run_at")
       .eq("recurrence_enabled", true)
@@ -206,29 +231,9 @@ Deno.serve(async (req) => {
     if (error) return jsonResp({ error: "falha ao buscar campanhas devidas", detail: error.message }, 500);
 
     for (const camp of due || []) {
-      const entry: any = { campaign_id: camp.id, name: camp.name };
+      const entry: any = { campaign_id: camp.id, name: camp.name, kind: "recurring" };
       try {
-        if (!camp.segment_id) {
-          entry.skipped = "sem segmento vinculado";
-        } else {
-          const { data: seg, error: segErr } = await supabase
-            .from("segments").select("rules").eq("id", camp.segment_id).maybeSingle();
-          if (segErr) throw segErr;
-          const recipients = await resolveRecipients(supabase, (seg?.rules as Rule[]) || []);
-
-          if (recipients.length === 0) {
-            entry.skipped = "segmento resolveu 0 destinatários";
-          } else {
-            const res = await fetch(`${SUPABASE_URL}/functions/v1/send-campaign`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${SERVICE_KEY}` },
-              body: JSON.stringify({ campaign_id: camp.id, recipients }),
-            });
-            const sendResult = await res.json();
-            entry.send_result = sendResult;
-            if (!res.ok || sendResult?.error) entry.error = sendResult?.error || `HTTP ${res.status}`;
-          }
-        }
+        Object.assign(entry, await dispatchCampaign(supabase, mkt, SUPABASE_URL, SERVICE_KEY, camp));
       } catch (e) {
         entry.error = e instanceof Error ? e.message : String(e);
       }
@@ -246,9 +251,39 @@ Deno.serve(async (req) => {
       results.push(entry);
     }
 
-    return jsonResp({ checked: (due || []).length, results });
+    // ── 2) agendamento único — achado 18/09/2026: NADA disparava isso antes.
+    //    "Agendar Envio" (CampaignForm) só gravava scheduled_at no banco; não
+    //    existia nenhum mecanismo, em lugar nenhum do sistema, que lesse essa
+    //    coluna e disparasse a campanha na hora certa — ficava presa em
+    //    status "scheduled" pra sempre, sem erro nenhum visível. ──
+    const { data: dueOnce, error: onceErr } = await mkt.from("campaigns")
+      .select("id, name, segment_id, scheduled_at")
+      .eq("recurrence_enabled", false)
+      .eq("status", "scheduled")
+      .not("scheduled_at", "is", null)
+      .lte("scheduled_at", nowUtc.toISOString());
+
+    if (onceErr) return jsonResp({ error: "falha ao buscar agendamentos únicos devidos", detail: onceErr.message, results }, 500);
+
+    for (const camp of dueOnce || []) {
+      const entry: any = { campaign_id: camp.id, name: camp.name, kind: "scheduled_once" };
+      try {
+        const r = await dispatchCampaign(supabase, mkt, SUPABASE_URL, SERVICE_KEY, camp);
+        Object.assign(entry, r);
+        // skip (sem segmento / 0 destinatários) não é algo que vá se resolver
+        // sozinho no próximo cron de 5min — marca "failed" pra aparecer na
+        // tela em vez de ficar invisível, presa em "scheduled" pra sempre.
+        if (r.skipped) await mkt.from("campaigns").update({ status: "failed" }).eq("id", camp.id);
+      } catch (e) {
+        entry.error = e instanceof Error ? e.message : String(e);
+        await mkt.from("campaigns").update({ status: "failed" }).eq("id", camp.id);
+      }
+      results.push(entry);
+    }
+
+    return jsonResp({ checked: (due || []).length + (dueOnce || []).length, results });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return jsonResp({ error: msg }, 500);
+    return jsonResp({ error: msg, results }, 500);
   }
 });

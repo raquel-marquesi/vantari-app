@@ -171,17 +171,41 @@ export async function countRecipients(rules) {
   return count ?? 0;
 }
 
-/* resolve a lista de destinatários { person_id, email, name } de um segmento */
+/* resolve a lista de destinatários { person_id, email, name, company, score } de
+   um segmento — company/score alimentam {{lead.company}}/{{lead.score}} no editor
+   de email (achado 18/09/2026: essas variáveis apareciam na lista de "Variáveis
+   disponíveis" do editor mas nunca eram substituídas de verdade no envio, porque
+   resolveRecipients nunca buscava esses dados — o email chegava com o texto
+   literal "{{lead.company}}" pro destinatário). */
 export async function resolveRecipients(rules) {
   const c = await buildPersonConstraints(rules);
   let q = core().from("persons")
-    .select("id, full_name, primary_email")
+    .select("id, full_name, primary_email, company_id")
     .eq("workspace_id", WORKSPACE_VANTARI)
     .not("primary_email", "is", null);
   q = applyConstraints(q, c);
   const { data, error } = await q.limit(5000);
   if (error) throw error;
-  return (data || [])
-    .filter(p => p.primary_email)
-    .map(p => ({ person_id: p.id, name: p.full_name, email: p.primary_email }));
+  const persons = (data || []).filter(p => p.primary_email);
+  if (persons.length === 0) return [];
+
+  const companyIds = [...new Set(persons.map(p => p.company_id).filter(Boolean))];
+  const personIds = persons.map(p => p.id);
+  const [{ data: companies }, { data: scores }] = await Promise.all([
+    companyIds.length
+      ? core().from("companies").select("id, name").in("id", companyIds)
+      : Promise.resolve({ data: [] }),
+    mkt().from("lead_scores").select("person_id, score_inicial")
+      .eq("workspace_id", WORKSPACE_VANTARI).in("person_id", personIds),
+  ]);
+  const companyName = Object.fromEntries((companies || []).map(c => [c.id, c.name]));
+  const scoreByPerson = Object.fromEntries((scores || []).map(s => [s.person_id, s.score_inicial]));
+
+  return persons.map(p => ({
+    person_id: p.id,
+    name:      p.full_name,
+    email:     p.primary_email,
+    company:   p.company_id ? (companyName[p.company_id] || null) : null,
+    score:     scoreByPerson[p.id] ?? null,
+  }));
 }

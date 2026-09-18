@@ -352,7 +352,13 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
   const b = block.content||{};
   switch(block.type) {
     case "header": return (
-      <div style={{background:`linear-gradient(135deg,${T.blue},${T.teal})`,padding:"32px 40px",textAlign:"center"}}>
+      // cor sólida (não gradiente) de propósito — Outlook desktop (motor do
+      // Word) ignora `linear-gradient` em CSS inline, e podia deixar o texto
+      // branco invisível num fundo que "sumia". blockToHtmlRow (HTML real
+      // enviado) já usava cor sólida; o preview mostrava gradiente até
+      // 18/09/2026 — resultado final sempre foi mais "chapado" do que a
+      // pré-visualização prometia.
+      <div style={{background:T.blue,padding:"32px 40px",textAlign:"center"}}>
         {b.logo&&<div style={{fontFamily:T.head,fontSize:18,fontWeight:700,color:"#fff",letterSpacing:"0.1em",marginBottom:b.headline?12:0}}>VANTARI</div>}
         {b.headline&&<div style={{fontFamily:T.head,fontSize:24,fontWeight:700,color:"#fff",letterSpacing:"-0.01em"}}>{b.headline}</div>}
         {b.subline&&<div style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:"rgba(255,255,255,0.75)",marginTop:6}}>{b.subline}</div>}
@@ -390,7 +396,7 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
     case "columns": return (
       <div style={{padding:"16px 40px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
         {[b.col1||"Coluna 1",b.col2||"Coluna 2"].map((col,i)=>(
-          <div key={i} style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink,lineHeight:1.6,padding:"12px",background:T.bg,borderRadius:8}}>{col}</div>
+          <div key={i} style={{fontFamily:T.font,fontSize:13,fontWeight:600,color:T.ink,lineHeight:1.6,padding:"12px",background:T.bg,borderRadius:8,whiteSpace:"pre-line"}}>{col}</div>
         ))}
       </div>
     );
@@ -415,6 +421,11 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
 ═══════════════════════════════════════════════════ */
 const escHtml = (s="") => String(s)
   .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+// escapa e troca quebra de linha por <br/> — usado no bloco de Colunas, que
+// (achado 18/09/2026) tinha textarea de várias linhas mas não respeitava
+// nenhuma quebra no HTML final, juntando tudo numa linha só.
+const escHtmlBr = (s="") => escHtml(s).replace(/\n/g,"<br/>");
 
 /* formatação inline do bloco de Texto — escrita como
    **negrito**, _itálico_, __sublinhado__, [[#RRGGBB|texto colorido]].
@@ -465,9 +476,9 @@ const blockToHtmlRow = (block) => {
     case "columns": return `
 <tr><td style="padding:16px 40px;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
-    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtml(b.col1||"Coluna 1")}</td>
+    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtmlBr(b.col1||"Coluna 1")}</td>
     <td width="16" style="font-size:1px;line-height:1px;">&nbsp;</td>
-    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtml(b.col2||"Coluna 2")}</td>
+    <td width="50%" valign="top" style="padding:12px;background:${T.bg};border-radius:8px;font-family:${EMAIL_FONT};font-size:13px;font-weight:600;color:${T.ink};line-height:1.6;">${escHtmlBr(b.col2||"Coluna 2")}</td>
   </tr></table>
 </td></tr>`;
     case "footer": return `
@@ -729,7 +740,11 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
   // ele mostrava a mesma coisa que o Desktop corrigido, um terceiro botão
   // redundante.
   const previewWidths = {desktop:"600px",mobile:"375px"};
-  const VARS = ["{{lead.name}}","{{lead.email}}","{{lead.company}}","{{lead.score}}","{{lead.stage}}","{{empresa.nome}}"];
+  // Achado 18/09/2026: {{lead.stage}} e {{empresa.nome}} apareciam aqui mas
+  // nunca foram implementados em lugar nenhum - iam pro email como texto
+  // literal. {{lead.company}}/{{lead.score}} agora funcionam de verdade
+  // (ver segment-resolver.js + send-campaign/index.ts::buildHtml).
+  const VARS = ["{{lead.name}}","{{lead.email}}","{{lead.company}}","{{lead.score}}"];
   const PREVIEW_ICONS = {desktop:Monitor,mobile:Smartphone};
 
   return (
@@ -751,8 +766,15 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
           </div>
         )}
         <div style={{display:"flex",gap:4}}>
-          <button onClick={()=>setAbEnabled(!abEnabled)}
-            style={{fontFamily:T.font,fontSize:11,fontWeight:700,padding:"5px 11px",border:`1px solid ${abEnabled?T.amber:T.border}`,borderRadius:7,background:abEnabled?"#fff4e6":T.white,color:abEnabled?T.amber:T.muted,cursor:"pointer"}}>
+          {/* Achado 18/09/2026: este botão nunca funcionou de verdade — ligava
+             o campo de "Variante B", mas o "Salvar" nunca gravava
+             abEnabled/abSubjectB em lugar nenhum (não existe coluna pra isso
+             em mkt.campaigns, nem lógica de split de envio). Desativado com
+             aviso até a função A/B ser implementada de verdade, mesmo padrão
+             já usado nesta tela pra outras features em roadmap (ver
+             ExportSection → "Relatórios Agendados"). */}
+          <button disabled title="Em breve — testar duas variantes de assunto ainda não está implementado de ponta a ponta"
+            style={{fontFamily:T.font,fontSize:11,fontWeight:700,padding:"5px 11px",border:`1px solid ${T.border}`,borderRadius:7,background:T.white,color:T.muted,cursor:"not-allowed",opacity:0.55}}>
             A/B
           </button>
           {["desktop","mobile"].map(p=>{

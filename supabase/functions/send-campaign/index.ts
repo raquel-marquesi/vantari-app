@@ -45,7 +45,7 @@ const CORS = {
 const APP_URL = Deno.env.get("PUBLIC_APP_URL") || "https://vantari-app.vercel.app";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-type Recipient = { person_id: string | null; email: string; name: string | null };
+type Recipient = { person_id: string | null; email: string; name: string | null; company?: string | null; score?: number | null };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
     /* ── envio de teste: não mexe em status/tracking, não passa por consentimento ── */
     if (test_email) {
-      const html = buildHtml(campaign.template_html, { name: "Teste", email: test_email }, campaign.name, null);
+      const html = buildHtml(campaign.template_html, { name: "Teste", email: test_email, company: "Empresa Exemplo Ltda.", score: 42 }, campaign.name, null);
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -118,7 +118,7 @@ Deno.serve(async (req) => {
       const key = email.toLowerCase();
       if (!email || !EMAIL_RE.test(email) || seen.has(key)) { if (email) skippedInvalid++; continue; }
       seen.add(key);
-      recipients.push({ person_id: r?.person_id ?? null, email, name: r?.name ?? null });
+      recipients.push({ person_id: r?.person_id ?? null, email, name: r?.name ?? null, company: r?.company ?? null, score: r?.score ?? null });
     }
 
     if (recipients.length === 0) {
@@ -279,16 +279,23 @@ Deno.serve(async (req) => {
 /* ── HTML builder ── */
 function buildHtml(
   templateHtml: string | null,
-  recipient: { name: string | null; email: string; person_id?: string | null },
+  recipient: { name: string | null; email: string; person_id?: string | null; company?: string | null; score?: number | null },
   campaignName: string,
   workspaceId: string | null
 ): string {
   const name = recipient.name || recipient.email;
-
+  // {{lead.company}}/{{lead.score}} — achado 18/09/2026: o editor de email
+  // anunciava essas variáveis na lista de "Variáveis disponíveis", mas nunca
+  // eram substituídas aqui — o destinatário recebia o texto literal
+  // "{{lead.company}}" no email. Corrigido junto com segment-resolver.js
+  // (que agora busca esses dados). Sem valor conhecido, vira string vazia
+  // (não "null"/"undefined" aparecendo no email).
   const body = templateHtml
     ? templateHtml
-        .replace(/\{\{lead\.name\}\}/g,  name)
-        .replace(/\{\{lead\.email\}\}/g, recipient.email)
+        .replace(/\{\{lead\.name\}\}/g,    name)
+        .replace(/\{\{lead\.email\}\}/g,   recipient.email)
+        .replace(/\{\{lead\.company\}\}/g, recipient.company || "")
+        .replace(/\{\{lead\.score\}\}/g,   recipient.score != null ? String(recipient.score) : "")
     : `<p>Olá, ${name}!</p><p>${campaignName}</p>`;
 
   // link real de descadastro só existe pra quem tem person_id (veio de segmento

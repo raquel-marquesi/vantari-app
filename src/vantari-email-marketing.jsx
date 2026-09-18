@@ -2164,9 +2164,20 @@ function TemplatesView({ onUseTemplate }) {
   };
   useEffect(() => { fetchTemplates(); }, []);
 
+  // Achado 18/09/2026: "Usar" pegava um bloco genérico e simplificado
+  // (header+texto+botão+rodapé, sem nenhum dos elementos especiais — tldr,
+  // comparativo, stats, card de oferta, steps, timeline) de um array
+  // separado (TEMPLATES) que nunca tinha relação nenhuma com o que o
+  // "Preview" mostrava (EMAIL_BODIES + EMAIL_PREVIEW_CSS, o design de
+  // verdade). Clicar em "Usar" entregava um email completamente diferente
+  // do que a pessoa acabou de ver no preview. Corrigido: agora usa o MESMO
+  // HTML do preview, como bloco "HTML bruto" (mesmo padrão já usado pros
+  // templates importados do RD em useDbTemplate, logo abaixo) — não dá mais
+  // pra editar campo a campo pelos controles visuais, mas garante que o que
+  // você vê é exatamente o que vai ser enviado.
   const useLibraryTemplate = (tpl) => {
-    const match = TEMPLATES.find(t => t.id === tpl.id);
-    onUseTemplate(match ? match.blocks : []);
+    const html = `${EMAIL_PREVIEW_CSS}${EMAIL_BODIES[tpl.id] || ""}`;
+    onUseTemplate([{ id:`b${Date.now()}_${Math.random()}`, type:"html", content:{ html } }]);
   };
 
   const useDbTemplate = async (tpl) => {

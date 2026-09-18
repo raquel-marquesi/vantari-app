@@ -571,9 +571,24 @@ const CampaignRing = ({ campaignCount }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   Seletor de período do topbar (7d/30d/90d/12m) — pedido da
+   Catarina, 18/09/2026: antes existia só visualmente, sem afetar
+   nenhuma query. Overview/Funil/Canais agora respeitam esse período.
+═══════════════════════════════════════════════════════════ */
+const RANGE_LABELS = { "7d": "7 dias", "30d": "30 dias", "90d": "90 dias", "12m": "12 meses" };
+const rangeToSince = (range) => {
+  const d = new Date();
+  if (range === "7d") d.setDate(d.getDate() - 7);
+  else if (range === "90d") d.setDate(d.getDate() - 90);
+  else if (range === "12m") d.setFullYear(d.getFullYear() - 1);
+  else d.setDate(d.getDate() - 30); // default: 30d
+  return d;
+};
+
+/* ═══════════════════════════════════════════════════════════
    SECTION 1 — OVERVIEW EXECUTIVO
 ═══════════════════════════════════════════════════════════ */
-const OverviewSection = () => {
+const OverviewSection = ({ dateRange }) => {
   const [activeMetric, setActiveMetric] = useState("pessoas");
   const [kpis,        setKpis]        = useState({ pessoas: 0, abertos: 0, ganhos: 0, pipelineCents: 0, campaigns: 0 });
   const [monthlyData, setMonthlyData] = useState([]);
@@ -583,6 +598,7 @@ const OverviewSection = () => {
   useEffect(() => {
     const fetchData = async () => {
       setError(null);
+      const sinceIso = rangeToSince(dateRange).toISOString();
       const sevenMonthsAgo = new Date();
       sevenMonthsAgo.setMonth(sevenMonthsAgo.getMonth() - 7);
 
@@ -590,10 +606,14 @@ const OverviewSection = () => {
       const crm = supabase.schema("crm");
       const mkt = supabase.schema("mkt");
 
+      // KPIs = "novos no período" (respeitam o seletor 7d/30d/90d/12m do topo,
+      // pedido da Catarina 18/09 — antes eram totais acumulados, sem relação
+      // nenhuma com o seletor). Pessoas/abertos/pipeline usam created_at;
+      // ganhos usa closed_at (é quando o negócio fechou, não quando nasceu).
       const results = await Promise.all([
-        core.from("persons").select("*", { count: "exact", head: true }),
-        crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open"),
-        crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won"),
+        core.from("persons").select("*", { count: "exact", head: true }).gte("created_at", sinceIso),
+        crm.from("deals").select("valor_ofertado_cents,valor_face_cents").eq("status", "open").gte("created_at", sinceIso),
+        crm.from("deals").select("*", { count: "exact", head: true }).eq("status", "won").gte("closed_at", sinceIso),
         mkt.from("campaigns").select("*", { count: "exact", head: true }).eq("status", "sent"),
         core.from("persons").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
         crm.from("deals").select("created_at").gte("created_at", sevenMonthsAgo.toISOString()),
@@ -640,12 +660,10 @@ const OverviewSection = () => {
       setSparkData({ pessoas: buckets.map(b => b.pessoas), negocios: buckets.map(b => b.negocios) });
     };
     fetchData();
-  }, []);
+  }, [dateRange]);
 
-  const prevP = sparkData.pessoas.at(-2) || 0;
-  const thisP = sparkData.pessoas.at(-1) || 0;
-  const pessoasDelta = thisP - prevP;
   const fmtMoney = (cents) => "R$ " + ((cents || 0) / 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+  const rangeLabel = RANGE_LABELS[dateRange] || dateRange;
 
   const lineKeys = {
     pessoas:  { key: "pessoas",  color: T.teal,   label: "Pessoas"  },
@@ -660,30 +678,30 @@ const OverviewSection = () => {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
         <HeroKpiCard
           icon={Users}      color={T.teal}
-          label="Pessoas (core)"
+          label="Pessoas novas"
           value={kpis.pessoas.toLocaleString("pt-BR")}
-          sub={pessoasDelta >= 0 ? `+${pessoasDelta} no mês` : `${pessoasDelta} no mês`}
+          sub={`últ. ${rangeLabel}`}
           sparkData={sparkData.pessoas}
         />
         <HeroKpiCard
           icon={Star}       color={T.amber}
           label="Negócios abertos"
           value={kpis.abertos.toLocaleString("pt-BR")}
-          sub="em andamento"
+          sub={`novos · últ. ${rangeLabel}`}
           sparkData={sparkData.negocios}
         />
         <HeroKpiCard
           icon={Zap}        color={T.violet}
           label="Ganhos"
           value={kpis.ganhos.toLocaleString("pt-BR")}
-          sub="negócios fechados"
+          sub={`fechados · últ. ${rangeLabel}`}
           sparkData={sparkData.negocios}
         />
         <HeroKpiCard
           icon={DollarSign} color={T.green}
           label="Valor em pipeline"
           value={fmtMoney(kpis.pipelineCents)}
-          sub="ofertado · abertos"
+          sub={`ofertado · novos · últ. ${rangeLabel}`}
           sparkData={sparkData.pessoas}
         />
       </div>
@@ -758,7 +776,7 @@ const OverviewSection = () => {
 const FUNNEL_COLORS = [T.brand2, T.violet, T.amber, T.coral, T.green, T.faint3];
 const stageKindSub = (k) => k === "won" ? "ganho" : k === "lost" ? "perdido" : "em aberto";
 
-const FunnelSection = () => {
+const FunnelSection = ({ dateRange }) => {
   const [stages, setStages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -767,14 +785,18 @@ const FunnelSection = () => {
   useEffect(() => {
     const load = async () => {
       setError(null); setNoPipeline(false);
+      const sinceIso = rangeToSince(dateRange).toISOString();
       const crm = supabase.schema("crm");
       const { data: pipes, error: pipeErr } = await crm.from("pipelines").select("id").eq("is_default", true).limit(1);
       if (pipeErr) { setError(pipeErr.message); setLoading(false); return; }
       const pipe = pipes?.[0];
       if (!pipe) { setNoPipeline(true); setLoading(false); return; }
+      // negócios CRIADOS no período (mesmo critério "novo no período" do
+      // Overview) — antes era o total histórico de cada estágio, sem
+      // nenhuma relação com o seletor de período do topbar.
       const [{ data: st, error: stErr }, { data: deals, error: dealsErr }] = await Promise.all([
         crm.from("stages").select("id,name,position,kind").eq("pipeline_id", pipe.id).order("position"),
-        crm.from("deals").select("stage_id").eq("pipeline_id", pipe.id),
+        crm.from("deals").select("stage_id").eq("pipeline_id", pipe.id).gte("created_at", sinceIso),
       ]);
       if (stErr || dealsErr) { setError((stErr || dealsErr).message); setLoading(false); return; }
       const c = {};
@@ -787,7 +809,7 @@ const FunnelSection = () => {
       setLoading(false);
     };
     load();
-  }, []);
+  }, [dateRange]);
 
   const FUNNEL_STAGES = stages;
   const counts  = FUNNEL_STAGES.map(s => s.count);
@@ -797,7 +819,7 @@ const FunnelSection = () => {
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       {error && <ErrorBanner>Não foi possível carregar o funil: {error}</ErrorBanner>}
       <Card>
-        <SectionTitle sub="Negócios por estágio — dados ao vivo do CRM">Esteira de Aquisição</SectionTitle>
+        <SectionTitle sub={`Negócios criados nos últ. ${RANGE_LABELS[dateRange] || dateRange}, por estágio`}>Esteira de Aquisição</SectionTitle>
         {loading ? (
           <div style={{ fontSize: 12, color: T.muted, fontFamily: T.font, padding: "20px 0", textAlign: "center" }}>Carregando…</div>
         ) : noPipeline ? (
@@ -1076,7 +1098,7 @@ const ReportBuilder = () => {
 /* ═══════════════════════════════════════════════════════════
    SECTION 4 — ANALYTICS POR CANAL
 ═══════════════════════════════════════════════════════════ */
-const ChannelSection = () => {
+const ChannelSection = ({ dateRange }) => {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1085,8 +1107,13 @@ const ChannelSection = () => {
     let alive = true;
     (async () => {
       setLoading(true); setError(null);
+      const sinceIso = rangeToSince(dateRange).toISOString();
+      // "leads" = pessoas com created_at no período; negócios/ganhos são das
+      // pessoas desse mesmo grupo — mesmo recorte "novo no período" das
+      // outras abas. Antes core.get_channel_funnel não aceitava período
+      // nenhum (sempre o total histórico), independente do seletor do topbar.
       const { data, error: e } = await supabase.schema("core")
-        .rpc("get_channel_funnel", { p_workspace: WORKSPACE_VANTARI });
+        .rpc("get_channel_funnel", { p_workspace: WORKSPACE_VANTARI, p_since: sinceIso });
       if (!alive) return;
       if (e) { setError(e.message); setLoading(false); return; }
       const withRates = (data || []).map((r, i) => ({
@@ -1099,7 +1126,7 @@ const ChannelSection = () => {
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, []);
+  }, [dateRange]);
 
   const totalLeads = rows.reduce((s, r) => s + Number(r.leads), 0);
 
@@ -1138,7 +1165,7 @@ const ChannelSection = () => {
         <>
           <div style={{ display: "grid", gridTemplateColumns: "3fr 2fr", gap: 14 }}>
             <Card>
-              <SectionTitle sub={`${totalLeads.toLocaleString("pt-BR")} leads no total, por canal de origem`}>Leads por Canal</SectionTitle>
+              <SectionTitle sub={`${totalLeads.toLocaleString("pt-BR")} leads nos últ. ${RANGE_LABELS[dateRange] || dateRange}, por canal de origem`}>Leads por Canal</SectionTitle>
               <ResponsiveContainer width="100%" height={Math.max(240, rows.length * 36)}>
                 <ComposedChart data={rows} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#EEF2F6" horizontal={false} />
@@ -1698,7 +1725,6 @@ export default function VantariAnalyticsDashboard() {
           <NavItem icon={Briefcase} label="Negócios" path="/crm" collapsed={collapsed} />
           <NavItem icon={Building2} label="Empresas" path="/empresas" collapsed={collapsed} />
           <NavItem icon={Activity} label="Atividades" path="/activities" collapsed={collapsed} />
-          <NavItem icon={ListChecks} label="Tarefas" path="/tasks" collapsed={collapsed} />
           <NavItem icon={AlertTriangle} label="Em Risco" path="/risco" collapsed={collapsed} />
           <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
           {role !== "captador" && (
@@ -1768,10 +1794,10 @@ export default function VantariAnalyticsDashboard() {
 
         {/* Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 28px", background: "linear-gradient(180deg, #F0F9FC 0%, #EBF7F3 100%)" }}>
-          {activeTab === "overview"  && <OverviewSection key={`overview-${refreshKey}`} />}
-          {activeTab === "funnel"    && <FunnelSection key={`funnel-${refreshKey}`} />}
+          {activeTab === "overview"  && <OverviewSection key={`overview-${refreshKey}`} dateRange={globalDateRange} />}
+          {activeTab === "funnel"    && <FunnelSection key={`funnel-${refreshKey}`} dateRange={globalDateRange} />}
           {activeTab === "reports"   && <ReportBuilder />}
-          {activeTab === "channels"  && <ChannelSection key={`channels-${refreshKey}`} />}
+          {activeTab === "channels"  && <ChannelSection key={`channels-${refreshKey}`} dateRange={globalDateRange} />}
           {activeTab === "realtime"  && <RealtimeSection key={`realtime-${refreshKey}`} />}
           {activeTab === "export"    && <ExportSection />}
         </div>

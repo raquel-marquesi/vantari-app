@@ -397,9 +397,6 @@ const renderBlock = (block, leadName="{{lead.name}}") => {
     case "footer": return (
       <div style={{background:T.faint,padding:"20px 40px",textAlign:"center",borderTop:`0.5px solid ${T.border}`}}>
         <p style={{fontFamily:T.font,fontSize:11,fontWeight:600,color:T.muted,margin:0}}>{b.text||"© 2024 Vantari · Todos os direitos reservados"}</p>
-        <p style={{fontFamily:T.font,fontSize:11,color:T.muted,margin:"4px 0 0",fontWeight:600}}>
-          <a href="#" style={{color:T.blue,textDecoration:"none"}}>Descadastrar</a> · <a href="#" style={{color:T.blue,textDecoration:"none"}}>Política de Privacidade</a>
-        </p>
       </div>
     );
     case "html": return (
@@ -664,6 +661,10 @@ const BlockEditor = ({ block, onChange }) => {
       <div>
         <label style={labelStyle}>Texto do rodapé</label>
         <textarea value={b.text||""} onChange={e=>upd("text",e.target.value)} rows={3} style={{...inputStyle,resize:"vertical"}}/>
+        <div style={{fontFamily:T.font,fontSize:10,fontWeight:600,color:T.blue,background:T.blueL,borderRadius:7,padding:"7px 10px",display:"flex",gap:5,alignItems:"flex-start"}}>
+          <Lightbulb size={11} color={T.blue} style={{flexShrink:0,marginTop:1}} aria-hidden="true"/>
+          O link de descadastro é adicionado automaticamente no envio — não precisa (nem dá pra) colocar aqui.
+        </div>
       </div>
     );
     case "columns": return (
@@ -710,9 +711,19 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
   const moveBlock   = (id,dir)=>{setBlocks(prev=>{const a=[...prev];const i=a.findIndex(b=>b.id===id);const j=dir==="up"?i-1:i+1;if(j<0||j>=a.length)return a;[a[i],a[j]]=[a[j],a[i]];return a;});};
   const updateBlock = (updated)=>setBlocks(p=>p.map(b=>b.id===updated.id?updated:b));
   const loadTemplate= (tpl)=>{setBlocks(tpl.blocks.map(b=>({...b,id:`b${Date.now()}_${Math.random()}`})));setShowTemplates(false);};
-  const previewWidths = {desktop:"100%",tablet:"600px",mobile:"375px"};
+  // 600px = a largura real que TODO cliente de email usa pra renderizar o
+  // HTML (Gmail, Outlook, Apple Mail — diferente de site, o email não se
+  // adapta à tela de quem recebe). Achado 18/09/2026: o modo "Desktop"
+  // mostrava os blocos esticados a 100% do painel do editor (podendo ficar
+  // bem mais largo que isso num monitor grande) — causava a sensação de
+  // "vai ficar torto", já que o resultado final é sempre mais estreito e
+  // compacto do que a pré-visualização deixava parecer. Removido também o
+  // modo "Tablet": não existe uma largura de email específica pra tablet —
+  // ele mostrava a mesma coisa que o Desktop corrigido, um terceiro botão
+  // redundante.
+  const previewWidths = {desktop:"600px",mobile:"375px"};
   const VARS = ["{{lead.name}}","{{lead.email}}","{{lead.company}}","{{lead.score}}","{{lead.stage}}","{{empresa.nome}}"];
-  const PREVIEW_ICONS = {desktop:Monitor,tablet:Tablet,mobile:Smartphone};
+  const PREVIEW_ICONS = {desktop:Monitor,mobile:Smartphone};
 
   return (
     <div style={{position:"fixed",inset:0,background:T.bg,zIndex:200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -737,7 +748,7 @@ const EmailEditor = ({ campaign, onSave, onClose }) => {
             style={{fontFamily:T.font,fontSize:11,fontWeight:700,padding:"5px 11px",border:`1px solid ${abEnabled?T.amber:T.border}`,borderRadius:7,background:abEnabled?"#fff4e6":T.white,color:abEnabled?T.amber:T.muted,cursor:"pointer"}}>
             A/B
           </button>
-          {["desktop","tablet","mobile"].map(p=>{
+          {["desktop","mobile"].map(p=>{
             const PI=PREVIEW_ICONS[p];
             return (
               <button key={p} onClick={()=>setPreview(p)}

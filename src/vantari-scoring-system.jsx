@@ -680,7 +680,6 @@ export default function VantariScoringSystem() {
           <NavItem icon={Briefcase}      label="Negócios"        path="/crm" collapsed={collapsed} />
           <NavItem icon={Building2}      label="Empresas"        path="/empresas" collapsed={collapsed} />
           <NavItem icon={Activity}       label="Atividades"      path="/activities" collapsed={collapsed} />
-          <NavItem icon={ListChecks}     label="Tarefas"         path="/tasks" collapsed={collapsed} />
           <NavItem icon={AlertTriangle}  label="Em Risco"        path="/risco" collapsed={collapsed} />
           <NavItem icon={FileBarChart} label="Relatórios" path="/reports" collapsed={collapsed} />
           <NavSection label="Ferramentas" collapsed={collapsed} />

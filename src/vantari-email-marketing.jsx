@@ -536,8 +536,13 @@ const BlockEditor = ({ block, onChange }) => {
     });
   };
   const applyColor = (hex) => wrapSelection(`[[#${hex.replace("#","")}|`, `]]`, "texto colorido");
+  const MAX_IMAGE_MB = 2; // mesmo limite já anunciado na dica acima do campo — antes não era checado em lugar nenhum
   const handleImageUpload = async (file) => {
     if (!file) return;
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      alert(`Imagem muito grande (${(file.size / 1024 / 1024).toFixed(1)}MB). Máximo ${MAX_IMAGE_MB}MB — imagens maiores fazem o Gmail cortar o email ("[Mensagem truncada]"). Reduz o tamanho do arquivo e tenta de novo.`);
+      return;
+    }
     setUploading(true);
     setImgDims(null);
     try {
@@ -553,9 +558,9 @@ const BlockEditor = ({ block, onChange }) => {
 
       const ext = file.name.split(".").pop();
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage.from("email-images").upload(fileName, file);
+      const { error } = await supabase.storage.from("email-assets").upload(fileName, file);
       if (error) throw error;
-      const { data } = supabase.storage.from("email-images").getPublicUrl(fileName);
+      const { data } = supabase.storage.from("email-assets").getPublicUrl(fileName);
       upd("src", data.publicUrl);
     } catch (err) {
       alert("Erro ao enviar imagem: " + err.message);
@@ -648,7 +653,9 @@ const BlockEditor = ({ block, onChange }) => {
         <label style={labelStyle}>Legenda</label>
         <input style={inputStyle} value={b.caption||""} onChange={e=>upd("caption",e.target.value)} placeholder="Opcional"/>
         <label style={labelStyle}>Largura fixa (opcional)</label>
-        <input style={inputStyle} value={b.width||""} onChange={e=>upd("width",e.target.value)} placeholder="Deixe vazio pra ocupar 100% do email. Ex: 195px pra logos pequenos"/>
+        <input style={inputStyle} value={b.width||""} onChange={e=>upd("width",e.target.value)}
+          onBlur={e=>{const v=e.target.value.trim();if(v&&/^\d+$/.test(v))upd("width",`${v}px`);}}
+          placeholder="Deixe vazio pra ocupar 100% do email. Ex: 195px pra logos pequenos"/>
       </div>
     );
     case "spacer": return (

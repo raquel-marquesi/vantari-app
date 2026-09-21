@@ -18,9 +18,19 @@
   "use strict";
 
   // ───── Config ─────
+  // Reserva fixa do endpoint: plugins de cache (ex. LiteSpeed Cache com
+  // "Combine JS"/"Load JS Deferred") reescrevem a página combinando scripts
+  // num bundle só. Isso faz `document.currentScript` deixar de apontar pra
+  // tag original com o atributo data-endpoint (e o fallback por "último
+  // <script> da página" pega o bundle combinado, que também não tem o
+  // atributo) — o tracker morria silenciosamente em qualquer página com
+  // esse tipo de otimização ativa, mesmo respondendo 200 OK normalmente.
+  // Com a reserva abaixo, o data-endpoint da tag continua tendo prioridade
+  // (permite trocar de projeto Supabase sem precisar reeditar este arquivo),
+  // mas se não achar, usa o endereço de produção direto.
+  var FALLBACK_ENDPOINT = "https://ejhrlrasepowdcdnggmv.supabase.co/functions/v1/track";
   var script   = document.currentScript || (function(){var s=document.getElementsByTagName("script");return s[s.length-1];})();
-  var endpoint = script && script.getAttribute("data-endpoint");
-  if (!endpoint) { console.warn("[Vantari] data-endpoint missing"); return; }
+  var endpoint = (script && script.getAttribute("data-endpoint")) || FALLBACK_ENDPOINT;
 
   var COOKIE_NAME    = "_vantari_vid";
   var IDENTIFY_KEY   = "_vantari_id";

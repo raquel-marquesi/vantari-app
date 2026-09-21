@@ -170,8 +170,12 @@
   };
 
   // ───── Boot ─────
+  // Chamar `track` direto como listener passa o objeto Event como
+  // pathOverride (addEventListener injeta o evento como 1º argumento) —
+  // isso corrompia a url gravada pra "hostname[object Event]" em toda
+  // primeira visita que carregava com o DOM ainda em parsing.
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", track);
+    document.addEventListener("DOMContentLoaded", function () { track(); });
   } else {
     track();
   }

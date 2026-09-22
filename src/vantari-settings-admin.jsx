@@ -2232,25 +2232,29 @@ export default function VantariSettingsAdmin() {
       {/* Topbar */}
       <div style={{background:T.surface,borderBottom:`1px solid ${T.border}`,padding:"0 28px",position:"sticky",top:0,zIndex:100}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",height:60}}>
-          <div style={{display:"flex",alignItems:"center",gap:16}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:16,minWidth:0,flex:"1 1 auto"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
               <div style={{width:32,height:32,borderRadius:8,background:T.gradient,display:"flex",alignItems:"center",justifyContent:"center"}}><Settings size={16} color="#fff"/></div>
               <div>
                 <div style={{fontSize:14,fontWeight:800,color:T.ink,letterSpacing:"-0.02em",fontFamily:T.head}}>Configurações</div>
                 <div style={{fontSize:10,color:T.muted,fontWeight:500,fontFamily:T.font}}>Vantari Platform</div>
               </div>
             </div>
-            <div style={{width:1,height:28,background:T.border}}/>
-            <div style={{display:"flex",gap:2}}>
+            <div style={{width:1,height:28,background:T.border,flexShrink:0}}/>
+            {/* minWidth:0 é o que permite esse flex item encolher abaixo do
+                tamanho do conteúdo — sem isso overflowX:auto nunca entra em
+                ação e as abas do fim (ex: Web Push, Suporte) ficam
+                empurradas pra fora da tela sem nenhuma barra de rolagem. */}
+            <div style={{display:"flex",gap:2,overflowX:"auto",minWidth:0}}>
               {TABS.map(t=>(
                 <button key={t.id} onClick={()=>setActiveTab(t.id)}
-                  style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?T.teal:T.muted,fontFamily:T.font,borderBottom:activeTab===t.id?`2px solid ${T.teal}`:"2px solid transparent",transition:"all 0.15s"}}>
+                  style={{display:"flex",alignItems:"center",gap:6,padding:"8px 14px",background:"none",border:"none",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?T.teal:T.muted,fontFamily:T.font,borderBottom:activeTab===t.id?`2px solid ${T.teal}`:"2px solid transparent",transition:"all 0.15s",whiteSpace:"nowrap",flexShrink:0}}>
                   <t.Icon size={14}/>{t.label}
                 </button>
               ))}
             </div>
           </div>
-          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
             <Badge color={T.green} bg="#ecfdf5">● Online</Badge>
             <Btn variant="secondary" size="sm" icon={<HelpCircle size={12}/>}>Ajuda</Btn>
           </div>

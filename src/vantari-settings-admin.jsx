@@ -1640,14 +1640,23 @@ const CustomFieldsTab = ({ toast }) => {
    LEAD TRACKING TAB — gerenciador de páginas rastreadas
    Substitui o módulo Lead Tracking do RD Station.
 ═══════════════════════════════════════════════════════════ */
+const POPUP_TRIGGERS = [
+  { value:"exit_intent", label:"Ao tentar sair (exit-intent)" },
+  { value:"time_delay",  label:"Depois de X segundos" },
+];
+
 const TrackingTab = ({ toast }) => {
   const [pages, setPages]     = useState([]);
+  const [forms, setForms]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [search, setSearch]   = useState("");
   const [filterFunnel, setFilterFunnel] = useState("all");
   const [editing, setEditing] = useState(null);
-  const [draft, setDraft]     = useState({ url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true });
+  const [draft, setDraft]     = useState({
+    url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true,
+    popup_enabled:false, popup_form_slug:"", popup_trigger:"exit_intent", popup_trigger_value:15, popup_frequency_days:7,
+  });
   const [saving, setSaving]   = useState(false);
   const [showSnippet, setShowSnippet] = useState(false);
 
@@ -1662,7 +1671,20 @@ const TrackingTab = ({ toast }) => {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchPages(); }, [fetchPages]);
+  // Formulários disponíveis pro pop-up: reaproveita os mesmos criados em
+  // /landing → Formulários (public.forms) + eventuais forms novos (mkt.forms).
+  const fetchForms = useCallback(async () => {
+    const [pub, mkt] = await Promise.all([
+      supabase.from("forms").select("slug,name").eq("active", true),
+      supabase.schema("mkt").from("forms").select("slug,name").eq("active", true),
+    ]);
+    const merged = [...(pub.data || []), ...(mkt.data || [])];
+    const seen = new Set(); const list = [];
+    for (const f of merged) { if (f.slug && !seen.has(f.slug)) { seen.add(f.slug); list.push(f); } }
+    setForms(list);
+  }, []);
+
+  useEffect(() => { fetchPages(); fetchForms(); }, [fetchPages, fetchForms]);
 
   const filtered = pages.filter(p => {
     const m1 = !search || p.url?.toLowerCase().includes(search.toLowerCase()) || p.title?.toLowerCase().includes(search.toLowerCase());
@@ -1673,17 +1695,28 @@ const TrackingTab = ({ toast }) => {
   const countBy = (f) => pages.filter(p => p.funnel === f).length;
 
   const openNew = () => {
-    setDraft({ url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true });
+    setDraft({
+      url:"", title:"", funnel:"outro", score_delta:5, category:"", active:true,
+      popup_enabled:false, popup_form_slug:"", popup_trigger:"exit_intent", popup_trigger_value:15, popup_frequency_days:7,
+    });
     setEditing("new");
   };
   const openEdit = (p) => {
-    setDraft({ url:p.url, title:p.title||"", funnel:p.funnel||"outro", score_delta:p.score_delta??5, category:p.category||"", active:!!p.active });
+    setDraft({
+      url:p.url, title:p.title||"", funnel:p.funnel||"outro", score_delta:p.score_delta??5, category:p.category||"", active:!!p.active,
+      popup_enabled: !!p.popup_enabled,
+      popup_form_slug: p.popup_form_slug || "",
+      popup_trigger: p.popup_trigger || "exit_intent",
+      popup_trigger_value: p.popup_trigger_value ?? 15,
+      popup_frequency_days: p.popup_frequency_days ?? 7,
+    });
     setEditing(p);
   };
   const closeEditor = () => setEditing(null);
 
   const save = async () => {
     if (!draft.url.trim()) return toast("URL é obrigatória", "error");
+    if (draft.popup_enabled && !draft.popup_form_slug) return toast("Escolha um formulário pro pop-up", "error");
     setSaving(true);
     const payload = {
       url: draft.url.trim().replace(/^https?:\/\//,"").replace(/\?.*$/,""),
@@ -1692,6 +1725,11 @@ const TrackingTab = ({ toast }) => {
       score_delta: Number(draft.score_delta) || 0,
       category: draft.category?.trim() || null,
       active: !!draft.active,
+      popup_enabled: !!draft.popup_enabled,
+      popup_form_slug: draft.popup_enabled ? draft.popup_form_slug : null,
+      popup_trigger: draft.popup_trigger,
+      popup_trigger_value: Number(draft.popup_trigger_value) || 15,
+      popup_frequency_days: Number(draft.popup_frequency_days) || 7,
     };
     let res;
     if (editing === "new") {
@@ -1822,7 +1860,10 @@ const TrackingTab = ({ toast }) => {
                         <div style={{fontWeight:600}}>{p.title || "(sem título)"}</div>
                         <div style={{fontSize:11,color:T.muted,fontFamily:T.mono,marginTop:2}}>{p.url}</div>
                       </td>
-                      <td style={{padding:"10px 14px"}}><Badge color={fm.color}>{fm.label}</Badge></td>
+                      <td style={{padding:"10px 14px",display:"flex",gap:6,flexWrap:"wrap"}}>
+                        <Badge color={fm.color}>{fm.label}</Badge>
+                        {p.popup_enabled && <Badge color={T.violet}>Pop-up</Badge>}
+                      </td>
                       <td style={{padding:"10px 14px",textAlign:"right",fontSize:13,fontFamily:T.mono,color:T.text,fontWeight:600}}>+{p.score_delta}</td>
                       <td style={{padding:"10px 14px",textAlign:"center"}}>
                         <div style={{display:"flex",justifyContent:"center"}}>
@@ -1874,6 +1915,35 @@ const TrackingTab = ({ toast }) => {
                 onChange={e=>setDraft(d=>({...d,category:e.target.value}))}
                 placeholder="blog, lp, produto"/>
               <Toggle checked={draft.active} onChange={v=>setDraft(d=>({...d,active:v}))} label="Ativo (rastreando visitas)"/>
+
+              <div style={{borderTop:`1px solid ${T.border}`,paddingTop:14,display:"flex",flexDirection:"column",gap:14}}>
+                <Toggle checked={draft.popup_enabled} onChange={v=>setDraft(d=>({...d,popup_enabled:v}))} label="Mostrar pop-up de formulário nessa página"/>
+                {draft.popup_enabled && (
+                  <>
+                    {forms.length === 0 ? (
+                      <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>
+                        Nenhum formulário ativo encontrado. Crie um em <strong>/landing → Formulários</strong> primeiro.
+                      </div>
+                    ) : (
+                      <Sel label="Formulário" value={draft.popup_form_slug}
+                        onChange={e=>setDraft(d=>({...d,popup_form_slug:e.target.value}))}
+                        options={[{value:"",label:"— selecione —"}, ...forms.map(f=>({value:f.slug,label:f.name||f.slug}))]}/>
+                    )}
+                    <div style={{display:"grid",gridTemplateColumns: draft.popup_trigger==="time_delay" ? "1fr 1fr" : "1fr",gap:14}}>
+                      <Sel label="Gatilho" value={draft.popup_trigger}
+                        onChange={e=>setDraft(d=>({...d,popup_trigger:e.target.value}))}
+                        options={POPUP_TRIGGERS}/>
+                      {draft.popup_trigger === "time_delay" && (
+                        <Input label="Segundos de espera" type="number" value={draft.popup_trigger_value}
+                          onChange={e=>setDraft(d=>({...d,popup_trigger_value:e.target.value}))}/>
+                      )}
+                    </div>
+                    <Input label="Não mostrar de novo por (dias)" type="number" value={draft.popup_frequency_days}
+                      onChange={e=>setDraft(d=>({...d,popup_frequency_days:e.target.value}))}
+                      hint="Depois que o visitante vê ou preenche o pop-up, some via localStorage no navegador dele."/>
+                  </>
+                )}
+              </div>
             </div>
             <div style={{padding:"14px 22px",borderTop:`1px solid ${T.border}`,display:"flex",justifyContent:"flex-end",gap:8,background:T.faint}}>
               <Btn variant="outline" size="sm" onClick={closeEditor}>Cancelar</Btn>

@@ -75,7 +75,7 @@ serve(async (req) => {
   let trackedPageId: string | null = null;
   const { data: tp } = await supabase
     .from("tracked_pages")
-    .select("id")
+    .select("id, popup_enabled, popup_form_slug, popup_trigger, popup_trigger_value, popup_frequency_days")
     .eq("url", normalizedUrl)
     .eq("active", true)
     .maybeSingle();
@@ -104,10 +104,24 @@ serve(async (req) => {
 
   if (error) return json({ error: error.message }, 500);
 
+  // 4) Config do pop-up (Etapa 5) — só devolve quando a página rastreada
+  // tem popup_enabled = true e um formulário associado. tracker.js decide
+  // localmente (localStorage) se já mostrou pra esse visitante recentemente.
+  const popup = (tp && tp.popup_enabled && tp.popup_form_slug)
+    ? {
+        page_id:        tp.id,
+        form_slug:      tp.popup_form_slug,
+        trigger:        tp.popup_trigger,
+        trigger_value:  tp.popup_trigger_value,
+        frequency_days: tp.popup_frequency_days,
+      }
+    : null;
+
   return json({
     ok: true,
     identified: !!leadId,
-    tracked:    !!trackedPageId
+    tracked:    !!trackedPageId,
+    popup,
   });
 });
 

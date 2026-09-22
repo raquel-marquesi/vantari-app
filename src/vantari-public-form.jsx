@@ -285,6 +285,15 @@ export default function VantariPublicForm() {
     if (error) { setError(error.message); return; }
     fireConversion(slug);
 
+    // Avisa quem embutiu esse form num iframe (pop-up do tracker.js, e no
+    // futuro forms-embed.js) que o envio deu certo — precisa de postMessage
+    // porque o embutidor é de outro domínio, não dá pra ler o DOM daqui.
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "vantari:form-submitted", slug }, "*");
+      }
+    } catch { /* noop */ }
+
     if (RJ_CAMPAIGN_SLUGS.has(slug)) {
       let number = WA_NUMBER_FALLBACK;
       try {

@@ -29,13 +29,27 @@
   // (permite trocar de projeto Supabase sem precisar reeditar este arquivo),
   // mas se não achar, usa o endereço de produção direto.
   var FALLBACK_ENDPOINT = "https://ejhrlrasepowdcdnggmv.supabase.co/functions/v1/track";
-  var script   = document.currentScript || (function(){var s=document.getElementsByTagName("script");return s[s.length-1];})();
-  var endpoint = (script && script.getAttribute("data-endpoint")) || FALLBACK_ENDPOINT;
+  var script      = document.currentScript || (function(){var s=document.getElementsByTagName("script");return s[s.length-1];})();
+  var endpointAttr = script && script.getAttribute("data-endpoint");
+  var endpoint = endpointAttr || FALLBACK_ENDPOINT;
+
+  // Origem do app (mesma lógica do forms-embed.js): usada pra montar o
+  // iframe /f/:slug do pop-up sem precisar hardcodar o domínio aqui.
+  // Só confia em script.src quando achou o data-endpoint na tag — mesmo
+  // motivo do FALLBACK_ENDPOINT acima: em páginas com "Combine JS" o
+  // `script` capturado é o bundle combinado do plugin de cache, cujo .src
+  // aponta pro domínio do WordPress, não do app.
+  var FALLBACK_APP_ORIGIN = "https://vantari-app.vercel.app";
+  var appOrigin = (function () {
+    if (!endpointAttr) return FALLBACK_APP_ORIGIN;
+    try { return new URL(script.src).origin; } catch (e) { return FALLBACK_APP_ORIGIN; }
+  })();
 
   var COOKIE_NAME    = "_vantari_vid";
   var IDENTIFY_KEY   = "_vantari_id";
   var COOKIE_DAYS    = 365 * 2;
   var HEARTBEAT_SEC  = 30;
+  var POPUP_SEEN_PREFIX = "_vantari_popup_seen_";
 
   // ───── Utils ─────
   function uid() {
@@ -90,14 +104,17 @@
       // em alguns cenários de CORS/rede local (ex.: localhost <-> 127.0.0.1) sem
       // reportar erro algum. fetch com keepalive sobrevive à navegação da mesma
       // forma, mas negocia CORS corretamente e é mais confiável.
-      fetch(endpoint, {
+      // Devolve a resposta em JSON (usada por track() pra ler a config do
+      // pop-up devolvida pela Edge Function) — se falhar, resolve null.
+      return fetch(endpoint, {
         method: "POST",
         mode: "cors",
         keepalive: true,
         headers: { "Content-Type": "application/json", "X-Visitor-Id": payload.visitor_id },
         body: body,
-      }).catch(function () { /* swallow network errors */ });
-    } catch (e) { /* swallow */ }
+      }).then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; /* swallow network errors */ });
+    } catch (e) { return Promise.resolve(null); /* swallow */ }
   }
 
   // ───── Track + Heartbeat ─────
@@ -124,7 +141,7 @@
       fbclid:       fb.fbclid,
       fbp:          fb.fbp,
       fbc:          fb.fbc,
-    });
+    }).then(handleTrackResponse);
   }
   function heartbeat() {
     var id = getIdentity();
@@ -136,6 +153,95 @@
       duration_s: Math.floor((Date.now() - startedAt)/1000),
     });
   }
+
+  // ───── Pop-ups (Etapa 5) ─────
+  // A Edge Function /track já resolve a tracked_page de cada visita — se ela
+  // tiver popup_enabled, devolve a config junto da resposta, sem endpoint
+  // novo. Reaproveita o formulário público /f/:slug dentro de um iframe.
+  var popupArmed   = false;
+  var popupTimer   = null;
+  var popupPending = null;
+
+  function popupSeenKey(pageId) { return POPUP_SEEN_PREFIX + pageId; }
+  function popupRecentlySeen(pageId, days) {
+    try {
+      var last = parseInt(localStorage.getItem(popupSeenKey(pageId)), 10);
+      return !!last && (Date.now() - last) < (days * 86400000);
+    } catch (e) { return false; }
+  }
+  function markPopupSeen(pageId) {
+    try { localStorage.setItem(popupSeenKey(pageId), String(Date.now())); } catch (e) {}
+  }
+
+  function closePopup() {
+    if (popupTimer) { clearTimeout(popupTimer); popupTimer = null; }
+    document.removeEventListener("mouseout", onExitIntent);
+    var el = document.getElementById("vantari-popup-overlay");
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function showPopup(cfg) {
+    if (document.getElementById("vantari-popup-overlay")) return; // já aberto
+    markPopupSeen(cfg.page_id);
+
+    var overlay = document.createElement("div");
+    overlay.id = "vantari-popup-overlay";
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(14,26,36,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:16px;";
+    overlay.addEventListener("click", function (e) { if (e.target === overlay) closePopup(); });
+
+    var box = document.createElement("div");
+    box.style.cssText = "position:relative;width:100%;max-width:480px;background:#fff;border-radius:14px;box-shadow:0 20px 60px -12px rgba(0,0,0,.35);overflow:hidden;max-height:90vh;";
+
+    var closeBtn = document.createElement("button");
+    closeBtn.innerHTML = "&times;";
+    closeBtn.setAttribute("aria-label", "Fechar");
+    closeBtn.style.cssText = "position:absolute;top:8px;right:10px;width:28px;height:28px;border:none;border-radius:50%;background:rgba(14,26,36,.08);color:#0E1A24;font-size:18px;line-height:1;cursor:pointer;z-index:1;";
+    closeBtn.onclick = closePopup;
+
+    var iframe = document.createElement("iframe");
+    iframe.src = appOrigin + "/f/" + encodeURIComponent(cfg.form_slug) + location.search;
+    iframe.style.cssText = "width:100%;height:520px;border:0;display:block;";
+    iframe.setAttribute("title", "Formulário Vantari");
+
+    box.appendChild(closeBtn);
+    box.appendChild(iframe);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+  }
+
+  function onExitIntent(e) {
+    // só dispara quando o mouse sai pelo topo da janela (indo em direção à
+    // barra de endereço/abas) — evita abrir ao simplesmente sair pelas
+    // laterais ou rodapé da página.
+    if (e.clientY > 0) return;
+    document.removeEventListener("mouseout", onExitIntent);
+    showPopup(popupPending);
+  }
+
+  function armPopup(cfg) {
+    if (!cfg || popupArmed) return;
+    popupArmed = true;
+    if (popupRecentlySeen(cfg.page_id, cfg.frequency_days || 7)) return;
+    popupPending = cfg;
+    if (cfg.trigger === "exit_intent") {
+      document.addEventListener("mouseout", onExitIntent);
+    } else {
+      popupTimer = setTimeout(function () { showPopup(cfg); }, (cfg.trigger_value || 15) * 1000);
+    }
+  }
+
+  function handleTrackResponse(data) {
+    if (data && data.popup) armPopup(data.popup);
+  }
+
+  // Fecha o pop-up sozinho quando o formulário dentro do iframe é enviado
+  // com sucesso (vantari-public-form.jsx manda esse postMessage). Precisa
+  // de postMessage porque o iframe é de outro domínio — não dá pra ler o
+  // DOM dele direto.
+  window.addEventListener("message", function (event) {
+    if (event.origin !== appOrigin) return;
+    if (event.data && event.data.type === "vantari:form-submitted") closePopup();
+  });
 
   // ───── SPA support (history change) ─────
   var lastPath = location.pathname;
@@ -153,6 +259,8 @@
     if (location.pathname !== lastPath) {
       lastPath  = location.pathname;
       startedAt = Date.now();
+      popupArmed = false;
+      closePopup();
       track();
     }
   });

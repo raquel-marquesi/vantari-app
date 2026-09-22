@@ -9,7 +9,7 @@ import {
   FolderOpen, HelpCircle, CheckCircle, BookOpen, Play, MessageSquare,
   Loader2, AlertTriangle, ArrowUp, ArrowDown, Kanban,
   Database, Edit3, Trash2, Search, X, Copy as CopyIcon,
-  Activity, Globe, Filter,
+  Activity, Globe, Filter, Bell,
   ChevronLeft, ChevronRight, LogOut,
 } from "lucide-react";
 
@@ -167,6 +167,7 @@ const TABS = [
   { id:"pipelines",    Icon:Kanban,        label:"Pipelines"             },
   { id:"customfields", Icon:Database,      label:"Campos Personalizados" },
   { id:"tracking",     Icon:Activity,      label:"Lead Tracking"         },
+  { id:"webpush",      Icon:Bell,          label:"Web Push"              },
   { id:"email",        Icon:Mail,          label:"Email"                 },
   { id:"billing",      Icon:CreditCard,    label:"Billing"               },
   { id:"advanced",     Icon:Settings,      label:"Avançado"              },
@@ -1957,6 +1958,115 @@ const TrackingTab = ({ toast }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════
+   WEB PUSH TAB — notificação no navegador (Etapa 5, parte 2)
+   Backend: public.push_subscriptions + Edge Functions push-subscribe
+   (captura) e send-web-push (disparo). Ver public/vantari-push-sw.js.
+═══════════════════════════════════════════════════════════ */
+const WebPushTab = ({ toast }) => {
+  const [count, setCount] = useState(null);
+  const [loadingCount, setLoadingCount] = useState(true);
+  const [draft, setDraft] = useState({ title: "", body: "", url: "" });
+  const [sending, setSending] = useState(false);
+  const [lastResult, setLastResult] = useState(null);
+  const [showSnippet, setShowSnippet] = useState(false);
+
+  const fetchCount = useCallback(async () => {
+    setLoadingCount(true);
+    const { count: c } = await supabase
+      .from("push_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("active", true);
+    setCount(c ?? 0);
+    setLoadingCount(false);
+  }, []);
+
+  useEffect(() => { fetchCount(); }, [fetchCount]);
+
+  const send = async () => {
+    if (!draft.title.trim() || !draft.body.trim()) return toast("Título e mensagem são obrigatórios", "error");
+    setSending(true);
+    setLastResult(null);
+    const { data, error } = await supabase.functions.invoke("send-web-push", {
+      body: { title: draft.title.trim(), body: draft.body.trim(), url: draft.url.trim() || "/" },
+    });
+    setSending(false);
+    if (error || data?.error) {
+      toast(`Erro: ${data?.error || error.message}`, "error");
+      return;
+    }
+    setLastResult(data);
+    toast(`Enviado! ${data.sent} entregues, ${data.failed} falharam.`, "success");
+    fetchCount(); // inscrições expiradas (404/410) podem ter sido desativadas no envio
+  };
+
+  const snippet = `<!-- Vantari Web Push — botão de opt-in, colar onde quiser (precisa do tracker.js já instalado) -->
+<button onclick="Vantari.enablePush().then(()=>alert('Notificações ativadas!')).catch(e=>alert('Não foi possível ativar: '+e.message))">
+  Ativar notificações
+</button>`;
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card style={{borderLeft:`4px solid ${T.violet}`}}>
+        <SectionTitle sub="Notificação no navegador, mesmo com a aba fechada — substitui o Web Push do RD Station">Web Push</SectionTitle>
+        <PreviewBanner>
+          Antes de usar: (1) rode <code style={{fontFamily:T.mono}}>supabase secrets set VAPID_PRIVATE_KEY=... VAPID_SUBJECT=...</code> no
+          projeto (chave pública já embutida no tracker.js); (2) suba o arquivo <code style={{fontFamily:T.mono}}>public/vantari-push-sw.js</code> pra
+          raiz do <strong>vantari.com.br</strong> (não é só um script tag — o Service Worker precisa estar no mesmo domínio dos visitantes);
+          (3) coloque o botão de opt-in abaixo em algum lugar do site.
+        </PreviewBanner>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{padding:"10px 14px",borderRadius:10,border:`1px solid ${T.border}`,background:T.faint}}>
+            <div style={{fontSize:11,fontWeight:700,color:T.violet,textTransform:"uppercase",letterSpacing:"0.06em",fontFamily:T.head}}>Inscritos ativos</div>
+            <div style={{fontSize:20,fontWeight:800,color:T.ink,fontFamily:T.head,marginTop:2}}>{loadingCount ? "…" : count}</div>
+          </div>
+          <Btn variant="outline" size="sm" icon={<RefreshCw size={12}/>} onClick={fetchCount}>Recarregar</Btn>
+          <div style={{flex:1}}/>
+          <Btn variant="secondary" size="sm" icon={<FileText size={12}/>} onClick={()=>setShowSnippet(s=>!s)}>{showSnippet?"Ocultar":"Ver"} botão de ativar</Btn>
+        </div>
+        {showSnippet && (
+          <div style={{marginTop:12,padding:14,background:"#0E1A24",borderRadius:10,position:"relative"}}>
+            <pre style={{margin:0,fontFamily:T.mono,fontSize:12,color:"#E2EAF0",whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{snippet}</pre>
+            <button onClick={()=>{navigator.clipboard?.writeText(snippet);toast("Snippet copiado!","success");}}
+              style={{position:"absolute",top:10,right:10,background:"rgba(255,255,255,0.1)",color:"#fff",border:"none",borderRadius:6,padding:"5px 10px",fontSize:11,fontFamily:T.font,fontWeight:600,cursor:"pointer"}}>Copiar</button>
+          </div>
+        )}
+      </Card>
+
+      <Card>
+        <SectionTitle sub="Envia pra todos os inscritos ativos agora">Nova notificação</SectionTitle>
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          <Input label="Título" value={draft.title}
+            onChange={e=>setDraft(d=>({...d,title:e.target.value}))}
+            placeholder="Ex: Sua antecipação está pronta"/>
+          <div>
+            <FL>Mensagem</FL>
+            <textarea value={draft.body}
+              onChange={e=>setDraft(d=>({...d,body:e.target.value}))}
+              rows={3} placeholder="Texto curto — aparece junto do título na notificação."
+              style={{width:"100%",padding:"9px 12px",borderRadius:8,border:`1.5px solid ${T.border}`,fontSize:13,color:T.text,fontFamily:T.font,resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+          <Input label="Link ao clicar (opcional)" value={draft.url}
+            onChange={e=>setDraft(d=>({...d,url:e.target.value}))}
+            placeholder="https://vantari.com.br/..." hint="Deixe em branco pra abrir a home do site"/>
+          <div>
+            <Btn onClick={send} disabled={sending} icon={sending?<Loader2 size={12}/>:<Send size={12}/>}>
+              {sending ? "Enviando..." : `Enviar para ${count ?? "..."} inscritos`}
+            </Btn>
+          </div>
+          {lastResult && (
+            <div style={{fontSize:12,color:T.muted,fontFamily:T.font}}>
+              Última tentativa: <strong style={{color:T.green}}>{lastResult.sent} entregues</strong>
+              {lastResult.failed > 0 && <> · <strong style={{color:T.coral}}>{lastResult.failed} falharam</strong></>}
+              {lastResult.deactivated > 0 && <> · {lastResult.deactivated} inscrição(ões) expirada(s) removida(s) automaticamente</>}
+            </div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    ROOT — topbar idêntico ao vantari-analytics-dashboard
 ═══════════════════════════════════════════════════════════ */
 const NavSection = ({ label, collapsed=false }) => (
@@ -2153,6 +2263,7 @@ export default function VantariSettingsAdmin() {
         {activeTab==="pipelines"   &&<PipelinesTab    toast={toast}/>}
         {activeTab==="customfields"&&<CustomFieldsTab toast={toast}/>}
         {activeTab==="tracking"    &&<TrackingTab     toast={toast}/>}
+        {activeTab==="webpush"     &&<WebPushTab      toast={toast}/>}
         {activeTab==="email"       &&<EmailTab        toast={toast}/>}
         {activeTab==="billing"     &&<BillingTab      toast={toast}/>}
         {activeTab==="advanced"    &&<AdvancedTab     toast={toast}/>}

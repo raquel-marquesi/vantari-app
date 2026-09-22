@@ -265,6 +265,74 @@
     }
   });
 
+  // ───── Web Push (Etapa 5, parte 2) ─────
+  // Vantari.enablePush() é uma API manual — não dispara sozinha no boot.
+  // Pedir permissão de notificação sem gesto do usuário é o jeito mais
+  // rápido de o navegador passar a bloquear o prompt automaticamente pro
+  // domínio inteiro; quem instala decide onde chamar isso (ex: onclick de
+  // um botão "Ativar notificações").
+  var VAPID_PUBLIC_KEY = "BFwD2VI78q0beHnDfY5PYZGY68mGkaBdp_h7Gt4DDPMRgLlbyRf7a-gCsHlD1Tvf2sHT2SRlQEwod3yPA5k5n4k";
+  var PUSH_SW_PATH = "/vantari-push-sw.js";
+  // deriva do mesmo `endpoint` já resolvido acima (com a mesma proteção
+  // contra script bundle de cache) — evita duplicar a lógica de fallback.
+  var pushSubscribeEndpoint = endpoint.replace(/\/track\/?$/, "/push-subscribe");
+
+  function urlBase64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var rawData = atob(base64);
+    var out = new Uint8Array(rawData.length);
+    for (var i = 0; i < rawData.length; i++) out[i] = rawData.charCodeAt(i);
+    return out;
+  }
+
+  function enablePush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      return Promise.reject(new Error("Push não suportado nesse navegador"));
+    }
+    return navigator.serviceWorker.register(PUSH_SW_PATH).then(function (registration) {
+      return Notification.requestPermission().then(function (permission) {
+        if (permission !== "granted") throw new Error("Permissão de notificação negada");
+        return registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        });
+      });
+    }).then(function (subscription) {
+      var json = subscription.toJSON();
+      var id = getIdentity();
+      return fetch(pushSubscribeEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint:   json.endpoint,
+          keys:       json.keys,
+          visitor_id: getVisitorId(),
+          lead_id:    id.lead_id || undefined,
+          url:        location.hostname + location.pathname,
+        }),
+      }).then(function () { return true; });
+    });
+  }
+
+  function disablePush() {
+    if (!("serviceWorker" in navigator)) return Promise.resolve(false);
+    return navigator.serviceWorker.getRegistration(PUSH_SW_PATH).then(function (registration) {
+      if (!registration) return false;
+      return registration.pushManager.getSubscription().then(function (subscription) {
+        if (!subscription) return false;
+        var endpointUrl = subscription.endpoint;
+        return subscription.unsubscribe().then(function () {
+          return fetch(pushSubscribeEndpoint, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: endpointUrl }),
+          }).then(function () { return true; });
+        });
+      });
+    });
+  }
+
   // ───── API pública ─────
   window.Vantari = {
     identify: function(data) {
@@ -275,6 +343,8 @@
     },
     reset: function() { setIdentity({}); },
     track: track,
+    enablePush: enablePush,
+    disablePush: disablePush,
   };
 
   // ───── Boot ─────

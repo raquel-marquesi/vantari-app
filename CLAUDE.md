@@ -218,6 +218,7 @@ Estes componentes estão definidos em cada arquivo que os usa (padrão do projet
 | `lead_custom_values` | Valores dos campos personalizados por lead (migration 001) |
 | `tracked_pages` | Catálogo de URLs rastreadas (migration 003) |
 | `page_visits` | Visitas registradas pelo tracker.js — trigger gera `lead_event` (migration 003) |
+| `push_subscriptions` | Inscrições de Web Push do navegador — `Vantari.enablePush()` no tracker.js (migration 22/09/2026, ver [docs/WEB_PUSH.md](docs/WEB_PUSH.md)) |
 | `companies` | Empresas vinculadas aos leads via `leads.company_id` (migration 004) |
 | `lead_imports` | Histórico de importações CSV (migration 004) |
 | `lead_exports` | Histórico de exportações CSV (migration 004) |
@@ -260,7 +261,7 @@ Plano em 11 etapas pra substituir 100% o RD Station Marketing.
 | **2** — Lead Tracking | ✅ | Migration 003 + Edge Function `/track` + `public/tracker.js` + UI em /settings + timeline no perfil + filtro em /segments |
 | **3** — Meta Lead Ads | ✅ | Sync real via Graph API (`sync-meta-leads`, ago/2026) — resolve pessoa via `core.resolve_person`, grava `core.events`. Pendente só do lado do usuário: criar o Meta App e cadastrar um Lead Ads Form real em `/settings → Integrações` |
 | **4** — Atrair (Social/SEO/Link Bio) | ⏳ | |
-| **5** — Conversão (Forms/Pop-ups/Web Push) | 🟡 parcial | Forms standalone ✅ (migration 006 + tab `/landing → Formulários` + rota pública `/f/:slug` + snippet `forms-embed.js`). Pop-ups ✅ (22/09/2026 — reaproveita os Forms via iframe de `/f/:slug`, config por página em `/settings → Lead Tracking`, gatilhos exit-intent/tempo). Web Push ⏳ |
+| **5** — Conversão (Forms/Pop-ups/Web Push) | ✅ | Forms standalone ✅ (migration 006 + tab `/landing → Formulários` + rota pública `/f/:slug` + snippet `forms-embed.js`). Pop-ups ✅ (22/09/2026 — reaproveita os Forms via iframe de `/f/:slug`, config por página em `/settings → Lead Tracking`, gatilhos exit-intent/tempo). Web Push ✅ (22/09/2026 — `public.push_subscriptions` + Edge Functions `push-subscribe`/`send-web-push` (VAPID, lib `npm:web-push`) + `public/vantari-push-sw.js` + `Vantari.enablePush()` no tracker.js + tab `/settings → Web Push`. **Passos manuais pendentes do lado da Catarina**: setar secrets `VAPID_PRIVATE_KEY`/`VAPID_SUBJECT`, subir o Service Worker pra raiz de `vantari.com.br`, colocar o botão de opt-in — checklist completo em [docs/WEB_PUSH.md](docs/WEB_PUSH.md)) |
 | **6** — Leads ampliado | ✅ | Migration 004 + 4 abas (Leads / Empresas / Importações / Exportações) + 8 categorias de Atividades no perfil |
 | **7** — Analisar (Canais/UTM/Atribuição) | ✅ | UTM first-touch em `core.persons` + `core.channel_of` + RPC `core.get_channel_funnel` (migration 31/07) + aba `/dashboard → Canais` (`ChannelSection`) já ligada e com dado real. Custo/ROI por canal ainda dependem de conectar Google Ads/Meta Ads (Etapa 8) |
 | **8** — GA4 + Google Ads | ⏳ | |

@@ -403,6 +403,11 @@ verify_jwt = false
 [functions.oauth-callback]
 verify_jwt = false
 
+# /push-subscribe roda dentro do Service Worker/página do site público
+# (vantari.com.br) chamando Vantari.enablePush() — mesmo motivo do /track.
+[functions.push-subscribe]
+verify_jwt = false
+
 [analytics]
 enabled = false
 port = 55327

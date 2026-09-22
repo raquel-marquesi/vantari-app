@@ -39,17 +39,22 @@ provedores de push (Google/Mozilla/etc.) usam se precisarem entrar em
 contato sobre abuso. Usamos a URL do site pra não depender de uma caixa
 de email específica ser monitorada.
 
-### 2. Subir o Service Worker pra raiz do vantari.com.br
+### 2. Publicar o Service Worker na raiz do vantari.com.br
 
-Pegue o arquivo `public/vantari-push-sw.js` deste repositório e publique
-ele em **`https://vantari.com.br/vantari-push-sw.js`** — precisa ser
-exatamente esse caminho (raiz do domínio, não uma subpasta), porque um
+Precisa existir uma resposta em **`https://vantari.com.br/vantari-push-sw.js`**
+— exatamente esse caminho (raiz do domínio, não uma subpasta), porque um
 Service Worker só controla páginas da mesma origem de onde foi servido.
 
-Como o site institucional é WordPress, isso normalmente significa: pedir
-pra quem administra o WordPress subir esse arquivo por FTP/gerenciador de
-arquivos na raiz pública do site (não dá pra fazer só colando um snippet
-de script, como fizemos com o tracker.js).
+**Jeito recomendado — via WPCode (sem FTP):** cole o conteúdo de
+[`docs/wpcode-vantari-push-sw.php`](wpcode-vantari-push-sw.php) como um
+snippet **PHP** novo no WPCode (mesmo plugin já usado pro tracker.js) e
+ative. Ele faz o próprio WordPress responder nesse endereço com o
+conteúdo do Service Worker — não precisa subir arquivo nenhum por
+FTP/gerenciador de arquivos.
+
+**Alternativa (se preferir subir o arquivo de verdade):** pegue
+`public/vantari-push-sw.js` deste repositório e publique ele por
+FTP/gerenciador de arquivos na raiz pública do WordPress.
 
 ### 3. Colocar um botão de opt-in no site
 

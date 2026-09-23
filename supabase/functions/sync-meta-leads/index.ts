@@ -308,6 +308,19 @@ serve(async (req) => {
         if (Number.isFinite(ts) && (maxFoundCreatedTs === null || ts > maxFoundCreatedTs)) maxFoundCreatedTs = ts;
       }
 
+      // created_time do lead mais antigo que FALHOU nesta rodada. Achado
+      // 23/09/2026: entre 21/09 e 23/09 o resolve_person deu "permission
+      // denied" pra todo lead, mas o watermark continuava avançando até
+      // maxFoundCreatedTs e os leads que falharam nunca eram reconsultados.
+      // Agora, se algum falhar, o watermark para logo antes dele e a próxima
+      // rodada tenta de novo (o check de duplicata acima evita regravar os
+      // que já tinham dado certo).
+      let minFailedCreatedTs: number | null = null;
+      const markFailed = (lead: MetaLead) => {
+        const ts = Math.floor(new Date(lead.created_time).getTime() / 1000);
+        if (Number.isFinite(ts) && (minFailedCreatedTs === null || ts < minFailedCreatedTs)) minFailedCreatedTs = ts;
+      };
+
       for (const lead of metaLeads) {
         // idempotência: não duplica se essa sync já rodou sobre o mesmo lead antes
         // (rede de segurança além do filtro "since" por formulário).
@@ -333,9 +346,9 @@ serve(async (req) => {
           p_utm_content:  lead.ad_name || null,
           p_utm_term:     lead.adset_name || null,
         });
-        if (rpcErr) { stat.error = rpcErr.message; continue; }
+        if (rpcErr) { stat.error = rpcErr.message; markFailed(lead); continue; }
 
-        await core.from("events").insert({
+        const { error: eventErr } = await core.from("events").insert({
           workspace_id: WORKSPACE_ID,
           person_id:    personId,
           source:       "meta",
@@ -351,6 +364,8 @@ serve(async (req) => {
             platform: lead.platform, created_time: lead.created_time,
           },
         });
+        // sem o evento, o check de duplicata não reconhece o lead — tenta de novo na próxima rodada
+        if (eventErr) { stat.error = eventErr.message; markFailed(lead); continue; }
 
         // marca a campanha pra scoring/segmentação, mesmo sem processo informado
         // (não-fatal: pessoa e evento já foram gravados acima) — só roda se o
@@ -428,9 +443,13 @@ serve(async (req) => {
         stat.synced++; totalSynced++;
       }
 
-      if (maxFoundCreatedTs !== null) {
-        nextFormIds[i] = { ...form, last_sync_ts: maxFoundCreatedTs };
-      } // found=0: mantém form (last_sync_ts intocado) — não perde a janela
+      // com falha: para 1s antes do lead falho (o filtro é "time_created > since")
+      // (cast: o TS não enxerga a atribuição feita dentro do markFailed e estreitaria pra null)
+      const failedTs = minFailedCreatedTs as number | null;
+      const nextTs = failedTs !== null ? failedTs - 1 : maxFoundCreatedTs;
+      if (nextTs !== null && nextTs > (form.last_sync_ts ?? 0)) {
+        nextFormIds[i] = { ...form, last_sync_ts: nextTs };
+      } // found=0 ou falha no lead mais antigo: mantém form (last_sync_ts intocado) — não perde a janela
     } catch (err: unknown) {
       stat.error = err instanceof Error ? err.message : String(err);
     }

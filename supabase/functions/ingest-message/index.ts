@@ -104,7 +104,7 @@ serve(async (req) => {
 
   // mesma resolução de identidade do /ingest — garante que a mensagem cai
   // na pessoa certa mesmo que ainda não exista (cria na hora)
-  const { data: personId, error: rpcErr } = await core.rpc("resolve_person", {
+  const { data: resolvedId, error: rpcErr } = await core.rpc("resolve_person", {
     p_workspace: workspaceId,
     p_cpf:   cpf,
     p_phone: phone,
@@ -116,6 +116,24 @@ serve(async (req) => {
     const invalid = /CPF inválido/i.test(rpcErr.message);
     return jsonResp({ error: "falha ao resolver pessoa", detail: rpcErr.message },
       invalid ? 422 : 500);
+  }
+
+  // 02/10/2026: contato que entrou só com o código interno do WhatsApp (LID)
+  // no lugar do telefone. Quando a Nina descobre o telefone real, ela manda o
+  // mesmo external_conversation_id com outro phone — sem isso o resolve_person
+  // criaria uma segunda pessoa. Junta as duas e fica com o telefone real.
+  let personId = resolvedId;
+  if (body.external_conversation_id && phone) {
+    const { data: reconciledId, error: recErr } = await core.rpc("reconcile_lid_person", {
+      p_workspace: workspaceId,
+      p_person: resolvedId,
+      p_external_conversation_id: String(body.external_conversation_id),
+      p_phone: phone,
+    });
+    // se falhar, segue com a pessoa do resolve_person: uma duplicata dá pra
+    // juntar depois, mensagem perdida não volta
+    if (recErr) console.error("reconcile_lid_person falhou:", recErr.message);
+    else personId = reconciledId ?? resolvedId;
   }
 
   const mediaUrl = body.media_url ? String(body.media_url) : null;

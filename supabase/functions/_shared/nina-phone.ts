@@ -104,6 +104,9 @@ export async function ninaCallWithPhoneRetry(
 ): Promise<NinaCallResult> {
   const first = await attemptNinaCall(url, secret, payload, phone);
   if (first.ok) return first;
+  // 422 = a Nina recusou de propósito (ex.: outside_24h_window na Cloud
+  // API) — repetir não muda a resposta, devolve direto.
+  if (first.status === 422) return first;
 
   let best = first;
   if (first.status === 404) {

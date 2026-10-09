@@ -54,6 +54,11 @@ function jsonResp(body: unknown, status = 200) {
   });
 }
 
+function parseNinaErrorCode(detail: string): string | null {
+  try { return JSON.parse(detail)?.error ?? null; }
+  catch { return null; }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
   if (req.method !== "POST")    return jsonResp({ error: "Method not allowed" }, 405);
@@ -117,6 +122,17 @@ serve(async (req) => {
       media_filename: mediaFilename,
     }, phoneOnFile);
     if (!result.ok) {
+      // 09/10/2026 — migração da Nina pra Cloud API oficial: fora da janela
+      // de 24h desde a última mensagem do cliente, o WhatsApp só aceita
+      // modelo aprovado e a Nina responde 422 {"error":"outside_24h_window"}.
+      // Não é falha de infraestrutura — não registra nina_call_failed (senão
+      // entraria na contagem do banner de "Nina instável" do /inbox).
+      if (result.status === 422 && parseNinaErrorCode(result.detail) === "outside_24h_window") {
+        return jsonResp({
+          error: "Não dá pra enviar: já passaram mais de 24h desde a última mensagem do cliente. Pela regra do WhatsApp, só é possível falar de novo quando ele mandar uma mensagem (ou com um modelo aprovado).",
+          code: "outside_24h_window",
+        }, 422);
+      }
       await logNinaFailure(core, conv.workspace_id, conv.person_id, "send-message", result);
       return jsonResp({ error: `Nina retornou erro (${result.status}) ao despachar a mensagem`, detail: result.detail }, 502);
     }

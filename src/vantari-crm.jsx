@@ -970,6 +970,19 @@ function FilterPanel({ stages, filters, onChange, onClear, onClose, captadores, 
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (era isso que deixava
+   o Kanban todo "Sem titular"). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function CRM() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -1023,8 +1036,8 @@ export default function CRM() {
 
       const ids = [...new Set((dl || []).map((d) => d.person_id).filter(Boolean))];
       if (ids.length) {
-        const { data: ppl } = await supabase.schema("core")
-          .from("persons").select("id,full_name,primary_email").in("id", ids);
+        const ppl = await selectInChunks(
+          () => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", ids);
         const map = {};
         (ppl || []).forEach((p) => { map[p.id] = p.full_name || p.primary_email; });
         setPersonMap(map);
@@ -1037,14 +1050,14 @@ export default function CRM() {
       // supabase-js não embeda entre schemas diferentes (crm/core) sem FK exposta
       const processoIds = [...new Set((dl || []).map((d) => d.processo_id).filter(Boolean))];
       if (processoIds.length) {
-        const { data: procs } = await crm
-          .from("processos").select("id,reclamada_company_id").in("id", processoIds);
+        const procs = await selectInChunks(
+          () => crm.from("processos").select("id,reclamada_company_id"), "id", processoIds);
         const companyIds = [...new Set((procs || []).map((p) => p.reclamada_company_id).filter(Boolean))];
         let companyNameById = {};
         if (companyIds.length) {
-          const { data: cos } = await supabase.schema("core")
-            .from("companies").select("id,name").in("id", companyIds);
-          (cos || []).forEach((c) => { companyNameById[c.id] = c.name; });
+          const cos = await selectInChunks(
+            () => supabase.schema("core").from("companies").select("id,name"), "id", companyIds);
+          cos.forEach((c) => { companyNameById[c.id] = c.name; });
         }
         const map = {};
         (procs || []).forEach((p) => { if (p.reclamada_company_id) map[p.id] = companyNameById[p.reclamada_company_id] || null; });

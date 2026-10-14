@@ -1037,9 +1037,9 @@ export default function CRM() {
       const ids = [...new Set((dl || []).map((d) => d.person_id).filter(Boolean))];
       if (ids.length) {
         const ppl = await selectInChunks(
-          () => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", ids);
+          () => supabase.schema("core").from("persons").select("id,full_name,primary_email,primary_phone"), "id", ids);
         const map = {};
-        (ppl || []).forEach((p) => { map[p.id] = p.full_name || p.primary_email; });
+        (ppl || []).forEach((p) => { map[p.id] = p.full_name || p.primary_email || p.primary_phone; });
         setPersonMap(map);
       } else {
         setPersonMap({});

@@ -7,7 +7,9 @@ Checklist para começar a corrigir bugs e construir features neste projeto usand
 
 ## 1. Acessos (peça à Raquel — só ela concede)
 
-- [ ] **GitHub** — ser adicionada como colaboradora no repo `raquel-marquesi/vantari-app`
+> Primeira dev a entrar: **Catarina Quartucci** — GitHub [@catarinaquartucci](https://github.com/catarinaquartucci) · `catarina.quartucci@vantari.com.br`
+
+- [ ] **GitHub** — ser adicionada como colaboradora no repo `raquel-marquesi/vantari-app` (Settings → Collaborators → Add `catarinaquartucci`, role Write)
 - [ ] **Supabase** — acesso ao projeto (ou receber `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY`)
 - [ ] **Vercel** — acesso ao projeto de deploy (opcional no início; o deploy é automático)
 - [ ] **Chaves de ambiente** — receber os valores do `.env` por canal seguro (nunca por commit / email aberto)

@@ -884,18 +884,24 @@ export default function InboxAtendimento() {
     }
   };
 
-  const statusBadge = (status, assignedName) => (
-    <span style={{
-      display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700,
-      padding: "3px 9px", borderRadius: 20, fontFamily: T.font,
-      background: status === "human" ? "#E8F7F1" : "#E6F3F6",
-      color: status === "human" ? T.green : T.teal,
-    }}>
-      <span style={{ width: 6, height: 6, borderRadius: "50%", background: status === "human" ? T.green : T.teal }} />
-      {status === "human" ? "Com humano" : "Nina respondendo"}
-      {status === "human" && assignedName ? ` · ${assignedName}` : ""}
-    </span>
-  );
+  // 15/10/2026 — "Aguardando equipe": com humano mas sem responsável. É o que
+  // acontece quando a própria Nina passa a conversa pro time (handoff no
+  // /ingest-message), ex: cliente reclamou de demora — ninguém pegou ainda.
+  const statusBadge = (status, assignedName, unassigned = false) => {
+    const waiting = status === "human" && unassigned;
+    const bg = waiting ? "#FFF4E0" : status === "human" ? "#E8F7F1" : "#E6F3F6";
+    const fg = waiting ? "#B45309" : status === "human" ? T.green : T.teal;
+    return (
+      <span style={{
+        display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700,
+        padding: "3px 9px", borderRadius: 20, fontFamily: T.font, background: bg, color: fg,
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: "50%", background: waiting ? T.amber : fg }} />
+        {waiting ? "Aguardando equipe" : status === "human" ? "Com humano" : "Nina respondendo"}
+        {status === "human" && !waiting && assignedName ? ` · ${assignedName}` : ""}
+      </span>
+    );
+  };
 
   const archivedBadge = (
     <span style={{
@@ -999,7 +1005,7 @@ export default function InboxAtendimento() {
                       ) : (c.last_message_body || "—")}
                     </div>
                     <div style={{ marginTop: 5, display: "flex", gap: 5, flexWrap: "wrap" }}>
-                      {statusBadge(c.status, c.status === "human" ? firstName(teamById[c.assigned_user_id]) : null)}
+                      {statusBadge(c.status, c.status === "human" ? firstName(teamById[c.assigned_user_id]) : null, !c.assigned_user_id)}
                       {c.archived_at && archivedBadge}
                     </div>
                   </div>
@@ -1021,7 +1027,7 @@ export default function InboxAtendimento() {
               <div style={{ padding: "14px 22px", borderBottom: `1px solid ${T.border}`, background: T.surface, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <div>
                   <div style={{ fontSize: 15, fontWeight: 700, color: T.ink, fontFamily: T.head }}>{selected.person?.full_name || selected.person?.primary_phone || "Contato sem nome"}</div>
-                  <div style={{ marginTop: 4, display: "flex", gap: 6 }}>{statusBadge(selected.status)}{selected.archived_at && archivedBadge}</div>
+                  <div style={{ marginTop: 4, display: "flex", gap: 6 }}>{statusBadge(selected.status, null, !selected.assigned_user_id)}{selected.archived_at && archivedBadge}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <AssigneeMenu

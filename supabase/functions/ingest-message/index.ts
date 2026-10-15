@@ -25,7 +25,13 @@
 //                                                             //   cliente no WhatsApp; a Nina hospeda e manda a URL,
 //                                                             //   o Next só guarda/exibe (não faz cópia)
 //   "media_type": "audio/ogg" | "image/jpeg" | "application/pdf" | ..., // mime type, obrigatório se media_url vier
-//   "media_filename": "comprovante.pdf"                      // opcional, nome original pra exibir/baixar
+//   "media_filename": "comprovante.pdf",                     // opcional, nome original pra exibir/baixar
+//   "handoff": { "to": "human", "reason": "..." }           // opcional (15/10/2026) — a Nina passou a conversa
+//                                                             //   pro time sozinha (ex: cliente reclamou de demora).
+//                                                             //   Vem junto com a última mensagem dela; a conversa
+//                                                             //   vira status='human' SEM responsável e aparece no
+//                                                             //   /inbox como "Aguardando equipe". Não avisa a Nina
+//                                                             //   de volta — foi ela que mandou.
 // }
 //
 // Resposta: { "person_id", "conversation_id", "message_id", "is_new_conversation" }
@@ -161,6 +167,32 @@ serve(async (req) => {
 
   const row = Array.isArray(msgResult) ? msgResult[0] : msgResult;
 
+  // 15/10/2026 — a Nina passou a conversa pro time por conta própria. Fica
+  // sem responsável (assigned_user_id null) pra qualquer um da equipe pegar,
+  // e sai de "Resolvidas" se estava lá. O motivo vai pra core.events, que é o
+  // rastro permanente — a conversa em si só guarda o status atual.
+  let handedOff = false;
+  // (se já estava com humano, não mexe — não tira o responsável de ninguém)
+  if (body.handoff?.to === "human" && sender === "nina" && row?.conversation_id && row?.prior_status !== "human") {
+    const reason = String(body.handoff.reason ?? "").slice(0, 500) || null;
+    const { error: hoErr } = await core.from("conversations")
+      .update({ status: "human", assigned_user_id: null, archived_at: null, updated_at: new Date().toISOString() })
+      .eq("id", row.conversation_id);
+    if (hoErr) {
+      return jsonResp({ person_id: personId, conversation_id: row.conversation_id, message_id: row.message_id,
+        error: "mensagem registrada, mas falhou ao passar a conversa pro time", detail: hoErr.message }, 500);
+    }
+    await core.from("events").insert({
+      workspace_id: workspaceId,
+      person_id: personId,
+      source: "nina",
+      type: "nina_handoff",
+      payload: { conversation_id: row.conversation_id, reason },
+      occurred_at: new Date().toISOString(),
+    });
+    handedOff = true;
+  }
+
   // Investigação (04/08/2026): a Nina respondendo mesmo com a conversa já
   // assumida por um humano (status='human' ANTES desta mensagem). O Next já
   // avisa a Nina do status a cada "Assumir/Devolver conversa"
@@ -195,5 +227,6 @@ serve(async (req) => {
     conversation_id: row?.conversation_id,
     message_id: row?.message_id,
     is_new_conversation: row?.is_new_conversation,
+    handed_off: handedOff,
   });
 });

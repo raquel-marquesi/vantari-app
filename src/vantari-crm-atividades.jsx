@@ -346,6 +346,19 @@ function AtividadeModal({ activity, deals, users, onClose, onSaved }) {
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function Atividades() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -375,19 +388,19 @@ export default function Atividades() {
       const dealIds = [...new Set((ac || []).map((a) => a.deal_id).filter(Boolean))];
       let dMap = {};
       if (dealIds.length) {
-        const { data: deals } = await crm.from("deals").select("id,person_id,processo_id,credit_type,modalidade").in("id", dealIds);
+        const deals = await selectInChunks(() => crm.from("deals").select("id,person_id,processo_id,credit_type,modalidade"), "id", dealIds);
         const personIds = [...new Set((deals || []).map((d) => d.person_id).filter(Boolean))];
         const processoIds = [...new Set((deals || []).map((d) => d.processo_id).filter(Boolean))];
-        const [{ data: persons }, { data: processos }] = await Promise.all([
-          personIds.length ? supabase.schema("core").from("persons").select("id,full_name,primary_email,primary_phone").in("id", personIds) : Promise.resolve({ data: [] }),
-          processoIds.length ? crm.from("processos").select("id,reclamada_company_id").in("id", processoIds) : Promise.resolve({ data: [] }),
+        const [persons, processos] = await Promise.all([
+          personIds.length ? selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email,primary_phone"), "id", personIds) : Promise.resolve([]),
+          processoIds.length ? selectInChunks(() => crm.from("processos").select("id,reclamada_company_id"), "id", processoIds) : Promise.resolve([]),
         ]);
         const personById = {}; (persons || []).forEach((p) => personById[p.id] = p);
         const processoById = {}; (processos || []).forEach((p) => processoById[p.id] = p);
         const companyIds = [...new Set((processos || []).map((p) => p.reclamada_company_id).filter(Boolean))];
         let companyById = {};
         if (companyIds.length) {
-          const { data: companies } = await supabase.schema("core").from("companies").select("id,name").in("id", companyIds);
+          const companies = await selectInChunks(() => supabase.schema("core").from("companies").select("id,name"), "id", companyIds);
           (companies || []).forEach((c) => companyById[c.id] = c);
         }
         (deals || []).forEach((d) => {
@@ -412,7 +425,7 @@ export default function Atividades() {
       const openPersonIds = [...new Set((openDeals || []).map((d) => d.person_id).filter(Boolean))];
       let openPersonById = {};
       if (openPersonIds.length) {
-        const { data: pl } = await supabase.schema("core").from("persons").select("id,full_name,primary_email").in("id", openPersonIds);
+        const pl = await selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", openPersonIds);
         (pl || []).forEach((p) => openPersonById[p.id] = p);
       }
       setDealOptions((openDeals || []).map((d) => ({

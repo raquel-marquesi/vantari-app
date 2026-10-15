@@ -242,6 +242,19 @@ function RegrasModal({ rules, onClose, onSaved }) {
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function EmRisco() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -270,13 +283,16 @@ export default function EmRisco() {
       const personIds = [...new Set((openDeals || []).map((d) => d.person_id).filter(Boolean))];
       const stageIds = [...new Set((openDeals || []).map((d) => d.stage_id).filter(Boolean))];
 
-      const [{ data: stages }, { data: persons }, { data: acts }] = await Promise.all([
+      // atividades: antes era um único .or(deal_id.in.(...),person_id.in.(...)) com
+      // todos os negócios abertos na URL; agora duas buscas em lotes (só o máximo
+      // por negócio/pessoa importa, então linha repetida entre as duas não atrapalha)
+      const [{ data: stages }, persons, actsByDeal, actsByPerson] = await Promise.all([
         stageIds.length ? crm.from("stages").select("id,name").in("id", stageIds) : Promise.resolve({ data: [] }),
-        personIds.length ? supabase.schema("core").from("persons").select("id,full_name,primary_email,primary_phone").in("id", personIds) : Promise.resolve({ data: [] }),
-        dealIds.length ? crm.from("activities").select("deal_id,person_id,created_at").or(
-          [`deal_id.in.(${dealIds.join(",")})`, personIds.length ? `person_id.in.(${personIds.join(",")})` : null].filter(Boolean).join(",")
-        ) : Promise.resolve({ data: [] }),
+        personIds.length ? selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email,primary_phone"), "id", personIds) : Promise.resolve([]),
+        dealIds.length ? selectInChunks(() => crm.from("activities").select("deal_id,person_id,created_at"), "deal_id", dealIds) : Promise.resolve([]),
+        dealIds.length && personIds.length ? selectInChunks(() => crm.from("activities").select("deal_id,person_id,created_at"), "person_id", personIds) : Promise.resolve([]),
       ]);
+      const acts = [...actsByDeal, ...actsByPerson];
 
       const stageById = {}; (stages || []).forEach((s) => stageById[s.id] = s.name);
       const personById = {}; (persons || []).forEach((p) => personById[p.id] = p);

@@ -17,6 +17,19 @@ const mkt  = () => supabase.schema("mkt");
 const crm  = () => supabase.schema("crm");
 const NIL  = "00000000-0000-0000-0000-000000000000";
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 /* campos de filtro — mesma definição do /segments (pós-convergência do score) */
 const FIELDS = [
   { value: "score_inicial",   label: "Score (Etapa 1)", type: "number", src: "score" },
@@ -191,12 +204,16 @@ export async function resolveRecipients(rules) {
 
   const companyIds = [...new Set(persons.map(p => p.company_id).filter(Boolean))];
   const personIds = persons.map(p => p.id);
-  const [{ data: companies }, { data: scores }] = await Promise.all([
+  // até 5000 ids aqui — em lotes; em erro segue sem empresa/score (como antes),
+  // pra não travar o envio da campanha por causa de um dado de enriquecimento
+  const [companies, scores] = await Promise.all([
     companyIds.length
-      ? core().from("companies").select("id, name").in("id", companyIds)
-      : Promise.resolve({ data: [] }),
-    mkt().from("lead_scores").select("person_id, score_inicial")
-      .eq("workspace_id", WORKSPACE_VANTARI).in("person_id", personIds),
+      ? selectInChunks(() => core().from("companies").select("id, name"), "id", companyIds)
+          .catch(e => { console.warn("[segment-resolver] falha ao buscar empresas:", e); return []; })
+      : Promise.resolve([]),
+    selectInChunks(() => mkt().from("lead_scores").select("person_id, score_inicial")
+      .eq("workspace_id", WORKSPACE_VANTARI), "person_id", personIds)
+      .catch(e => { console.warn("[segment-resolver] falha ao buscar scores:", e); return []; }),
   ]);
   const companyName = Object.fromEntries((companies || []).map(c => [c.id, c.name]));
   const scoreByPerson = Object.fromEntries((scores || []).map(s => [s.person_id, s.score_inicial]));

@@ -326,6 +326,19 @@ function TarefaModal({ tarefa, deals, users, currentUserId, onClose, onSaved }) 
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function Tarefas() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -360,11 +373,11 @@ export default function Tarefas() {
       const dealIds = [...new Set((ac || []).map((a) => a.deal_id).filter(Boolean))];
       let dMap = {};
       if (dealIds.length) {
-        const { data: deals } = await crm.from("deals").select("id,person_id,processo_id").in("id", dealIds);
+        const deals = await selectInChunks(() => crm.from("deals").select("id,person_id,processo_id"), "id", dealIds);
         const personIds = [...new Set((deals || []).map((d) => d.person_id).filter(Boolean))];
-        const { data: persons } = personIds.length
-          ? await supabase.schema("core").from("persons").select("id,full_name,primary_email").in("id", personIds)
-          : { data: [] };
+        const persons = personIds.length
+          ? await selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", personIds)
+          : [];
         const personById = {}; (persons || []).forEach((p) => personById[p.id] = p);
         (deals || []).forEach((d) => {
           const person = personById[d.person_id];
@@ -377,7 +390,7 @@ export default function Tarefas() {
       const openPersonIds = [...new Set((openDeals || []).map((d) => d.person_id).filter(Boolean))];
       let openPersonById = {};
       if (openPersonIds.length) {
-        const { data: pl } = await supabase.schema("core").from("persons").select("id,full_name,primary_email").in("id", openPersonIds);
+        const pl = await selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", openPersonIds);
         (pl || []).forEach((p) => openPersonById[p.id] = p);
       }
       setDealOptions((openDeals || []).map((d) => ({

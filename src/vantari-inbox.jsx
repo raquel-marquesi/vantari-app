@@ -347,6 +347,19 @@ function AssigneeMenu({ status, assignedUserId, team, myUserId, busy, onPick, on
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function InboxAtendimento() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -425,9 +438,11 @@ export default function InboxAtendimento() {
       const personIds = [...new Set((convs || []).map((c) => c.person_id).filter(Boolean))];
       let personById = {};
       if (personIds.length) {
-        const { data: persons } = await core.from("persons")
-          .select("id, full_name, primary_phone, primary_email, cpf, status").in("id", personIds);
-        (persons || []).forEach((p) => personById[p.id] = p);
+        // falha aqui não derruba a lista de conversas — segue sem os nomes, como antes
+        const persons = await selectInChunks(
+          () => core.from("persons").select("id, full_name, primary_phone, primary_email, cpf, status"), "id", personIds
+        ).catch((e) => { console.warn("[inbox] falha ao buscar pessoas:", e); return []; });
+        persons.forEach((p) => personById[p.id] = p);
       }
       if (reqId !== convReqId.current) return; // resposta antiga, ignora (evita "piscar" com dado desatualizado)
       setConversations((convs || []).map((c) => ({ ...c, person: personById[c.person_id] || null })));

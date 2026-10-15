@@ -224,6 +224,19 @@ function Kpi({ label, value, color, sub }) {
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function Reports() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -245,7 +258,7 @@ export default function Reports() {
 
       const personIds = [...new Set((d || []).map((x) => x.person_id).filter(Boolean))];
       if (personIds.length) {
-        const { data: persons } = await supabase.schema("core").from("persons").select("id,full_name,primary_email").in("id", personIds);
+        const persons = await selectInChunks(() => supabase.schema("core").from("persons").select("id,full_name,primary_email"), "id", personIds);
         const map = {}; (persons || []).forEach((p) => map[p.id] = p);
         setPersonMap(map);
       } else setPersonMap({});

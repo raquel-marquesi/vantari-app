@@ -1420,8 +1420,10 @@ const ReportView = ({ campaign, onBack }) => {
   useEffect(() => {
     const ids = [...new Set(sends.map(s => s.person_id).filter(Boolean))];
     if (!ids.length) return;
-    supabase.schema("core").from("persons").select("id, full_name, primary_email").in("id", ids)
-      .then(({ data }) => setPeopleById(Object.fromEntries((data || []).map(p => [p.id, p]))));
+    // sem try/catch na tela: em erro segue sem nomes, como antes
+    selectInChunks(() => supabase.schema("core").from("persons").select("id, full_name, primary_email"), "id", ids)
+      .catch(e => { console.warn("[email] falha ao buscar destinatários:", e); return []; })
+      .then(data => setPeopleById(Object.fromEntries(data.map(p => [p.id, p]))));
   }, [campaign.id]);
 
   // hora local de Brasília (mesmo offset fixo usado no resto do app —
@@ -2671,6 +2673,19 @@ function TemplatePreviewModal({ template, onClose }) {
   );
 }
 
+/* .in("id", [...]) vira query string no GET — com centenas de UUIDs a URL
+   passa do limite do gateway e a requisição falha inteira (a tela some com os
+   nomes em silêncio). Busca em lotes e propaga o erro. */
+async function selectInChunks(query, column, ids, size = 100) {
+  const out = [];
+  for (let i = 0; i < ids.length; i += size) {
+    const { data, error } = await query().in(column, ids.slice(i, i + size));
+    if (error) throw error;
+    out.push(...(data || []));
+  }
+  return out;
+}
+
 export default function VantariEmailMarketing() {
   const [campaigns,  setCampaigns]  = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -2701,9 +2716,12 @@ export default function VantariEmailMarketing() {
       const allPersonIds = [...new Set((data || []).flatMap(c => (c.campaign_sends || []).map(s => s.person_id).filter(Boolean)))];
       let revokedSet = new Set();
       if (allPersonIds.length) {
-        const { data: revoked } = await supabase.schema("core").from("consents")
-          .select("person_id").eq("channel", "email").eq("status", "revoked").in("person_id", allPersonIds);
-        revokedSet = new Set((revoked || []).map(r => r.person_id));
+        // em erro, segue com 0 descadastros em vez de derrubar a lista de campanhas (como antes)
+        const revoked = await selectInChunks(
+          () => supabase.schema("core").from("consents").select("person_id").eq("channel", "email").eq("status", "revoked"),
+          "person_id", allPersonIds
+        ).catch(e => { console.warn("[email] falha ao buscar descadastros:", e); return []; });
+        revokedSet = new Set(revoked.map(r => r.person_id));
       }
 
       setCampaigns((data || []).map(c => {

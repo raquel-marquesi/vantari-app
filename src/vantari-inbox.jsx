@@ -360,6 +360,85 @@ async function selectInChunks(query, column, ids, size = 100) {
   return out;
 }
 
+/* ─── Modelo de mensagem (WhatsApp Cloud API) ───
+   15/10/2026 — fora da janela de 24h desde a última mensagem do cliente, a
+   Meta só aceita modelo aprovado. Catálogo em public.whatsapp_templates;
+   a aprovação de verdade fica no Gerenciador do WhatsApp. */
+const fillTemplate = (body, values) =>
+  body.replace(/\{\{(\d+)\}\}/g, (m, n) => values[Number(n) - 1] || m);
+
+function TemplateModal({ templates, person, processos, sending, onClose, onSend }) {
+  const [templateId, setTemplateId] = useState(templates[0]?.id || "");
+  const tpl = templates.find((t) => t.id === templateId) || null;
+  const defaultFor = (p) => {
+    if (p.source === "first_name") return firstName(person?.full_name) || "";
+    if (p.source === "processo_cnj") return processos[0]?.numero_cnj || "";
+    return "";
+  };
+  const [values, setValues] = useState([]);
+  useEffect(() => { setValues((tpl?.params || []).map(defaultFor)); }, [templateId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const params = tpl?.params || [];
+  const missing = params.some((_, i) => !(values[i] || "").trim());
+  const inputSt = { width: "100%", padding: "9px 11px", border: `1px solid ${T.border}`, borderRadius: 9, fontSize: 13, fontFamily: T.font, outline: "none", boxSizing: "border-box" };
+
+  return (
+    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(14,26,36,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: "100%", maxWidth: 560, maxHeight: "90vh", overflowY: "auto", background: T.surface, borderRadius: 14, padding: 22, fontFamily: T.font, boxShadow: "0 20px 50px -20px rgba(14,26,36,.35)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ fontFamily: T.head, fontWeight: 700, fontSize: 17, color: T.ink }}>Enviar modelo aprovado</div>
+          <button onClick={onClose} style={{ display: "flex", background: "none", border: "none", cursor: "pointer", color: T.faint3 }}><X size={18} /></button>
+        </div>
+        <div style={{ fontSize: 12.5, color: T.muted, marginBottom: 16, lineHeight: 1.5 }}>
+          Mensagens prontas, aprovadas pela Meta — a única forma de falar com o cliente quando já passaram mais de 24h da última mensagem dele.
+        </div>
+
+        {templates.length === 0 ? (
+          <div style={{ fontSize: 13, color: T.muted, padding: "12px 0" }}>Nenhum modelo cadastrado ainda.</div>
+        ) : (
+          <>
+            <label style={{ fontSize: 11.5, fontWeight: 700, color: T.muted, display: "block", marginBottom: 6 }}>Modelo</label>
+            <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} style={{ ...inputSt, marginBottom: 14, background: T.surface }}>
+              {templates.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+
+            {params.map((p, i) => (
+              <div key={i} style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: T.muted, display: "block", marginBottom: 6 }}>{p.label}</label>
+                {p.source === "processo_cnj" && processos.length > 1 ? (
+                  <select value={values[i] || ""} onChange={(e) => setValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))} style={{ ...inputSt, background: T.surface, fontFamily: T.mono }}>
+                    {processos.map((pr) => <option key={pr.id} value={pr.numero_cnj}>{pr.numero_cnj}</option>)}
+                  </select>
+                ) : (
+                  <input value={values[i] || ""} onChange={(e) => setValues((v) => v.map((x, j) => (j === i ? e.target.value : x)))}
+                    placeholder={p.source === "first_name" ? "Nome confirmado do cliente" : ""}
+                    style={{ ...inputSt, fontFamily: p.source === "processo_cnj" ? T.mono : T.font }} />
+                )}
+                {p.source === "first_name" && (
+                  <div style={{ fontSize: 11, color: T.faint3, marginTop: 4 }}>Confira se é o nome real do cliente, não o apelido do perfil do WhatsApp.</div>
+                )}
+              </div>
+            ))}
+
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: T.muted, margin: "6px 0 6px" }}>Prévia</div>
+            <div style={{ background: "#E7F6EE", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: T.text, whiteSpace: "pre-wrap", lineHeight: 1.5, marginBottom: 16 }}>
+              {tpl ? fillTemplate(tpl.body, values) : ""}
+            </div>
+          </>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <button onClick={onClose} style={{ padding: "9px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, color: T.text, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: T.font }}>Cancelar</button>
+          <button disabled={!tpl || missing || sending}
+            onClick={() => onSend({ name: tpl.name, language: tpl.language, body_params: values.map((v) => v.trim()) }, fillTemplate(tpl.body, values.map((v) => v.trim())))}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 16px", background: T.gradient, border: "none", borderRadius: 9, color: "#fff", fontSize: 13, fontWeight: 700, fontFamily: T.font, cursor: (!tpl || missing || sending) ? "default" : "pointer", opacity: (!tpl || missing || sending) ? 0.6 : 1 }}>
+            {sending ? <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Send size={14} />} Enviar modelo
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function InboxAtendimento() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -387,6 +466,9 @@ export default function InboxAtendimento() {
   const recordedChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
   const [actionBusy, setActionBusy] = useState(false);
+  // modelos aprovados na Meta (public.whatsapp_templates) — 15/10/2026
+  const [templates, setTemplates] = useState([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [banner, setBanner] = useState(null);
   // 10/08/2026 — seletor de atendente: lista de quem tem acesso real ao
   // workspace (via RPC public.list_workspace_team, que resolve o nome a
@@ -465,6 +547,9 @@ export default function InboxAtendimento() {
     supabase.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id || null));
     supabase.rpc("list_workspace_team", { p_workspace: WORKSPACE_VANTARI })
       .then(({ data, error: e }) => { if (!e) setTeam(data || []); });
+    supabase.from("whatsapp_templates").select("id, name, language, label, body, params")
+      .eq("workspace_id", WORKSPACE_VANTARI).eq("active", true).order("label")
+      .then(({ data, error: e }) => { if (!e) setTemplates(data || []); });
   }, []);
 
   const teamById = useMemo(() => Object.fromEntries(team.map((t) => [t.user_id, t.name])), [team]);
@@ -523,6 +608,14 @@ export default function InboxAtendimento() {
   }, []);
 
   const selected = useMemo(() => conversations.find((c) => c.id === selectedId) || null, [conversations, selectedId]);
+
+  // janela de 24h da Cloud API: conta a partir da última mensagem DO CLIENTE
+  // (não da nossa). Fechada = texto livre é recusado, só modelo aprovado.
+  const windowClosed = useMemo(() => {
+    const lastIn = [...messages].reverse().find((m) => m.direction === "in");
+    if (!lastIn) return messages.length > 0;
+    return Date.now() - new Date(lastIn.created_at).getTime() > 24 * 60 * 60 * 1000;
+  }, [messages]);
 
   useEffect(() => {
     if (!selectedId) { setMessages([]); setProcessos([]); setDealByProcesso({}); setNinaDrift(null); return; }
@@ -776,6 +869,21 @@ export default function InboxAtendimento() {
     }
   };
 
+  const sendTemplate = async (template, renderedBody) => {
+    if (!selected || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true); setBanner(null);
+    try {
+      const { ok, json } = await callFn("conversation-send", { conversation_id: selected.id, body: renderedBody, template });
+      if (!ok) { setBanner({ type: "error", text: json?.error || "Falha ao enviar o modelo." }); return; }
+      setShowTemplateModal(false);
+      loadMessages(selected.id);
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
+  };
+
   const statusBadge = (status, assignedName) => (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 700,
@@ -1007,6 +1115,16 @@ export default function InboxAtendimento() {
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {windowClosed && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 12px", background: "#FEF6E7", border: "1px solid #FBE3B5", borderRadius: 9, fontSize: 12.5, color: T.text }}>
+                        <AlertTriangle size={15} color={T.amber} style={{ flexShrink: 0 }} />
+                        <span style={{ flex: 1 }}>Já passaram mais de 24h desde a última mensagem do cliente — o WhatsApp só aceita um modelo aprovado.</span>
+                        <button onClick={() => setShowTemplateModal(true)}
+                          style={{ display: "flex", alignItems: "center", gap: 5, padding: "6px 12px", background: T.gradient, border: "none", borderRadius: 8, color: "#fff", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: T.font, flexShrink: 0 }}>
+                          <FileText size={13} /> Enviar modelo
+                        </button>
+                      </div>
+                    )}
                     {pendingAttachment && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: T.bg, borderRadius: 9 }}>
                         {pendingAttachment.kind === "audio" ? (
@@ -1032,6 +1150,10 @@ export default function InboxAtendimento() {
                         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, color: T.muted, cursor: "pointer" }}>
                         <Paperclip size={16} />
                       </button>
+                      <button onClick={() => setShowTemplateModal(true)} disabled={sending || uploadingAttachment} title="Enviar modelo aprovado (fora da janela de 24h)"
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, color: T.muted, cursor: "pointer" }}>
+                        <FileText size={16} />
+                      </button>
                       <button onClick={startRecording} disabled={sending || uploadingAttachment || !!pendingAttachment} title="Gravar áudio"
                         style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, flexShrink: 0, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, color: T.muted, cursor: (sending || uploadingAttachment || pendingAttachment) ? "default" : "pointer", opacity: pendingAttachment ? 0.5 : 1 }}>
                         <Mic size={16} />
@@ -1051,6 +1173,11 @@ export default function InboxAtendimento() {
             </>
           )}
         </div>
+
+        {showTemplateModal && selected && (
+          <TemplateModal templates={templates} person={selected.person} processos={processos} sending={sending}
+            onClose={() => setShowTemplateModal(false)} onSend={sendTemplate} />
+        )}
 
         {/* ─── painel do lead ─── */}
         {selected && (

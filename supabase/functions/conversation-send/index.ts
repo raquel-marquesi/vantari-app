@@ -27,7 +27,12 @@
 //                                                 //   "inbox-media" (Storage), pro anexo/áudio que o
 //                                                 //   atendente subiu no /inbox
 //   "media_type": "audio/webm" | "image/png" | ..., // obrigatório se media_url vier
-//   "media_filename": "comprovante.pdf"          // opcional, nome original do arquivo
+//   "media_filename": "comprovante.pdf",         // opcional, nome original do arquivo
+//   "template": {                                // opcional (15/10/2026) — modelo aprovado na Meta,
+//     "name": "resultado_analise_negativa",      //   única forma de falar com o cliente fora da
+//     "language": "pt_BR",                       //   janela de 24h na Cloud API. "body" vem com o
+//     "body_params": ["Maria", "0001234-..."]    //   texto já preenchido, só pro histórico.
+//   }
 // }
 // Resposta: { message_id, conversation_id, created_at }
 // ════════════════════════════════════════════════════════════════
@@ -75,7 +80,15 @@ serve(async (req) => {
   const mediaUrl = body.media_url ? String(body.media_url) : null;
   const mediaType = mediaUrl ? String(body.media_type ?? "") : null;
   const mediaFilename = body.media_filename ? String(body.media_filename) : null;
+  const template = body.template && typeof body.template === "object" ? {
+    name: String(body.template.name ?? "").trim(),
+    language: String(body.template.language ?? "pt_BR").trim(),
+    body_params: Array.isArray(body.template.body_params) ? body.template.body_params.map((v: unknown) => String(v ?? "").trim()) : [],
+  } : null;
   if (!conversationId) return jsonResp({ error: "conversation_id obrigatório" }, 400);
+  if (template && !template.name) return jsonResp({ error: "template.name obrigatório" }, 400);
+  if (template && template.body_params.some((v: string) => !v)) return jsonResp({ error: "preencha todas as variáveis do modelo" }, 400);
+  if (template && mediaUrl) return jsonResp({ error: "modelo não aceita anexo" }, 400);
   if (!text && !mediaUrl) return jsonResp({ error: "body (texto) ou media_url obrigatório" }, 400);
   if (mediaUrl && !mediaType) return jsonResp({ error: "media_type obrigatório quando media_url é enviado" }, 400);
 
@@ -120,6 +133,7 @@ serve(async (req) => {
       media_url: mediaUrl,
       media_type: mediaType,
       media_filename: mediaFilename,
+      ...(template ? { template } : {}),
     }, phoneOnFile);
     if (!result.ok) {
       // 09/10/2026 — migração da Nina pra Cloud API oficial: fora da janela
@@ -129,8 +143,18 @@ serve(async (req) => {
       // entraria na contagem do banner de "Nina instável" do /inbox).
       if (result.status === 422 && parseNinaErrorCode(result.detail) === "outside_24h_window") {
         return jsonResp({
-          error: "Não dá pra enviar: já passaram mais de 24h desde a última mensagem do cliente. Pela regra do WhatsApp, só é possível falar de novo quando ele mandar uma mensagem (ou com um modelo aprovado).",
+          error: "Não dá pra enviar: já passaram mais de 24h desde a última mensagem do cliente. Pela regra do WhatsApp, só é possível falar de novo quando ele mandar uma mensagem — ou pelo botão \"Modelo\", com uma mensagem aprovada pela Meta.",
           code: "outside_24h_window",
+        }, 422);
+      }
+      // modelo recusado pela Meta (não aprovado, variável inválida, sem forma de
+      // pagamento...) — também é recusa de propósito, não instabilidade da Nina
+      if (result.status === 422 && parseNinaErrorCode(result.detail) === "template_rejected") {
+        let metaDetail = "";
+        try { metaDetail = JSON.parse(result.detail)?.detail ?? ""; } catch { /* ignora */ }
+        return jsonResp({
+          error: `A Meta recusou o modelo "${template?.name ?? ""}".${metaDetail ? " Motivo: " + metaDetail : ""}`,
+          code: "template_rejected",
         }, 422);
       }
       await logNinaFailure(core, conv.workspace_id, conv.person_id, "send-message", result);
